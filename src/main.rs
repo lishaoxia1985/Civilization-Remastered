@@ -5,7 +5,10 @@ mod tile_map;
 use assets::{AssetsPlugin, MaterialResource};
 use bevy_prototype_lyon::prelude::*;
 use ruleset::Ruleset;
-use tile_map::{hex::HexOrientation, HexLayout, MapParameters, MapSize, TileMap};
+use tile_map::{
+    hex::{Hex, HexOrientation, Offset, SQRT_3},
+    HexLayout, MapParameters, MapSize, TileMap,
+};
 
 use bevy::{math::DVec2, prelude::*, window::close_on_esc};
 
@@ -54,32 +57,25 @@ fn start_up_system(
     materials: Res<MaterialResource>,
     ruleset: Res<Ruleset>,
 ) {
-    /* let mut tile_map = TileMap::new(
-        MapParameters::default(),
-        Layout {
-            orientation: LayoutOrientation::LayoutFlat,
-            size: DVec2::new(4., 4.),
-            origin: DVec2::new(0., 0.),
-        },
-        &ruleset,
-    ); */
     let mut tile_map = TileMap::new(
         MapParameters {
             map_size: MapSize {
-                width: 100,
+                width: 80,
                 height: 40,
             },
             hex_layout: HexLayout {
-                orientation: HexOrientation::Flat,
+                orientation: HexOrientation::Pointy,
                 size: DVec2::new(8., 8.),
                 origin: DVec2::new(0., 0.),
             },
+            offset: Offset::Odd,
             ..Default::default()
         },
         &ruleset,
     );
     let tile_pixel_size = tile_map.map_parameters.hex_layout.size * DVec2::new(2.0, 3_f64.sqrt());
     tile_map.spawn_tile_type_for_pangaea(&ruleset);
+    //tile_map.spawn_tile_type_for_fractal(&ruleset);
     tile_map.generate_terrain(&ruleset);
     tile_map.generate_coasts(&ruleset);
     tile_map.generate_lakes(&ruleset);
@@ -89,6 +85,41 @@ fn start_up_system(
     tile_map.add_features(&ruleset);
     tile_map.natural_wonder_generator(&ruleset);
     tile_map.recalculate_areas();
+
+    let position_offset = tile_map.tile_list.values().fold(
+        (0.0_f64, 0.0_f64, 0.0_f64, 0.0_f64),
+        |(min_offset_x, min_offset_y, max_offset_x, max_offset_y), tile| {
+            let [offset_x, offset_y] = tile_map
+                .map_parameters
+                .hex_layout
+                .hex_to_pixel(Hex::from(tile.hex_position))
+                .to_array();
+            (
+                min_offset_x.min(offset_x),
+                min_offset_y.min(offset_y),
+                max_offset_x.max(offset_x),
+                max_offset_y.max(offset_y),
+            )
+        },
+    );
+
+    tile_map.map_parameters.hex_layout.origin = -(DVec2::new(position_offset.0, position_offset.1)
+        + DVec2::new(position_offset.2, position_offset.3))
+        / 2.;
+
+    /* let height = tile_map.map_parameters.map_size.height;
+    let width = tile_map.map_parameters.map_size.width;
+
+    let (height_pixel, width_pixel) = match tile_map.map_parameters.hex_layout.orientation {
+        HexOrientation::Pointy => (
+            (2. + (width as f64 - 1.) * 1.5) * tile_map.map_parameters.hex_layout.size.x,
+            (height as f64 + 0.5) * SQRT_3 * tile_map.map_parameters.hex_layout.size.y,
+        ),
+        HexOrientation::Flat => (
+            (height as f64 + 0.5) * SQRT_3 * tile_map.map_parameters.hex_layout.size.x,
+            (2. + (width as f64 - 1.) * 1.5) * tile_map.map_parameters.hex_layout.size.y,
+        ),
+    }; */
 
     tile_map.river_list.values().for_each(|river| {
         let mut path_builder = PathBuilder::new();

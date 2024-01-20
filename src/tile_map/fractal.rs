@@ -5,11 +5,10 @@ use image::{imageops::resize, GrayImage, ImageBuffer};
 use rand::{rngs::StdRng, seq::SliceRandom, Rng};
 
 use super::{
-    hex::{Hex, Offset, OffsetCoordinate},
+    hex::{Hex, Offset, OffsetCoordinate, SQRT_3},
     Direction, HexLayout, HexOrientation,
 };
 
-const SQRT_3: f64 = 1.732050807568877293527446341505872367_f64;
 const DEFAULT_WIDTH_EXP: i32 = 7;
 const DEFAULT_HEIGHT_EXP: i32 = 6;
 
@@ -20,7 +19,7 @@ struct VoronoiSeed {
     pub directional_bias_strength: i32,
 }
 
-struct CvFractal {
+pub struct CvFractal {
     /// The width of the 2D map
     map_width: i32,
     /// The height of the 2D map
@@ -50,7 +49,7 @@ struct CvFractal {
 }
 
 #[derive(PartialEq, Eq)]
-struct Flags {
+pub struct Flags {
     /// It determines whether the map wraps horizontally. When it's true, the rightmost and leftmost edges of the map are connected to form a circular map.
     wrap_x: bool,
     /// It determines whether the map wraps vertically. When it's true, the top and bottom edges of the map are connected to form a circular map.
@@ -391,8 +390,19 @@ impl CvFractal {
         }
     }
 
-    pub fn get_height_from_percent(&self, percent: i32) -> i32 {
-        let percent = percent.clamp(0, 100);
+    /// Get a vector containing the calculated height values based on the given percentages for a fractal array.
+    ///
+    /// It takes an array of percentages. Each percentage value is clamped between 0 and 100.
+    ///
+    /// The function then extracts all values from the fractal array except its last row and last column,
+    /// flattens the array, sorts it in an unstable manner, and calculates target values based on the input percentages.
+    ///
+    /// The final output is a vector containing the calculated height values corresponding to the input percentages.
+    pub fn get_height_from_percents(&self, percents: &[i32]) -> Vec<i32> {
+        let percents: Vec<i32> = percents
+            .iter()
+            .map(|&percent| percent.clamp(0, 100))
+            .collect();
         // Get all value from the fractal array except its last row and last column
         let mut flatten: Vec<&i32> = self
             .fractal_array
@@ -403,10 +413,15 @@ impl CvFractal {
         flatten.sort_unstable();
 
         let len = flatten.len();
-        let target_index = (len * percent as usize) / 100;
-        let target_value = flatten[target_index];
+        percents
+            .iter()
+            .map(|&percent| {
+                let target_index = ((len - 1) * percent as usize) / 100;
+                let target_value = flatten[target_index];
 
-        *target_value
+                *target_value
+            })
+            .collect()
     }
 
     fn tectonic_action(&mut self, rifts: &CvFractal) {

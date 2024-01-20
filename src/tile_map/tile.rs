@@ -26,14 +26,6 @@ impl Tile {
         }
     }
 
-    pub fn latitude(&self) -> i32 {
-        self.hex_position[0] + self.hex_position[1]
-    }
-
-    pub fn longitude(&self) -> i32 {
-        self.hex_position[0] - self.hex_position[1]
-    }
-
     pub fn tiles_neighbors<'a>(&'a self, tile_map: &'a TileMap) -> Vec<&Tile> {
         self.tiles_at_distance(1, tile_map)
     }
@@ -91,10 +83,6 @@ impl Tile {
 
     pub fn pixel_position(&self, layout: HexLayout) -> DVec2 {
         layout.hex_to_pixel(Hex::from(self.hex_position))
-    }
-
-    pub fn pixel_relative_position(&self, layout: HexLayout) -> DVec2 {
-        (self.pixel_position(layout) - layout.origin) / layout.size
     }
 
     pub fn tile_corner_position(&self, direction: Direction, tile_map: &TileMap) -> DVec2 {

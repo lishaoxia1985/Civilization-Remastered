@@ -2,17 +2,18 @@
 
 use std::array;
 use std::cmp::{max, min};
-use std::f64::consts::PI;
+use std::f64::consts::FRAC_PI_3;
 use std::ops::{Add, Sub};
 
 use bevy::math::{DMat2, DVec2, IVec2};
 
-const SQRT_3: f64 = 1.732050807568877293527446341505872367_f64;
+pub const SQRT_3: f64 = 1.732050807568877293527446341505872367_f64;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Hex(IVec2);
 impl Hex {
-    const HEX_DIRECTIONS: [Self; 6] = [
+    /// Hexagon neighbor coordinates array, following [`Direction::POINTY_EDGE`] or [`Direction::FLAT_EDGE`] order
+    pub const HEX_DIRECTIONS: [Self; 6] = [
         Self::new(1, 0),
         Self::new(1, -1),
         Self::new(0, -1),
@@ -110,11 +111,13 @@ impl Hex {
     pub fn hexes_at_distance(self, distance: u32) -> Vec<Hex> {
         let mut hex_list = Vec::with_capacity((6 * distance) as usize);
         let radius = distance as i32;
-        let mut hex = Hex(self.0 + Self::HEX_DIRECTIONS[4].0 * radius);
-        for i in 0..6 {
-            for _ in 0..radius {
-                hex_list.push(hex);
-                hex = hex.hex_neighbor(i);
+        for q in -radius..=radius {
+            for r in max(-radius, -q - radius)..=min(radius, -q + radius) {
+                let offset_hex = Hex::from([q, r]);
+                if Self::hex_distance(offset_hex, Hex::from([0, 0])) == radius {
+                    let hex = self + offset_hex;
+                    hex_list.push(hex);
+                }
             }
         }
         hex_list
@@ -200,6 +203,10 @@ impl OffsetCoordinate {
             }
         }
     }
+
+    pub fn to_array(&self) -> [i32; 2] {
+        self.0.into()
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -248,8 +255,34 @@ pub enum Direction {
 }
 
 impl Direction {
-    // Pointy hex edge or Flat hex corner direction
-    pub const ARRAY_1: [Direction; 6] = [
+    /// Pointy hex edge direction
+    /// ```txt
+    ///            x Axis
+    ///
+    ///          / \     / \
+    ///         /   \   /   \
+    ///        /     \ /     \
+    ///       |       |       |
+    ///       |   4   |   5   |
+    ///       |       |       |
+    ///      / \     /5\     / \
+    ///     /   \   /   \   /   \
+    ///    /     \ /     \ /     \
+    ///   |       |4     0|       |
+    ///   |   3   | Hex-A |   0   |
+    ///   |       |3     1|       |
+    ///    \     / \     / \     /
+    ///     \   /   \   /   \   /
+    ///      \ /     \2/     \ /
+    ///       |       |       |
+    ///       |   2   |   1   |
+    ///       |       |       |
+    ///        \     / \     /
+    ///         \   /   \   /
+    ///          \ /     \ /    y Axis
+    ///  ```
+    ///     
+    pub const POINTY_EDGE: [Direction; 6] = [
         Direction::East,
         Direction::SouthEast,
         Direction::SouthWest,
@@ -257,8 +290,9 @@ impl Direction {
         Direction::NorthWest,
         Direction::NorthEast,
     ];
-    // Flat hex edge or Pointy hex corner direction
-    pub const ARRAY_2: [Direction; 6] = [
+
+    /// Pointy hex corner direction
+    pub const POINTY_CORNER: [Direction; 6] = [
         Direction::NorthEast,
         Direction::SouthEast,
         Direction::South,
@@ -266,6 +300,36 @@ impl Direction {
         Direction::NorthWest,
         Direction::North,
     ];
+
+    /// Flat hex edge direction
+    /// ```txt
+    ///            x Axis     
+    ///                 ________
+    ///                /        \
+    ///               /          \
+    ///      ________/     5      \________
+    ///     /        \            /        \
+    ///    /          \          /          \
+    ///   /     4      \________/     0      \
+    ///   \            /4      5\            /
+    ///    \          /          \          /
+    ///     \________/3   Hex-A  0\________/
+    ///     /        \            /        \
+    ///    /          \          /          \
+    ///   /     3      \2______1/     1      \
+    ///   \            /        \            /
+    ///    \          /          \          /
+    ///     \________/     2      \________/
+    ///              \            /
+    ///               \          /
+    ///                \________/       y Axis     
+    /// ```
+    ///    
+    pub const FLAT_EDGE: [Direction; 6] = Self::POINTY_CORNER;
+
+    /// Flat hex corner direction
+    pub const FLAT_CORNER: [Direction; 6] = Self::POINTY_EDGE;
+
     pub fn opposite_direction(self) -> Self {
         match self {
             Direction::North => Direction::South,
@@ -290,15 +354,15 @@ pub struct HexLayout {
 impl HexLayout {
     pub const fn edge_direction(&self) -> [Direction; 6] {
         match self.orientation {
-            HexOrientation::Pointy => Direction::ARRAY_1,
-            HexOrientation::Flat => Direction::ARRAY_2,
+            HexOrientation::Pointy => Direction::POINTY_EDGE,
+            HexOrientation::Flat => Direction::FLAT_EDGE,
         }
     }
 
     pub const fn corner_direction(&self) -> [Direction; 6] {
         match self.orientation {
-            HexOrientation::Pointy => Direction::ARRAY_2,
-            HexOrientation::Flat => Direction::ARRAY_1,
+            HexOrientation::Pointy => Direction::POINTY_CORNER,
+            HexOrientation::Flat => Direction::FLAT_CORNER,
         }
     }
 
@@ -333,7 +397,7 @@ impl HexLayout {
     fn hex_corner_offset(self, corner: i32) -> DVec2 {
         let m = self.orientation.value();
         let size: DVec2 = self.size;
-        let angle: f64 = 2.0 * PI * (m.start_angle - corner as f64) / 6.0;
+        let angle: f64 = (m.start_angle - corner as f64) * FRAC_PI_3;
         size * DVec2::from_angle(angle)
     }
 }

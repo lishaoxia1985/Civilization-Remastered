@@ -1,9 +1,9 @@
-use std::cmp::{max, min};
+use std::cmp::max;
 use std::collections::{BTreeMap, VecDeque};
 
+use bevy::math::IVec2;
 use bevy::utils::HashSet;
 use bevy::{math::DVec2, prelude::Res, utils::HashMap};
-use noise::{core::worley::ReturnType, Fbm, MultiFractal, NoiseFn, OpenSimplex, Worley};
 use rand::seq::SliceRandom;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 
@@ -13,7 +13,8 @@ mod fractal;
 mod map_parameters;
 mod tile;
 
-use self::hex::Hex;
+use self::fractal::{CvFractal, Flags};
+use self::hex::{Hex, Offset, OffsetCoordinate};
 use self::tile::Tile;
 pub use hex::{HexLayout, HexOrientation};
 pub use map_parameters::{MapParameters, MapSize, SeaLevel};
@@ -33,6 +34,7 @@ impl TileMap {
             map_parameters.map_size.width,
             map_parameters.map_size.height,
             map_parameters.hex_layout,
+            map_parameters.offset,
             ruleset,
         );
         Self {
@@ -47,31 +49,19 @@ impl TileMap {
         width: i32,
         height: i32,
         hex_layout: HexLayout,
+        offset: Offset,
         ruleset: &Res<Ruleset>,
     ) -> BTreeMap<[i32; 2], Tile> {
         let mut tile_list = BTreeMap::new();
-        let (left, right) = (-width / 2, (width - 1) / 2);
-        let (bottom, top) = (-height / 2, (height - 1) / 2);
-        match hex_layout.orientation {
-            HexOrientation::Pointy => {
-                for r in bottom..=top {
-                    let r_offset = r / 2;
-                    for q in (left - r_offset)..=(right - r_offset) {
-                        let tile = Tile::new([q, r], ruleset);
-                        tile_list.insert([q, r], tile);
-                    }
-                }
+        for y in 0..height {
+            for x in 0..width {
+                let offset_coordinate = OffsetCoordinate::new(x, y);
+                let hex_coordinate = offset_coordinate.to_hex(offset, hex_layout.orientation);
+
+                let tile = Tile::new(hex_coordinate.to_array(), ruleset);
+                tile_list.insert(hex_coordinate.to_array(), tile);
             }
-            HexOrientation::Flat => {
-                for q in left..=right {
-                    let q_offset = q / 2;
-                    for r in (bottom - q_offset)..=(top - q_offset) {
-                        let tile = Tile::new([q, r], ruleset);
-                        tile_list.insert([q, r], tile);
-                    }
-                }
-            }
-        };
+        }
         tile_list
     }
 
@@ -81,17 +71,6 @@ impl TileMap {
 
     pub const fn tile_corner_direction(&self) -> [Direction; 6] {
         self.map_parameters.hex_layout.corner_direction()
-    }
-
-    pub fn max_longitude_and_max_latitude(&self) -> (f64, f64) {
-        self.tile_list
-            .values()
-            .fold((0.0_f64, 0.0_f64), |(max_long, max_lat), tile| {
-                let [longitude, latitude] = tile
-                    .pixel_relative_position(self.map_parameters.hex_layout)
-                    .to_array();
-                (max_long.max(longitude), max_lat.max(latitude))
-            })
     }
 
     pub fn spawn_tile_type_for_fractal(&mut self, ruleset: &Res<Ruleset>) {
@@ -134,103 +113,137 @@ impl TileMap {
             }
         };
 
-        let (seed, seed2, seed3) = self.random_number_generator.gen();
+        let mut continents_fractal = CvFractal::create(
+            &mut self.random_number_generator,
+            self.map_parameters.map_size.width,
+            self.map_parameters.map_size.height,
+            2,
+            Flags::default(),
+            7,
+            6,
+        );
 
-        let continents_fbm = Fbm::<OpenSimplex>::new(seed)
-            .set_octaves(6)
-            .set_frequency(1.0 / 10.0)
-            .set_persistence(continent_grain as f64 / 10.)
-            .set_lacunarity(2.0);
-        let mountains_fbm = Worley::new(seed2)
-            .set_frequency(1. / 10.)
-            .set_return_type(ReturnType::Distance);
-        let hills_fbm = Worley::new(seed3)
-            .set_frequency(1. / 20.)
-            .set_return_type(ReturnType::Distance);
+        continents_fractal.ridge_builder(
+            &mut self.random_number_generator,
+            15,
+            &Flags::default(),
+            1,
+            2,
+            &self.map_parameters.hex_layout,
+        );
 
-        let mut continents_height = Vec::with_capacity(self.tile_list.len());
-        let mut mountains_height = Vec::with_capacity(self.tile_list.len());
-        let mut hills_height = Vec::with_capacity(self.tile_list.len());
+        let mut mountains_fractal = CvFractal::create(
+            &mut self.random_number_generator,
+            self.map_parameters.map_size.width,
+            self.map_parameters.map_size.height,
+            2,
+            Flags::default(),
+            7,
+            6,
+        );
 
-        self.tile_list.values().for_each(|tile| {
-            let pixel_position = tile
-                .pixel_relative_position(self.map_parameters.hex_layout)
-                .to_array();
+        mountains_fractal.ridge_builder(
+            &mut self.random_number_generator,
+            10,
+            &Flags::default(),
+            6,
+            1,
+            &self.map_parameters.hex_layout,
+        );
 
-            let elevation = (continents_fbm.get(pixel_position) + 1.0) / 2.0;
-            let elevation_val = (elevation * 255.) as i32;
-            continents_height.push(elevation_val);
+        let mut hills_fractal = CvFractal::create(
+            &mut self.random_number_generator,
+            self.map_parameters.map_size.width,
+            self.map_parameters.map_size.height,
+            2,
+            Flags::default(),
+            7,
+            6,
+        );
 
-            let mountains_elevation = 1. - (mountains_fbm.get(pixel_position) + 1.0) / 2.0;
-            let mountains_val = (mountains_elevation * 255.) as i32;
-            mountains_height.push(mountains_val);
+        hills_fractal.ridge_builder(
+            &mut self.random_number_generator,
+            15,
+            &Flags::default(),
+            1,
+            2,
+            &self.map_parameters.hex_layout,
+        );
 
-            let hills_elevation = 1. - (hills_fbm.get(pixel_position) + 1.0) / 2.0;
-            let hills_val = (hills_elevation * 255.) as i32;
-            hills_height.push(hills_val);
-        });
+        let [water_threshold] = continents_fractal.get_height_from_percents(&[water_percent])[..]
+        else {
+            panic!("Vec length does not match the pattern")
+        };
 
-        let mut continents_height_sorted = continents_height.clone();
-        let mut mountains_height_sorted = mountains_height.clone();
-        let mut hills_height_sorted = hills_height.clone();
+        let [pass_threshold, hills_bottom1, hills_top1, hills_bottom2, hills_top2] = hills_fractal
+            .get_height_from_percents(&[
+                hills_near_mountains,
+                hills_bottom1,
+                hills_top1,
+                hills_bottom2,
+                hills_top2,
+            ])[..]
+        else {
+            panic!("Vec length does not match the pattern")
+        };
 
-        continents_height_sorted.sort_unstable();
-        mountains_height_sorted.sort_unstable();
-        hills_height_sorted.sort_unstable();
+        let [mountain_threshold, hills_near_mountains, hills_clumps, mountain_100, mountain_99, mountain_98, mountain_97, mountain_95] =
+            mountains_fractal.get_height_from_percents(&[
+                mountains,
+                hills_near_mountains,
+                hills_clumps,
+                100,
+                99,
+                98,
+                97,
+                95,
+            ])[..]
+        else {
+            panic!("Vec length does not match the pattern")
+        };
 
-        let water_threshold = Self::get_height(&continents_height_sorted, water_percent);
-        let mountain_threshold = Self::get_height(&mountains_height_sorted, mountains);
-        let pass_threshold = Self::get_height(&hills_height_sorted, hills_near_mountains);
-        let hills_near_mountains = Self::get_height(&mountains_height_sorted, hills_near_mountains);
-        let hills_bottom1 = Self::get_height(&hills_height_sorted, hills_bottom1);
-        let hills_top1 = Self::get_height(&hills_height_sorted, hills_top1);
-        let hills_bottom2 = Self::get_height(&hills_height_sorted, hills_bottom2);
-        let hills_top2 = Self::get_height(&hills_height_sorted, hills_top2);
-        let hills_clumps = Self::get_height(&mountains_height_sorted, hills_clumps);
+        self.tile_list.values_mut().for_each(|tile| {
+            let hex_coord = Hex::from(tile.hex_position);
+            let offset_coord = hex_coord.to_offset_coordinate(
+                self.map_parameters.offset,
+                self.map_parameters.hex_layout.orientation,
+            );
 
-        let mountain_100 = Self::get_height(&mountains_height_sorted, 100);
-        let mountain_99 = Self::get_height(&mountains_height_sorted, 99);
-        let mountain_98 = Self::get_height(&mountains_height_sorted, 98);
-        let mountain_97 = Self::get_height(&mountains_height_sorted, 97);
-        let mountain_95 = Self::get_height(&mountains_height_sorted, 95);
+            let [x, y] = offset_coord.to_array();
+            let height = continents_fractal.get_height(x, y);
 
-        self.tile_list
-            .values_mut()
-            .zip(continents_height)
-            .zip(mountains_height)
-            .zip(hills_height)
-            .for_each(|(((tile, height), mountain_height), hill_height)| {
-                if height <= water_threshold {
-                    tile.base_terrain = ruleset.terrains["Ocean"].clone();
-                    if tectonic_islands {
-                        if mountain_height == mountain_100 {
-                            tile.base_terrain = ruleset.terrains["Mountain"].clone();
-                        } else if mountain_height == mountain_99 {
-                            tile.terrain_features.push(ruleset.terrains["Hill"].clone());
-                            tile.base_terrain = ruleset.terrains["Grassland"].clone();
-                        } else if (mountain_height == mountain_97)
-                            || (mountain_height == mountain_95)
-                        {
-                            tile.base_terrain = ruleset.terrains["Grassland"].clone();
-                        }
-                    }
-                } else if mountain_height >= mountain_threshold {
-                    if hill_height >= pass_threshold {
+            let mountain_height = mountains_fractal.get_height(x, y);
+            let hill_height = hills_fractal.get_height(x, y);
+
+            if height <= water_threshold {
+                tile.base_terrain = ruleset.terrains["Ocean"].clone();
+                if tectonic_islands {
+                    if mountain_height == mountain_100 {
+                        tile.base_terrain = ruleset.terrains["Mountain"].clone();
+                    } else if mountain_height == mountain_99 {
                         tile.terrain_features.push(ruleset.terrains["Hill"].clone());
                         tile.base_terrain = ruleset.terrains["Grassland"].clone();
-                    } else {
-                        tile.base_terrain = ruleset.terrains["Mountain"].clone();
+                    } else if (mountain_height == mountain_97) || (mountain_height == mountain_95) {
+                        tile.base_terrain = ruleset.terrains["Grassland"].clone();
                     }
-                } else if mountain_height >= hills_near_mountains
-                    || (hill_height >= hills_bottom1 && hill_height <= hills_top1)
-                    || (hill_height >= hills_bottom2 && hill_height <= hills_top2)
-                {
+                }
+            } else if mountain_height >= mountain_threshold {
+                if hill_height >= pass_threshold {
                     tile.terrain_features.push(ruleset.terrains["Hill"].clone());
                     tile.base_terrain = ruleset.terrains["Grassland"].clone();
                 } else {
-                    tile.base_terrain = ruleset.terrains["Grassland"].clone();
-                };
-            });
+                    tile.base_terrain = ruleset.terrains["Mountain"].clone();
+                }
+            } else if mountain_height >= hills_near_mountains
+                || (hill_height >= hills_bottom1 && hill_height <= hills_top1)
+                || (hill_height >= hills_bottom2 && hill_height <= hills_top2)
+            {
+                tile.terrain_features.push(ruleset.terrains["Hill"].clone());
+                tile.base_terrain = ruleset.terrains["Grassland"].clone();
+            } else {
+                tile.base_terrain = ruleset.terrains["Grassland"].clone();
+            };
+        });
     }
 
     pub fn spawn_tile_type_for_pangaea(&mut self, ruleset: &Res<Ruleset>) {
@@ -271,132 +284,154 @@ impl TileMap {
             }
         };
 
-        let (seed, seed2, seed3) = self.random_number_generator.gen();
+        //let (seed, seed2, seed3) = self.random_number_generator.gen();
 
-        let continents_fbm = Fbm::<OpenSimplex>::new(seed)
-            .set_octaves(6)
-            .set_frequency(1.0 / 10.0)
-            .set_persistence(continent_grain as f64 / 10.)
-            .set_lacunarity(2.0);
-        let mountains_fbm = Worley::new(seed2)
-            .set_frequency(1. / 10.)
-            .set_return_type(ReturnType::Distance);
-        let hills_fbm = Worley::new(seed3)
-            .set_frequency(1. / 20.)
-            .set_return_type(ReturnType::Distance);
+        let mut continents_fractal = CvFractal::create(
+            &mut self.random_number_generator,
+            self.map_parameters.map_size.width,
+            self.map_parameters.map_size.height,
+            2,
+            Flags::default(),
+            7,
+            6,
+        );
 
-        let mut continents_height = Vec::with_capacity(self.tile_list.len());
-        let mut mountains_height = Vec::with_capacity(self.tile_list.len());
-        let mut hills_height = Vec::with_capacity(self.tile_list.len());
+        continents_fractal.ridge_builder(
+            &mut self.random_number_generator,
+            15,
+            &Flags::default(),
+            1,
+            2,
+            &self.map_parameters.hex_layout,
+        );
 
-        self.tile_list.values().for_each(|tile| {
-            let pixel_position = tile
-                .pixel_relative_position(self.map_parameters.hex_layout)
-                .to_array();
+        let mut mountains_fractal = CvFractal::create(
+            &mut self.random_number_generator,
+            self.map_parameters.map_size.width,
+            self.map_parameters.map_size.height,
+            2,
+            Flags::default(),
+            7,
+            6,
+        );
 
-            let elevation = (continents_fbm.get(pixel_position) + 1.0) / 2.0;
-            let elevation_val = (elevation * 255.) as i32;
-            continents_height.push(elevation_val);
+        mountains_fractal.ridge_builder(
+            &mut self.random_number_generator,
+            10,
+            &Flags::default(),
+            6,
+            1,
+            &self.map_parameters.hex_layout,
+        );
 
-            let mountains_elevation = 1. - (mountains_fbm.get(pixel_position) + 1.0) / 2.0;
-            let mountains_val = (mountains_elevation * 255.) as i32;
-            mountains_height.push(mountains_val);
+        let mut hills_fractal = CvFractal::create(
+            &mut self.random_number_generator,
+            self.map_parameters.map_size.width,
+            self.map_parameters.map_size.height,
+            2,
+            Flags::default(),
+            7,
+            6,
+        );
 
-            let hills_elevation = 1. - (hills_fbm.get(pixel_position) + 1.0) / 2.0;
-            let hills_val = (hills_elevation * 255.) as i32;
-            hills_height.push(hills_val);
-        });
+        hills_fractal.ridge_builder(
+            &mut self.random_number_generator,
+            15,
+            &Flags::default(),
+            1,
+            2,
+            &self.map_parameters.hex_layout,
+        );
 
-        let mut continents_height_sorted = continents_height.clone();
-        let mut mountains_height_sorted = mountains_height.clone();
-        let mut hills_height_sorted = hills_height.clone();
+        let [water_threshold] = continents_fractal.get_height_from_percents(&[water_percent])[..]
+        else {
+            panic!("Vec length does not match the pattern")
+        };
 
-        continents_height_sorted.sort_unstable();
-        mountains_height_sorted.sort_unstable();
-        hills_height_sorted.sort_unstable();
+        let [pass_threshold, hills_bottom1, hills_top1, hills_bottom2, hills_top2] = hills_fractal
+            .get_height_from_percents(&[
+                hills_near_mountains,
+                hills_bottom1,
+                hills_top1,
+                hills_bottom2,
+                hills_top2,
+            ])[..]
+        else {
+            panic!("Vec length does not match the pattern")
+        };
 
-        let water_threshold = Self::get_height(&continents_height_sorted, water_percent);
-        let mountain_threshold = Self::get_height(&mountains_height_sorted, mountains);
-        let pass_threshold = Self::get_height(&hills_height_sorted, hills_near_mountains);
-        let hills_near_mountains = Self::get_height(&mountains_height_sorted, hills_near_mountains);
-        let hills_bottom1 = Self::get_height(&hills_height_sorted, hills_bottom1);
-        let hills_top1 = Self::get_height(&hills_height_sorted, hills_top1);
-        let hills_bottom2 = Self::get_height(&hills_height_sorted, hills_bottom2);
-        let hills_top2 = Self::get_height(&hills_height_sorted, hills_top2);
-        let hills_clumps = Self::get_height(&mountains_height_sorted, hills_clumps);
+        let [mountain_threshold, hills_near_mountains, hills_clumps, mountain_100, mountain_99, mountain_98, mountain_97, mountain_95] =
+            mountains_fractal.get_height_from_percents(&[
+                mountains,
+                hills_near_mountains,
+                hills_clumps,
+                100,
+                99,
+                98,
+                97,
+                95,
+            ])[..]
+        else {
+            panic!("Vec length does not match the pattern")
+        };
 
-        let mountain_100 = Self::get_height(&mountains_height_sorted, 100);
-        let mountain_99 = Self::get_height(&mountains_height_sorted, 99);
-        let mountain_98 = Self::get_height(&mountains_height_sorted, 98);
-        let mountain_97 = Self::get_height(&mountains_height_sorted, 97);
-        let mountain_95 = Self::get_height(&mountains_height_sorted, 95);
+        let width = self.map_parameters.map_size.width;
+        let height = self.map_parameters.map_size.height;
+        let center_position = DVec2::new(width as f64 / 2., height as f64 / 2.);
 
-        let (max_longitude, max_latitude) = self.max_longitude_and_max_latitude();
-        /*
-        let majorAxis = max_longitude * 3. / 5.;
-        let minorAxis = max_latitude * 3. / 5.;
-         */
-        let axis = DVec2::new(max_longitude, max_latitude) * 3. / 5.;
+        let axis = center_position * 3. / 5.;
 
-        self.tile_list
-            .values_mut()
-            .zip(continents_height)
-            .zip(mountains_height)
-            .zip(hills_height)
-            .for_each(|(((tile, height), mountain_height), hill_height)| {
-                let mut h = water_threshold as f64;
-                let center_position = self.map_parameters.hex_layout.origin;
-                /*
-                let majorAxisSquared = majorAxis * majorAxis;
-                let minorAxisSquared = minorAxis * minorAxis;
-                let [deltaX, deltaY] = (pixel_position - center_position).to_array();
-                let deltaXSquared = deltaX * deltaX;
-                let deltaYSquared = deltaY * deltaY;
-                let d = deltaXSquared / majorAxisSquared + deltaYSquared / minorAxisSquared;
-                 */
-                let d = ((tile.pixel_relative_position(self.map_parameters.hex_layout)
-                    - center_position)
-                    / axis)
-                    .length_squared();
-                if d <= 1. {
-                    h = h + (h * 0.125)
-                } else {
-                    h = h - (h * 0.125)
+        self.tile_list.values_mut().for_each(|tile| {
+            let hex_coord = Hex::from(tile.hex_position);
+            let offset_coord = hex_coord.to_offset_coordinate(
+                self.map_parameters.offset,
+                self.map_parameters.hex_layout.orientation,
+            );
+            let [x, y] = offset_coord.to_array();
+            let height = continents_fractal.get_height(x, y);
+
+            let mountain_height = mountains_fractal.get_height(x, y);
+            let hill_height = hills_fractal.get_height(x, y);
+
+            let mut h = water_threshold as f64;
+
+            let delta = IVec2::from([x, y]).as_dvec2() - center_position;
+            let d = (delta / axis).length_squared();
+
+            if d <= 1. {
+                h = h + (h * 0.125)
+            } else {
+                h = h - (h * 0.125)
+            }
+
+            let height = ((height as f64 + h + h) * 0.33) as i32;
+
+            if height <= water_threshold {
+                tile.base_terrain = ruleset.terrains["Ocean"].clone();
+                if height == mountain_100 {
+                    tile.base_terrain = ruleset.terrains["Mountain"].clone()
+                } else if height == mountain_99 {
+                    tile.base_terrain = ruleset.terrains["Hill"].clone()
+                } else if height == mountain_97 || height == mountain_95 {
+                    tile.base_terrain = ruleset.terrains["Grassland"].clone()
                 }
-
-                let height = ((height as f64 + h + h) * 0.33) as i32;
-
-                if height <= water_threshold {
-                    tile.base_terrain = ruleset.terrains["Ocean"].clone();
-                    if height == mountain_100 {
-                        tile.base_terrain = ruleset.terrains["Mountain"].clone()
-                    } else if height == mountain_99 {
-                        tile.base_terrain = ruleset.terrains["Hill"].clone()
-                    } else if height == mountain_97 || height == mountain_95 {
-                        tile.base_terrain = ruleset.terrains["Grassland"].clone()
-                    }
-                } else if mountain_height >= mountain_threshold {
-                    if hill_height >= pass_threshold {
-                        tile.terrain_features.push(ruleset.terrains["Hill"].clone());
-                        tile.base_terrain = ruleset.terrains["Grassland"].clone();
-                    } else {
-                        tile.base_terrain = ruleset.terrains["Mountain"].clone();
-                    }
-                } else if mountain_height >= hills_near_mountains
-                    || (hill_height >= hills_bottom1 && hill_height <= hills_top1)
-                    || (hill_height >= hills_bottom2 && hill_height <= hills_top2)
-                {
+            } else if mountain_height >= mountain_threshold {
+                if hill_height >= pass_threshold {
                     tile.terrain_features.push(ruleset.terrains["Hill"].clone());
                     tile.base_terrain = ruleset.terrains["Grassland"].clone();
                 } else {
-                    tile.base_terrain = ruleset.terrains["Grassland"].clone();
-                };
-            });
-    }
-
-    fn get_height(height_sorted: &Vec<i32>, ratio: i32) -> i32 {
-        debug_assert!(height_sorted.windows(2).all(|w| w[0] <= w[1]));
-        height_sorted[(height_sorted.len() as f64 * ratio as f64 / 100. - 1.) as usize]
+                    tile.base_terrain = ruleset.terrains["Mountain"].clone();
+                }
+            } else if mountain_height >= hills_near_mountains
+                || (hill_height >= hills_bottom1 && hill_height <= hills_top1)
+                || (hill_height >= hills_bottom2 && hill_height <= hills_top2)
+            {
+                tile.terrain_features.push(ruleset.terrains["Hill"].clone());
+                tile.base_terrain = ruleset.terrains["Grassland"].clone();
+            } else {
+                tile.base_terrain = ruleset.terrains["Grassland"].clone();
+            };
+        });
     }
 
     pub fn generate_coasts(&mut self, ruleset: &Res<Ruleset>) {
@@ -493,69 +528,67 @@ impl TileMap {
         let plains_top_percent = 100;
         let plains_bottom_percent = max(0, 100 - plains_percent);
 
-        let (seed, seed2, seed3) = self.random_number_generator.gen();
-        let variation_fbm = Fbm::<OpenSimplex>::new(seed)
-            .set_octaves(6)
-            .set_frequency(1.0 / 10.0)
-            .set_persistence(0.5)
-            .set_lacunarity(2.0);
-        let deserts_fbm = Fbm::<OpenSimplex>::new(seed2)
-            .set_octaves(6)
-            .set_frequency(1.0 / 10.0)
-            .set_persistence(0.5)
-            .set_lacunarity(2.0);
-        let plains_fbm = Fbm::<OpenSimplex>::new(seed3)
-            .set_octaves(6)
-            .set_frequency(1.0 / 10.0)
-            .set_persistence(0.5)
-            .set_lacunarity(2.0);
+        //let (seed, seed2, seed3) = self.random_number_generator.gen();
+        let variation_fractal = CvFractal::create(
+            &mut self.random_number_generator,
+            self.map_parameters.map_size.width,
+            self.map_parameters.map_size.height,
+            3,
+            Flags::default(),
+            -1,
+            -1,
+        );
+        let deserts_fractal = CvFractal::create(
+            &mut self.random_number_generator,
+            self.map_parameters.map_size.width,
+            self.map_parameters.map_size.height,
+            3,
+            Flags::default(),
+            -1,
+            -1,
+        );
+        let plains_fractal = CvFractal::create(
+            &mut self.random_number_generator,
+            self.map_parameters.map_size.width,
+            self.map_parameters.map_size.height,
+            3,
+            Flags::default(),
+            -1,
+            -1,
+        );
 
-        let mut deserts_height = Vec::with_capacity(self.tile_list.len());
-        let mut plains_height = Vec::with_capacity(self.tile_list.len());
+        let [desert_top, plains_top] =
+            deserts_fractal.get_height_from_percents(&[desert_top_percent, plains_top_percent])[..]
+        else {
+            panic!("Vec length does not match the pattern")
+        };
+        let [desert_bottom, plains_bottom] = plains_fractal
+            .get_height_from_percents(&[desert_bottom_percent, plains_bottom_percent])[..]
+        else {
+            panic!("Vec length does not match the pattern")
+        };
 
-        self.tile_list.values().for_each(|tile| {
-            let pixel_position = tile
-                .pixel_relative_position(self.map_parameters.hex_layout)
-                .to_array();
-
-            let deserts_elevation = (deserts_fbm.get(pixel_position) + 1.0) / 2.0;
-            let deserts_val = (deserts_elevation * 255.) as i32;
-            deserts_height.push(deserts_val);
-
-            let plains_elevation = (plains_fbm.get(pixel_position) + 1.0) / 2.0;
-            let plains_val = (plains_elevation * 255.) as i32;
-            plains_height.push(plains_val);
-        });
-
-        let mut deserts_height_sorted = deserts_height.clone();
-        let mut plains_height_sorted = plains_height.clone();
-
-        deserts_height_sorted.sort_unstable();
-        plains_height_sorted.sort_unstable();
-
-        let desert_top = Self::get_height(&deserts_height_sorted, desert_top_percent);
-        let desert_bottom = Self::get_height(&plains_height_sorted, desert_bottom_percent);
-        let plains_top = Self::get_height(&deserts_height_sorted, plains_top_percent);
-        let plains_bottom = Self::get_height(&plains_height_sorted, plains_bottom_percent);
-
-        let (_, max_latitude) = self.max_longitude_and_max_latitude();
+        let width = self.map_parameters.map_size.width;
+        let height = self.map_parameters.map_size.height;
 
         self.tile_list
             .values_mut()
             .filter(|tile| {
                 tile.base_terrain.name != "Ocean" && tile.base_terrain.name != "Mountain"
             })
-            .zip(deserts_height)
-            .zip(plains_height)
-            .for_each(|((tile, desert_val), plain_val)| {
-                let pixel_position = tile
-                    .pixel_relative_position(self.map_parameters.hex_layout)
-                    .to_array();
-                let mut latitude = pixel_position[1];
-                let elevation = (variation_fbm.get(pixel_position) + 1.0) / 2.0;
-                let height = elevation * 255.;
-                latitude = latitude.abs() / max_latitude;
-                latitude += (128. - height) / (255.0 * 5.0);
+            .for_each(|tile| {
+                let hex_coord = Hex::from(tile.hex_position);
+                let offset_coord = hex_coord.to_offset_coordinate(
+                    self.map_parameters.offset,
+                    self.map_parameters.hex_layout.orientation,
+                );
+                let [x, y] = offset_coord.to_array();
+
+                let deserts_height = deserts_fractal.get_height(x, y);
+                let plains_height = plains_fractal.get_height(x, y);
+
+                let mut latitude = ((height as f64 / 2. - y as f64) / (height as f64 / 2.)).abs();
+                latitude += (128 - variation_fractal.get_height(x, y)) as f64 / (255.0 * 5.0);
                 latitude = latitude.clamp(0., 1.);
 
                 if latitude >= snow_latitude {
@@ -564,13 +597,13 @@ impl TileMap {
                     tile.base_terrain = ruleset.terrains["Tundra"].clone()
                 } else if latitude < grass_latitude {
                     tile.base_terrain = ruleset.terrains["Grassland"].clone()
-                } else if desert_val >= desert_bottom
-                    && desert_val <= desert_top
+                } else if deserts_height >= desert_bottom
+                    && deserts_height <= desert_top
                     && latitude >= desert_bottom_latitude
                     && latitude < desert_top_latitude
                 {
                     tile.base_terrain = ruleset.terrains["Desert"].clone()
-                } else if plain_val >= plains_bottom && plain_val <= plains_top {
+                } else if plains_height >= plains_bottom && plains_height <= plains_top {
                     tile.base_terrain = ruleset.terrains["Plains"].clone()
                 }
             });
@@ -1093,30 +1126,32 @@ impl TileMap {
             return;
         }
 
+        // In this tuple, The first element is next possible flow, the second element is the direction of the special plot relative to current plot
+        // We evaluate the weight value of the special plot using a certain algorithm and select the minimum one to determine the next direction of the river flow 
         let adjacent_plot_directions = match self.map_parameters.hex_layout.orientation {
             HexOrientation::Pointy => [
-                (Direction::North, &Direction::NorthWest),
-                (Direction::NorthEast, &Direction::NorthEast),
-                (Direction::SouthEast, &Direction::East),
-                (Direction::South, &Direction::SouthWest),
-                (Direction::SouthWest, &Direction::West),
-                (Direction::NorthWest, &Direction::NorthWest),
+                (Direction::North, Direction::NorthWest),
+                (Direction::NorthEast, Direction::NorthEast),
+                (Direction::SouthEast, Direction::East),
+                (Direction::South, Direction::SouthWest),
+                (Direction::SouthWest, Direction::West),
+                (Direction::NorthWest, Direction::NorthWest),
             ],
             HexOrientation::Flat => [
-                (Direction::East, &Direction::NorthEast),
-                (Direction::SouthEast, &Direction::South),
-                (Direction::SouthWest, &Direction::SouthWest),
-                (Direction::West, &Direction::NorthWest),
-                (Direction::NorthWest, &Direction::NorthWest),
-                (Direction::NorthEast, &Direction::North),
+                (Direction::East, Direction::NorthEast),
+                (Direction::SouthEast, Direction::South),
+                (Direction::SouthWest, Direction::SouthWest),
+                (Direction::West, Direction::NorthWest),
+                (Direction::NorthWest, Direction::NorthWest),
+                (Direction::NorthEast, Direction::North),
             ],
         };
 
-        fn next_flow_directions(flow_direction: &Direction, tile_map: &TileMap) -> [Direction; 2] {
+        fn next_flow_directions(flow_direction: Direction, tile_map: &TileMap) -> [Direction; 2] {
             let direction_array = tile_map.tile_corner_direction();
             let index = direction_array
                 .iter()
-                .position(|x| x == flow_direction)
+                .position(|&dir| dir == flow_direction)
                 .unwrap();
             [
                 direction_array[(index + 1) % 6], // turn_right_flow_direction
@@ -1124,7 +1159,7 @@ impl TileMap {
             ]
         }
 
-        fn river_value_at_plot(plot: &[i32; 2], tile_map: &mut TileMap) -> i32 {
+        fn river_value_at_plot(plot: [i32; 2], tile_map: &mut TileMap) -> i32 {
             fn plot_elevation(tile: &Tile) -> i32 {
                 if tile.is_mountain() {
                     4
@@ -1136,7 +1171,7 @@ impl TileMap {
                     1
                 }
             }
-            let tile = &tile_map.tile_list[plot];
+            let tile = &tile_map.tile_list[&plot];
             let mut sum = plot_elevation(tile) * 20;
             let direction_array = tile_map.tile_edge_direction();
             direction_array.iter().for_each(|&direction| {
@@ -1154,11 +1189,11 @@ impl TileMap {
         }
 
         let adjacent_plot_list = adjacent_plot_directions
-            .iter()
-            .filter_map(|(flow_direction, &direction)| {
+            .into_iter()
+            .filter_map(|(flow_direction, direction)| {
                 river_plot_tile
                     .tile_neighbor(self, direction)
-                    .map(|neighbor_tile| (*flow_direction, neighbor_tile.hex_position))
+                    .and_then(|neighbor_tile| Some((flow_direction, neighbor_tile.hex_position)))
             })
             .collect::<Vec<_>>();
 
@@ -1167,10 +1202,10 @@ impl TileMap {
             for (flow_direction, adjacent_plot) in adjacent_plot_list.into_iter() {
                 if flow_direction.opposite_direction() != original_flow_direction
                     && (this_flow_direction == Direction::NoDirection
-                        || next_flow_directions(&this_flow_direction, self)
+                        || next_flow_directions(this_flow_direction, self)
                             .contains(&flow_direction))
                 {
-                    let mut value = river_value_at_plot(&adjacent_plot, self);
+                    let mut value = river_value_at_plot(adjacent_plot, self);
                     if flow_direction == original_flow_direction {
                         value = (value * 3) / 4;
                     }
@@ -1300,7 +1335,7 @@ impl TileMap {
 
         let tile_list_position: Vec<_> = self.tile_list.keys().copied().collect();
 
-        let (_, max_latitude) = self.max_longitude_and_max_latitude();
+        let height = self.map_parameters.map_size.height;
 
         for hex_position in tile_list_position.iter() {
             let tile = &self.tile_list[hex_position];
@@ -1316,11 +1351,15 @@ impl TileMap {
                     .occurs_on
                     .contains(&tile.base_terrain.name)
             {
-                let pixel_position = tile
-                    .pixel_relative_position(self.map_parameters.hex_layout)
-                    .to_array();
-                let mut latitude = pixel_position[1];
-                latitude = latitude.abs() / max_latitude;
+                let hex_coord = Hex::from(tile.hex_position);
+                let offset_coord = hex_coord.to_offset_coordinate(
+                    self.map_parameters.offset,
+                    self.map_parameters.hex_layout.orientation,
+                );
+                let [_x, y] = offset_coord.to_array();
+
+                let latitude = ((height as f64 / 2. - y as f64) / (height as f64 / 2.)).abs();
+
                 if latitude > 0.78 {
                     let mut score = self.random_number_generator.gen_range(0..100) as f64;
                     score += latitude * 100.;
@@ -1418,11 +1457,14 @@ impl TileMap {
             /* **********start to add jungle********** */
             if !marsh {
                 let tile = &self.tile_list[hex_position];
-                let pixel_position = tile
-                    .pixel_relative_position(self.map_parameters.hex_layout)
-                    .to_array();
-                let mut latitude = pixel_position[1];
-                latitude /= max_latitude;
+                let hex_coord = Hex::from(tile.hex_position);
+                let offset_coord = hex_coord.to_offset_coordinate(
+                    self.map_parameters.offset,
+                    self.map_parameters.hex_layout.orientation,
+                );
+                let [_x, y] = offset_coord.to_array();
+
+                let latitude = ((height as f64 / 2. - y as f64) / (height as f64 / 2.)).abs();
                 if ruleset.terrains["Jungle"]
                     .occurs_on
                     .contains(&tile.base_terrain.name)
