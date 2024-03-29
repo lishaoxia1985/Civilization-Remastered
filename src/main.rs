@@ -6,7 +6,7 @@ use assets::{AssetsPlugin, MaterialResource};
 use bevy_prototype_lyon::prelude::*;
 use ruleset::Ruleset;
 use tile_map::{
-    hex::{Hex, HexOrientation, Offset, SQRT_3},
+    hex::{Direction, Hex, HexOrientation, Offset, SQRT_3},
     HexLayout, MapParameters, MapSize, TileMap,
 };
 
@@ -123,29 +123,47 @@ fn start_up_system(
 
     tile_map.river_list.values().for_each(|river| {
         let mut path_builder = PathBuilder::new();
-        river.iter().for_each(|(hex_position, direction)| {
-            let tile = &tile_map.tile_list[hex_position];
-            let index = tile_map
-                .tile_edge_direction()
-                .iter()
-                .position(|x| x == direction)
-                .unwrap();
-            let (first_point, second_point) = match tile_map.map_parameters.hex_layout.orientation {
-                HexOrientation::Pointy => (
-                    tile_map.tile_corner_direction()[index],
-                    tile_map.tile_corner_direction()[(index + 1) % 6],
-                ),
-                HexOrientation::Flat => (
-                    tile_map.tile_corner_direction()[(index + 5) % 6],
-                    tile_map.tile_corner_direction()[index],
-                ),
-            };
-            let first_point_position = tile.tile_corner_position(first_point, &tile_map);
-            let second_point_position = tile.tile_corner_position(second_point, &tile_map);
+        river
+            .iter()
+            .enumerate()
+            .for_each(|(index, (hex_position, flow_direction))| {
+                let tile = &tile_map.tile_list[hex_position];
+                let (first_point, second_point) =
+                    match tile_map.map_parameters.hex_layout.orientation {
+                        HexOrientation::Pointy => match *flow_direction {
+                            Direction::North => (Direction::SouthEast, Direction::NorthEast),
+                            Direction::NorthEast => (Direction::South, Direction::SouthEast),
+                            Direction::East => panic!(),
+                            Direction::SouthEast => (Direction::SouthWest, Direction::South),
+                            Direction::South => (Direction::NorthEast, Direction::SouthEast),
+                            Direction::SouthWest => (Direction::SouthEast, Direction::South),
+                            Direction::West => panic!(),
+                            Direction::NorthWest => (Direction::South, Direction::SouthWest),
+                            Direction::NoDirection => panic!(),
+                        },
+                        HexOrientation::Flat => match *flow_direction {
+                            Direction::North => panic!(),
+                            Direction::NorthEast => (Direction::SouthEast, Direction::East),
+                            Direction::East => (Direction::SouthWest, Direction::SouthEast),
+                            Direction::SouthEast => (Direction::NorthEast, Direction::East),
+                            Direction::South => panic!(),
+                            Direction::SouthWest => (Direction::East, Direction::SouthEast),
+                            Direction::West => (Direction::SouthEast, Direction::SouthWest),
+                            Direction::NorthWest => (Direction::East, Direction::NorthEast),
+                            Direction::NoDirection => panic!(),
+                        },
+                    };
 
-            path_builder.move_to(first_point_position.as_vec2());
-            path_builder.line_to(second_point_position.as_vec2());
-        });
+                if index == 0 {
+                    let first_point_position = tile.tile_corner_position(first_point, &tile_map);
+                    let second_point_position = tile.tile_corner_position(second_point, &tile_map);
+                    path_builder.move_to(first_point_position.as_vec2());
+                    path_builder.line_to(second_point_position.as_vec2());
+                } else {
+                    let second_point_position = tile.tile_corner_position(second_point, &tile_map);
+                    path_builder.line_to(second_point_position.as_vec2());
+                }
+            });
 
         let path = path_builder.build();
 
@@ -156,7 +174,7 @@ fn start_up_system(
                 ..default()
             },
             Stroke::new(Color::BLACK, 2.0),
-            Fill::color(Color::RED),
+            //Fill::color(Color::RED),
         ));
     });
 

@@ -6,7 +6,7 @@ use crate::ruleset::{Ruleset, Terrain};
 
 use super::{
     hex::{Direction, Hex, HexLayout},
-    TileMap,
+    HexOrientation, TileMap,
 };
 
 pub struct Tile {
@@ -47,16 +47,47 @@ impl Tile {
     }
 
     pub fn has_river(&self, direction: Direction, tile_map: &TileMap) -> bool {
+        // this var is ralated to river direction position and river flow direction
+        let ralated_direction = match tile_map.map_parameters.hex_layout.orientation {
+            HexOrientation::Pointy => [
+                (Direction::East, [Direction::North, Direction::South]),
+                (
+                    Direction::SouthEast,
+                    [Direction::NorthEast, Direction::SouthWest],
+                ),
+                (
+                    Direction::SouthWest,
+                    [Direction::NorthWest, Direction::SouthEast],
+                ),
+            ],
+            HexOrientation::Flat => [
+                (
+                    Direction::NorthEast,
+                    [Direction::NorthWest, Direction::SouthEast],
+                ),
+                (
+                    Direction::SouthEast,
+                    [Direction::NorthEast, Direction::SouthWest],
+                ),
+                (Direction::South, [Direction::East, Direction::West]),
+            ],
+        };
         let direction_array = tile_map.tile_edge_direction();
         let index = direction_array
             .iter()
             .position(|&x| x == direction)
             .unwrap() as i32;
         if index < 3 {
-            tile_map
-                .river_list
-                .values()
-                .any(|river| river.contains(&(self.hex_position, direction)))
+            tile_map.river_list.values().any(|river| {
+                river.iter().any(|&(hex_position, river_flow_direction)| {
+                    hex_position == self.hex_position // 1. Check whether there is a river in the current tile
+                        && ralated_direction// 2. Check whether there is a river in the given direction of the tile according to the river flow direction
+                            .iter()
+                            .any(|&(river_position_direction, river_flow_directions)| {
+                                direction == river_position_direction && river_flow_directions.contains(&river_flow_direction)
+                            })
+                })
+            })
         } else if let Some(neighbor_tile) = self.tile_neighbor(tile_map, direction) {
             let dir = direction.opposite_direction();
             neighbor_tile.has_river(dir, tile_map)

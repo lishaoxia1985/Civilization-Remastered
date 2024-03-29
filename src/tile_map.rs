@@ -674,30 +674,31 @@ impl TileMap {
     pub fn add_rivers(&mut self, ruleset: &Res<Ruleset>) {
         let river_source_range_default = 4;
         let sea_water_range_default = 3;
-        let plots_per_river_edge = 12;
+        const plots_per_river_edge: i32 = 12;
 
         fn pass_conditions(
             tile: &Tile,
             tile_map: &TileMap,
             random_number_generator: &mut StdRng,
         ) -> [bool; 4] {
-            let plots_per_river_edge = 12.;
             let num_tiles = tile_map
                 .tile_list
                 .values()
                 .filter(|x| x.area_id == tile.area_id)
-                .count() as f64;
-            let num_river_edges = num_river_edges(tile, tile_map) as f64;
+                .count() as i32;
+            let num_river_edges = num_river_edges(tile, tile_map);
             [
                 tile.is_hill() || tile.is_mountain(),
                 tile.is_coastal_land(tile_map) && random_number_generator.gen_range(0..8) == 0,
                 (tile.is_hill() || tile.is_mountain())
-                    && (num_river_edges < num_tiles / plots_per_river_edge + 1.),
-                num_river_edges < num_tiles / plots_per_river_edge + 1.,
+                    && (num_river_edges < num_tiles / plots_per_river_edge + 1),
+                num_river_edges < num_tiles / plots_per_river_edge + 1,
             ]
         }
 
-        // this method is getting the number of river edges in the area where the tile is
+        // Returns the number of river edges in the area where the tile is
+        // 1. Get the area where the tile is
+        // 2. Get the number of rivers edge which the tile in the area own
         fn num_river_edges(tile: &Tile, tile_map: &TileMap) -> i32 {
             let mut num_river_edges = 0;
             let area_tile_list: Vec<_> = tile_map
@@ -707,14 +708,13 @@ impl TileMap {
                 .collect();
             area_tile_list.iter().for_each(|tile| {
                 tile_map.river_list.values().for_each(|river_plot| {
-                    for (hex_position, _) in river_plot.iter() {
-                        if hex_position == &tile.hex_position {
-                            num_river_edges += 1
-                        }
-                    }
+                    num_river_edges = river_plot
+                        .iter()
+                        .filter(|(hex_position, _)| hex_position == &tile.hex_position)
+                        .count();
                 });
             });
-            num_river_edges
+            num_river_edges as i32
         }
 
         let mut random_number_generator = self.random_number_generator.clone();
@@ -801,7 +801,7 @@ impl TileMap {
                     self.river_list
                         .entry(river_id)
                         .or_default()
-                        .push((river_plot, Direction::East));
+                        .push((river_plot, this_flow_direction));
                     let river_plot_tile = &self.tile_list[&river_plot];
                     if let Some(neighbor_tile) =
                         river_plot_tile.tile_neighbor(self, Direction::NorthEast)
@@ -823,7 +823,7 @@ impl TileMap {
                     self.river_list
                         .entry(river_id)
                         .or_default()
-                        .push((river_plot, Direction::SouthEast));
+                        .push((river_plot, this_flow_direction));
                     let river_plot_tile = &self.tile_list[&river_plot];
                     if let Some(neighbor_tile) =
                         river_plot_tile.tile_neighbor(self, Direction::East)
@@ -849,7 +849,7 @@ impl TileMap {
                     self.river_list
                         .entry(river_id)
                         .or_default()
-                        .push((river_plot, Direction::SouthWest));
+                        .push((river_plot, this_flow_direction));
                     let river_plot_tile = &self.tile_list[&river_plot];
                     if let Some(neighbor_tile) =
                         river_plot_tile.tile_neighbor(self, Direction::SouthEast)
@@ -886,7 +886,7 @@ impl TileMap {
                     self.river_list
                         .entry(river_id)
                         .or_default()
-                        .push((river_plot, Direction::East));
+                        .push((river_plot, this_flow_direction));
                     let river_plot_tile = &self.tile_list[&river_plot];
                     if let Some(neighbor_tile) =
                         river_plot_tile.tile_neighbor(self, Direction::SouthEast)
@@ -914,7 +914,7 @@ impl TileMap {
                     self.river_list
                         .entry(river_id)
                         .or_default()
-                        .push((river_plot, Direction::SouthEast));
+                        .push((river_plot, this_flow_direction));
                     let river_plot_tile = &self.tile_list[&river_plot];
                     if let Some(neighbor_tile) =
                         river_plot_tile.tile_neighbor(self, Direction::SouthWest)
@@ -935,7 +935,7 @@ impl TileMap {
                     self.river_list
                         .entry(river_id)
                         .or_default()
-                        .push((river_plot, Direction::SouthWest));
+                        .push((river_plot, this_flow_direction));
                     let river_plot_tile = &self.tile_list[&river_plot];
                     if let Some(neighbor_tile) =
                         river_plot_tile.tile_neighbor(self, Direction::West)
@@ -963,7 +963,7 @@ impl TileMap {
                     self.river_list
                         .entry(river_id)
                         .or_default()
-                        .push((river_plot, Direction::SouthEast));
+                        .push((river_plot, this_flow_direction));
                     let river_plot_tile = &self.tile_list[&river_plot];
                     if let Some(neighbor_tile) =
                         river_plot_tile.tile_neighbor(self, Direction::NorthEast)
@@ -990,7 +990,7 @@ impl TileMap {
                     self.river_list
                         .entry(river_id)
                         .or_default()
-                        .push((river_plot, Direction::South));
+                        .push((river_plot, this_flow_direction));
                     let river_plot_tile = &self.tile_list[&river_plot];
                     if let Some(neighbor_tile) =
                         river_plot_tile.tile_neighbor(self, Direction::SouthEast)
@@ -1025,7 +1025,7 @@ impl TileMap {
                     self.river_list
                         .entry(river_id)
                         .or_default()
-                        .push((river_plot, Direction::NorthEast));
+                        .push((river_plot, this_flow_direction));
                     let river_plot_tile = &self.tile_list[&river_plot];
                     if let Some(neighbor_tile) =
                         river_plot_tile.tile_neighbor(self, Direction::SouthEast)
@@ -1056,7 +1056,7 @@ impl TileMap {
                     self.river_list
                         .entry(river_id)
                         .or_default()
-                        .push((river_plot, Direction::SouthEast));
+                        .push((river_plot, this_flow_direction));
                     let river_plot_tile = &self.tile_list[&river_plot];
                     if let Some(neighbor_tile) =
                         river_plot_tile.tile_neighbor(self, Direction::South)
@@ -1076,7 +1076,7 @@ impl TileMap {
                     self.river_list
                         .entry(river_id)
                         .or_default()
-                        .push((river_plot, Direction::South));
+                        .push((river_plot, this_flow_direction));
                     let river_plot_tile = &self.tile_list[&river_plot];
                     if let Some(neighbor_tile) =
                         river_plot_tile.tile_neighbor(self, Direction::SouthWest)
@@ -1098,7 +1098,7 @@ impl TileMap {
                     self.river_list
                         .entry(river_id)
                         .or_default()
-                        .push((river_plot, Direction::NorthEast));
+                        .push((river_plot, this_flow_direction));
                     let river_plot_tile = &self.tile_list[&river_plot];
                     if let Some(neighbor_tile) =
                         river_plot_tile.tile_neighbor(self, Direction::North)
@@ -1127,7 +1127,7 @@ impl TileMap {
         }
 
         // In this tuple, The first element is next possible flow, the second element is the direction of the special plot relative to current plot
-        // We evaluate the weight value of the special plot using a certain algorithm and select the minimum one to determine the next direction of the river flow 
+        // We evaluate the weight value of the special plot using a certain algorithm and select the minimum one to determine the next direction of the river flow
         let adjacent_plot_directions = match self.map_parameters.hex_layout.orientation {
             HexOrientation::Pointy => [
                 (Direction::North, Direction::NorthWest),
