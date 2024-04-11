@@ -35,20 +35,17 @@ impl Tile {
         tile_map: &'a TileMap,
         direction: Direction,
     ) -> Option<&Tile> {
-        let direction_array = tile_map.tile_edge_direction();
-        let neighbor_tile_position = direction_array
-            .iter()
-            .position(|&x| x == direction)
-            .unwrap() as i32;
-        let hex_position = Hex::from(self.hex_position)
-            .hex_neighbor(neighbor_tile_position)
+        let orientation = tile_map.map_parameters.hex_layout.orientation;
+        let hex_neighbor = Hex::from(self.hex_position)
+            .neighbor(orientation, direction)
             .to_array();
-        tile_map.tile_list.get(&hex_position)
+        tile_map.tile_list.get(&hex_neighbor)
     }
 
     pub fn has_river(&self, direction: Direction, tile_map: &TileMap) -> bool {
-        // this var is ralated to river direction position and river flow direction
-        let ralated_direction = match tile_map.map_parameters.hex_layout.orientation {
+        // This variable is related to river direction position and river flow direction
+        let river_position_and_flow_direction = match tile_map.map_parameters.hex_layout.orientation
+        {
             HexOrientation::Pointy => [
                 (Direction::East, [Direction::North, Direction::South]),
                 (
@@ -72,16 +69,18 @@ impl Tile {
                 (Direction::South, [Direction::East, Direction::West]),
             ],
         };
-        let direction_array = tile_map.tile_edge_direction();
-        let index = direction_array
-            .iter()
-            .position(|&x| x == direction)
-            .unwrap() as i32;
-        if index < 3 {
+
+        let edge_index = tile_map
+            .map_parameters
+            .hex_layout
+            .orientation
+            .edge_index(direction);
+
+        if edge_index < 3 {
             tile_map.river_list.values().any(|river| {
                 river.iter().any(|&(hex_position, river_flow_direction)| {
                     hex_position == self.hex_position // 1. Check whether there is a river in the current tile
-                        && ralated_direction// 2. Check whether there is a river in the given direction of the tile according to the river flow direction
+                        && river_position_and_flow_direction// 2. Check whether there is a river in the given direction of the tile according to the river flow direction
                             .iter()
                             .any(|&(river_position_direction, river_flow_directions)| {
                                 direction == river_position_direction && river_flow_directions.contains(&river_flow_direction)
@@ -117,15 +116,10 @@ impl Tile {
     }
 
     pub fn tile_corner_position(&self, direction: Direction, tile_map: &TileMap) -> DVec2 {
-        let direction_array = tile_map.tile_corner_direction();
-        let corner_position = direction_array
-            .iter()
-            .position(|&x| x == direction)
-            .unwrap() as i32;
         tile_map
             .map_parameters
             .hex_layout
-            .polygon_corner(Hex::from(self.hex_position), corner_position)
+            .corner(Hex::from(self.hex_position), direction)
     }
 
     pub fn is_adjacent_to(&self, terrain: &str, tile_map: &TileMap) -> bool {

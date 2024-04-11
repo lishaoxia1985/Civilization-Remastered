@@ -2,7 +2,7 @@
 
 use std::array;
 use std::cmp::{max, min};
-use std::f64::consts::FRAC_PI_3;
+use std::f64::consts::{FRAC_PI_3, FRAC_PI_6};
 use std::ops::{Add, Sub};
 
 use bevy::math::{DMat2, DVec2, IVec2};
@@ -89,8 +89,9 @@ impl Hex {
         }
     }
 
-    pub fn hex_neighbor(self, direction: i32) -> Hex {
-        Self(self.0 + Self::HEX_DIRECTIONS[direction as usize].0)
+    pub fn neighbor(self, orientation: HexOrientation, direction: Direction) -> Hex {
+        let edge_index = orientation.edge_index(direction);
+        Self(self.0 + Self::HEX_DIRECTIONS[edge_index].0)
     }
 
     pub fn hex_diagonal_neighbor(self, direction: i32) -> Hex {
@@ -232,15 +233,6 @@ impl DoubledCoordinate {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
-pub struct Orientation {
-    /// Matrix used to compute hexagonal coordinates to pixel coordinates
-    pub f: DMat2,
-    /// Matrix used to compute pixel coordinates to hexagonal coordinates
-    pub b: DMat2,
-    pub start_angle: f64,
-}
-
 #[derive(PartialEq, Clone, Copy, Debug)]
 pub enum Direction {
     North,
@@ -255,81 +247,6 @@ pub enum Direction {
 }
 
 impl Direction {
-    /// Pointy hex edge direction
-    /// ```txt
-    ///            x Axis
-    ///
-    ///          / \     / \
-    ///         /   \   /   \
-    ///        /     \ /     \
-    ///       |       |       |
-    ///       |   4   |   5   |
-    ///       |       |       |
-    ///      / \     /5\     / \
-    ///     /   \   /   \   /   \
-    ///    /     \ /     \ /     \
-    ///   |       |4     0|       |
-    ///   |   3   | Hex-A |   0   |
-    ///   |       |3     1|       |
-    ///    \     / \     / \     /
-    ///     \   /   \   /   \   /
-    ///      \ /     \2/     \ /
-    ///       |       |       |
-    ///       |   2   |   1   |
-    ///       |       |       |
-    ///        \     / \     /
-    ///         \   /   \   /
-    ///          \ /     \ /    y Axis
-    ///  ```
-    ///     
-    pub const POINTY_EDGE: [Direction; 6] = [
-        Direction::East,
-        Direction::SouthEast,
-        Direction::SouthWest,
-        Direction::West,
-        Direction::NorthWest,
-        Direction::NorthEast,
-    ];
-
-    /// Pointy hex corner direction
-    pub const POINTY_CORNER: [Direction; 6] = [
-        Direction::NorthEast,
-        Direction::SouthEast,
-        Direction::South,
-        Direction::SouthWest,
-        Direction::NorthWest,
-        Direction::North,
-    ];
-
-    /// Flat hex edge direction
-    /// ```txt
-    ///            x Axis     
-    ///                 ________
-    ///                /        \
-    ///               /          \
-    ///      ________/     5      \________
-    ///     /        \            /        \
-    ///    /          \          /          \
-    ///   /     4      \________/     0      \
-    ///   \            /4      5\            /
-    ///    \          /          \          /
-    ///     \________/3   Hex-A  0\________/
-    ///     /        \            /        \
-    ///    /          \          /          \
-    ///   /     3      \2______1/     1      \
-    ///   \            /        \            /
-    ///    \          /          \          /
-    ///     \________/     2      \________/
-    ///              \            /
-    ///               \          /
-    ///                \________/       y Axis     
-    /// ```
-    ///    
-    pub const FLAT_EDGE: [Direction; 6] = Self::POINTY_CORNER;
-
-    /// Flat hex corner direction
-    pub const FLAT_CORNER: [Direction; 6] = Self::POINTY_EDGE;
-
     pub fn opposite_direction(self) -> Self {
         match self {
             Direction::North => Direction::South,
@@ -352,52 +269,40 @@ pub struct HexLayout {
     pub origin: DVec2,
 }
 impl HexLayout {
-    pub const fn edge_direction(&self) -> [Direction; 6] {
-        match self.orientation {
-            HexOrientation::Pointy => Direction::POINTY_EDGE,
-            HexOrientation::Flat => Direction::FLAT_EDGE,
-        }
-    }
-
-    pub const fn corner_direction(&self) -> [Direction; 6] {
-        match self.orientation {
-            HexOrientation::Pointy => Direction::POINTY_CORNER,
-            HexOrientation::Flat => Direction::FLAT_CORNER,
-        }
-    }
-
     pub fn hex_to_pixel(self, hex: Hex) -> DVec2 {
-        let m = self.orientation.value();
+        let m = self.orientation.conversion_matrix();
         let size: DVec2 = self.size;
         let origin: DVec2 = self.origin;
-        let mat2 = m.f;
+        let mat2 = m.forward_matrix;
         let pixel_position = mat2 * (hex.0.as_dvec2()) * size;
         pixel_position + origin
     }
 
     pub fn pixel_to_hex(self, pixel_position: DVec2) -> Hex {
-        let m = self.orientation.value();
+        let m = self.orientation.conversion_matrix();
         let (size, origin) = (self.size, self.origin);
         let pt = (pixel_position - origin) / size;
-        let mat2 = m.b;
+        let mat2 = m.inverse_matrix;
         let fractional_hex = mat2 * pt;
         Hex::round(fractional_hex)
     }
 
-    pub fn polygon_corner(self, hex: Hex, i: i32) -> DVec2 {
+    /// Get the corner coordinates of the given hexagonal coordinates according to corner direction
+    pub fn corner(self, hex: Hex, direction: Direction) -> DVec2 {
         let center: DVec2 = self.hex_to_pixel(hex);
-        let offset: DVec2 = self.hex_corner_offset(i);
+        let offset: DVec2 = self.corner_offset(direction);
         center + offset
     }
 
-    pub fn polygon_corners(self, hex: Hex) -> [DVec2; 6] {
-        array::from_fn(|i| self.polygon_corner(hex, i as i32))
+    /// Retrieves all 6 corner coordinates of the given hexagonal coordinates
+    pub fn all_corners(self, hex: Hex) -> [DVec2; 6] {
+        let corner_array = self.orientation.corner_direction();
+        array::from_fn(|i| self.corner(hex, corner_array[i]))
     }
 
-    fn hex_corner_offset(self, corner: i32) -> DVec2 {
-        let m = self.orientation.value();
+    fn corner_offset(self, direction: Direction) -> DVec2 {
         let size: DVec2 = self.size;
-        let angle: f64 = (m.start_angle - corner as f64) * FRAC_PI_3;
+        let angle: f64 = self.orientation.corner_angle(direction);
         size * DVec2::from_angle(angle)
     }
 }
@@ -428,6 +333,15 @@ impl Offset {
 }
 
 #[derive(Clone, Copy, Debug)]
+/// This struct stored a forward and inverse matrix, for pixel/hex conversion
+pub struct ConversionMatrix {
+    /// Matrix used to compute hexagonal coordinates to pixel coordinates
+    pub forward_matrix: DMat2,
+    /// Matrix used to compute pixel coordinates to hexagonal coordinates
+    pub inverse_matrix: DMat2,
+}
+
+#[derive(Clone, Copy, Debug)]
 pub enum HexOrientation {
     /// ⬢, [`Hex`] is pointy-topped
     Pointy,
@@ -436,22 +350,187 @@ pub enum HexOrientation {
 }
 
 impl HexOrientation {
-    const POINTY_ORIENTATION: Orientation = Orientation {
-        f: DMat2::from_cols_array(&[SQRT_3, 0.0, SQRT_3 / 2.0, 3.0 / 2.0]),
-        b: DMat2::from_cols_array(&[SQRT_3 / 3.0, 0.0, -1.0 / 3.0, 2.0 / 3.0]),
-        start_angle: 0.5,
+    /// Pointy hex edge direction, the directions of the edges of a `Hex` relative to its center
+    ///
+    /// - The number in the Hex-A is the index of the direction of the Hex-A corner in the array of all the corner direction
+    /// - The number outside the Hex-A is the index of the direction of the Hex-A edge in the array of all the edge direction
+    ///
+    /// ```txt
+    ///
+    ///          / \     / \
+    ///         /   \   /   \
+    ///        /     \ /     \
+    ///       |       |       |
+    ///       |   4   |   5   |
+    ///       |       |       |
+    ///      / \     /5\     / \
+    ///     /   \   /   \   /   \
+    ///    /     \ /     \ /     \
+    ///   |       |4     0|       |
+    ///   |   3   | Hex-A |   0   |
+    ///   |       |3     1|       |
+    ///    \     / \     / \     /
+    ///     \   /   \   /   \   /
+    ///      \ /     \2/     \ /
+    ///       |       |       |
+    ///       |   2   |   1   |
+    ///       |       |       |
+    ///        \     / \     /
+    ///         \   /   \   /
+    ///          \ /     \ /
+    ///  ```
+    ///     
+    pub const POINTY_EDGE: [Direction; 6] = [
+        Direction::East,
+        Direction::SouthEast,
+        Direction::SouthWest,
+        Direction::West,
+        Direction::NorthWest,
+        Direction::NorthEast,
+    ];
+
+    /// Pointy hex corner direction, the directions of the corners of a `Hex` relative to its center
+    /// > See [`POINTY_EDGE`] for more information
+    pub const POINTY_CORNER: [Direction; 6] = [
+        Direction::NorthEast,
+        Direction::SouthEast,
+        Direction::South,
+        Direction::SouthWest,
+        Direction::NorthWest,
+        Direction::North,
+    ];
+
+    /// Flat hex edge direction, the directions of the edges of a `Hex` relative to its center
+    ///  
+    /// - The number in the Hex-A is the index of the direction of the Hex-A corner in the array of all the corner direction
+    /// - The number outside the Hex-A is the index of the direction of the Hex-A edge in the array of all the edge direction
+    ///
+    /// ```txt
+    ///                 ________
+    ///                /        \
+    ///               /          \
+    ///      ________/     5      \________
+    ///     /        \            /        \
+    ///    /          \          /          \
+    ///   /     4      \________/     0      \
+    ///   \            /4      5\            /
+    ///    \          /          \          /
+    ///     \________/3   Hex-A  0\________/
+    ///     /        \            /        \
+    ///    /          \          /          \
+    ///   /     3      \2______1/     1      \
+    ///   \            /        \            /
+    ///    \          /          \          /
+    ///     \________/     2      \________/
+    ///              \            /
+    ///               \          /
+    ///                \________/
+    /// ```
+    ///    
+    pub const FLAT_EDGE: [Direction; 6] = Self::POINTY_CORNER;
+
+    /// Flat hex corner direction, the directions of the corners of a `Hex` relative to its center
+    /// > See [`FLAT_EDGE`] for more information
+    pub const FLAT_CORNER: [Direction; 6] = Self::POINTY_EDGE;
+
+    #[inline]
+    /// Get the index of the direction of the `Hex` corner in the array of all the corner direction
+    pub fn corner_index(self, direction: Direction) -> usize {
+        self.corner_direction()
+            .iter()
+            .position(|&x| x == direction)
+            .unwrap()
+    }
+
+    #[inline]
+    /// Get the index of the direction of the `Hex` edge in the array of all the edge direction
+    pub fn edge_index(self, direction: Direction) -> usize {
+        self.edge_direction()
+            .iter()
+            .position(|&x| x == direction)
+            .unwrap()
+    }
+
+    // Returns the next corner direction in clockwise order
+    pub fn corner_clockwise(self, corner_direction: Direction) -> Direction {
+        let corner_index = self.corner_index(corner_direction);
+        self.corner_direction()[(corner_index + 1) / 6]
+    }
+
+    // Returns the next edge direction in clockwise order
+    pub fn edge_clockwise(self, edge_direction: Direction) -> Direction {
+        let edge_index = self.edge_index(edge_direction);
+        self.edge_direction()[(edge_index + 1) / 6]
+    }
+
+    // Returns the next corner direction in counter clockwise order
+    pub fn corner_counter_clockwise(self, corner_direction: Direction) -> Direction {
+        let corner_index = self.corner_index(corner_direction);
+        self.corner_direction()[(corner_index + 5) / 6]
+    }
+
+    // Returns the next edge direction in counter clockwise order
+    pub fn edge_counter_clockwise(self, edge_direction: Direction) -> Direction {
+        let edge_index = self.edge_index(edge_direction);
+        self.edge_direction()[(edge_index + 5) / 6]
+    }
+
+    #[inline]
+    /// Returns the angle of the `Hex` corner in radians of the given direction for the hexagons
+    pub fn corner_angle(self, direction: Direction) -> f64 {
+        let start_angle = match self {
+            HexOrientation::Pointy => FRAC_PI_6,
+            HexOrientation::Flat => 0.0,
+        };
+        let corner_index = self.corner_index(direction) as f64;
+        start_angle - corner_index * FRAC_PI_3
+    }
+
+    #[inline]
+    /// Returns the angle of the `Hex` edge in radians of the given direction for the hexagons
+    pub fn edge_angle(self, direction: Direction) -> f64 {
+        let start_angle = match self {
+            HexOrientation::Pointy => 0.0,
+            HexOrientation::Flat => FRAC_PI_6,
+        };
+        let edge_index = self.edge_index(direction) as f64;
+        start_angle - edge_index * FRAC_PI_3
+    }
+
+    const POINTY_CONVERSION_MATRIX: ConversionMatrix = ConversionMatrix {
+        forward_matrix: DMat2::from_cols_array(&[SQRT_3, 0.0, SQRT_3 / 2.0, 3.0 / 2.0]),
+        inverse_matrix: DMat2::from_cols_array(&[SQRT_3 / 3.0, 0.0, -1.0 / 3.0, 2.0 / 3.0]),
     };
 
-    const FLAT_ORIENTATION: Orientation = Orientation {
-        f: DMat2::from_cols_array(&[3.0 / 2.0, SQRT_3 / 2.0, 0.0, SQRT_3]),
-        b: DMat2::from_cols_array(&[2.0 / 3.0, -1.0 / 3.0, 0.0, SQRT_3 / 3.0]),
-        start_angle: 0.0,
+    const FLAT_CONVERSION_MATRIX: ConversionMatrix = ConversionMatrix {
+        forward_matrix: DMat2::from_cols_array(&[3.0 / 2.0, SQRT_3 / 2.0, 0.0, SQRT_3]),
+        inverse_matrix: DMat2::from_cols_array(&[2.0 / 3.0, -1.0 / 3.0, 0.0, SQRT_3 / 3.0]),
     };
 
-    fn value(self) -> Orientation {
+    #[inline]
+    /// Get `ConversionMatrix` for pixel/hex conversion
+    const fn conversion_matrix(self) -> ConversionMatrix {
         match self {
-            Self::Pointy => Self::POINTY_ORIENTATION,
-            Self::Flat => Self::FLAT_ORIENTATION,
+            Self::Pointy => Self::POINTY_CONVERSION_MATRIX,
+            Self::Flat => Self::FLAT_CONVERSION_MATRIX,
+        }
+    }
+
+    #[inline]
+    // Get all the directions of the edges of a `Hex` relative to its center
+    pub const fn edge_direction(&self) -> [Direction; 6] {
+        match self {
+            HexOrientation::Pointy => Self::POINTY_EDGE,
+            HexOrientation::Flat => Self::FLAT_EDGE,
+        }
+    }
+
+    #[inline]
+    // Get all the directions of the corners of a `Hex` relative to its center
+    pub const fn corner_direction(&self) -> [Direction; 6] {
+        match self {
+            HexOrientation::Pointy => Self::POINTY_CORNER,
+            HexOrientation::Flat => Self::FLAT_CORNER,
         }
     }
 }
@@ -462,7 +541,8 @@ mod tests {
     use bevy::math::{DVec2, IVec2};
 
     use super::{
-        hex_linedraw, DoubledCoordinate, Hex, HexLayout, HexOrientation, Offset, OffsetCoordinate,
+        hex_linedraw, Direction, DoubledCoordinate, Hex, HexLayout, HexOrientation, Offset,
+        OffsetCoordinate,
     };
 
     pub fn equal_hex(name: &str, a: Hex, b: Hex) {
@@ -495,7 +575,12 @@ mod tests {
         equal_hex(
             "hex_neighbor",
             Hex::new(1, -3),
-            Hex::new(1, -2).hex_neighbor(2),
+            Hex::new(1, -2).neighbor(HexOrientation::Flat, Direction::South),
+        );
+        equal_hex(
+            "hex_neighbor",
+            Hex::new(1, -3),
+            Hex::new(1, -2).neighbor(HexOrientation::Pointy, Direction::SouthWest),
         );
     }
 

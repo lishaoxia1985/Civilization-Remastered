@@ -491,7 +491,7 @@ impl CvFractal {
 
             let weakness = max(0, random.gen_range(0..7) - 3);
 
-            let tile_edge_direction = hex_layout.edge_direction();
+            let tile_edge_direction = hex_layout.orientation.edge_direction();
             let bias_direction = *tile_edge_direction.choose(&mut random).unwrap();
 
             let directional_bias_strength = max(0, random.gen_range(0..8) - 4);
@@ -610,7 +610,7 @@ impl CvFractal {
             .map(|(index, _)| index)
             .unwrap();
 
-        hex_layout.edge_direction()[max_index]
+        hex_layout.orientation.edge_direction()[max_index]
     }
 
     pub fn write_to_file(&self, filename: &str) {

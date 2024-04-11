@@ -66,11 +66,14 @@ impl TileMap {
     }
 
     pub const fn tile_edge_direction(&self) -> [Direction; 6] {
-        self.map_parameters.hex_layout.edge_direction()
+        self.map_parameters.hex_layout.orientation.edge_direction()
     }
 
     pub const fn tile_corner_direction(&self) -> [Direction; 6] {
-        self.map_parameters.hex_layout.corner_direction()
+        self.map_parameters
+            .hex_layout
+            .orientation
+            .corner_direction()
     }
 
     pub fn spawn_tile_type_for_fractal(&mut self, ruleset: &Res<Ruleset>) {
@@ -1149,13 +1152,14 @@ impl TileMap {
 
         fn next_flow_directions(flow_direction: Direction, tile_map: &TileMap) -> [Direction; 2] {
             let direction_array = tile_map.tile_corner_direction();
-            let index = direction_array
-                .iter()
-                .position(|&dir| dir == flow_direction)
-                .unwrap();
+            let flow_direction_index = tile_map
+                .map_parameters
+                .hex_layout
+                .orientation
+                .corner_index(flow_direction);
             [
-                direction_array[(index + 1) % 6], // turn_right_flow_direction
-                direction_array[(index + 5) % 6], // turn_left_flow_direction
+                direction_array[(flow_direction_index + 1) % 6], // turn_right_flow_direction
+                direction_array[(flow_direction_index + 5) % 6], // turn_left_flow_direction
             ]
         }
 
