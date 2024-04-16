@@ -234,16 +234,24 @@ impl DoubledCoordinate {
 }
 
 #[derive(PartialEq, Clone, Copy, Debug)]
+/// This enum represents all the directions of hex coordinates
+///
+/// Each enum member has a constant number, it means:\
+/// We should create 2 direction arrays, one for the hex edge and one for the hex corner (We call them A and B).
+/// - From left to right, the first digit of the number represents the index of the direction in the array A.\
+/// If the digit is 9, the direction does not exist in the array A.
+/// - From left to right, the second digit of the number represents the index of the direction in the array B.\
+/// If the digit is 9, the direction does not exist in the array B.
 pub enum Direction {
-    North,
-    NorthEast,
-    East,
-    SouthEast,
-    South,
-    SouthWest,
-    West,
-    NorthWest,
-    NoDirection,
+    North = 95,
+    NorthEast = 50,
+    East = 09,
+    SouthEast = 11,
+    South = 92,
+    SouthWest = 23,
+    West = 39,
+    NorthWest = 44,
+    NoDirection = 99,
 }
 
 impl Direction {
@@ -435,42 +443,44 @@ impl HexOrientation {
 
     #[inline]
     /// Get the index of the direction of the `Hex` corner in the array of all the corner direction
-    pub fn corner_index(self, direction: Direction) -> usize {
-        self.corner_direction()
-            .iter()
-            .position(|&x| x == direction)
-            .unwrap()
+    pub const fn corner_index(self, direction: Direction) -> usize {
+        /* self.corner_direction().iter().position(|&x| x == direction).unwrap() */
+        match self {
+            HexOrientation::Pointy => direction as usize % 10,
+            HexOrientation::Flat => direction as usize / 10,
+        }
     }
 
     #[inline]
     /// Get the index of the direction of the `Hex` edge in the array of all the edge direction
-    pub fn edge_index(self, direction: Direction) -> usize {
-        self.edge_direction()
-            .iter()
-            .position(|&x| x == direction)
-            .unwrap()
+    pub const fn edge_index(self, direction: Direction) -> usize {
+        /* self.edge_direction().iter().position(|&x| x == direction).unwrap() */
+        match self {
+            HexOrientation::Pointy => direction as usize / 10,
+            HexOrientation::Flat => direction as usize % 10,
+        }
     }
 
     // Returns the next corner direction in clockwise order
-    pub fn corner_clockwise(self, corner_direction: Direction) -> Direction {
+    pub const fn corner_clockwise(self, corner_direction: Direction) -> Direction {
         let corner_index = self.corner_index(corner_direction);
         self.corner_direction()[(corner_index + 1) / 6]
     }
 
     // Returns the next edge direction in clockwise order
-    pub fn edge_clockwise(self, edge_direction: Direction) -> Direction {
+    pub const fn edge_clockwise(self, edge_direction: Direction) -> Direction {
         let edge_index = self.edge_index(edge_direction);
         self.edge_direction()[(edge_index + 1) / 6]
     }
 
     // Returns the next corner direction in counter clockwise order
-    pub fn corner_counter_clockwise(self, corner_direction: Direction) -> Direction {
+    pub const fn corner_counter_clockwise(self, corner_direction: Direction) -> Direction {
         let corner_index = self.corner_index(corner_direction);
         self.corner_direction()[(corner_index + 5) / 6]
     }
 
     // Returns the next edge direction in counter clockwise order
-    pub fn edge_counter_clockwise(self, edge_direction: Direction) -> Direction {
+    pub const fn edge_counter_clockwise(self, edge_direction: Direction) -> Direction {
         let edge_index = self.edge_index(edge_direction);
         self.edge_direction()[(edge_index + 5) / 6]
     }
@@ -483,7 +493,8 @@ impl HexOrientation {
             HexOrientation::Flat => 0.0,
         };
         let corner_index = self.corner_index(direction) as f64;
-        start_angle - corner_index * FRAC_PI_3
+        //equal to `start_angle - corner_index * FRAC_PI_3`
+        corner_index.mul_add(-FRAC_PI_3, start_angle)
     }
 
     #[inline]
@@ -494,7 +505,8 @@ impl HexOrientation {
             HexOrientation::Flat => FRAC_PI_6,
         };
         let edge_index = self.edge_index(direction) as f64;
-        start_angle - edge_index * FRAC_PI_3
+        //equal to `start_angle - edge_index * FRAC_PI_3`
+        edge_index.mul_add(-FRAC_PI_3, start_angle)
     }
 
     const POINTY_CONVERSION_MATRIX: ConversionMatrix = ConversionMatrix {

@@ -1,4 +1,7 @@
-use std::cmp::{max, min};
+use std::{
+    array,
+    cmp::{max, min},
+};
 
 use bevy::math::DVec2;
 use image::{imageops::resize, GrayImage, ImageBuffer};
@@ -13,10 +16,45 @@ const DEFAULT_WIDTH_EXP: i32 = 7;
 const DEFAULT_HEIGHT_EXP: i32 = 6;
 
 struct VoronoiSeed {
+    /// The hex coordinate of the seed
     pub hex_coordinate: Hex,
+    /// The weakness value implies the influence of the seed on its surrounding area
     pub weakness: i32,
+    /// The bias direction indicates the preferred direction or bias when assigning points within its influence region during the generation of the diagram.
     pub bias_direction: Direction,
+    /// The strength of the bias direction.
     pub directional_bias_strength: i32,
+}
+
+impl VoronoiSeed {
+    /// Generates a random seed for the fractal
+    pub fn gen_random_seed(
+        random: &mut StdRng,
+        fractal_width: i32,
+        fractal_height: i32,
+        offset: Offset,
+        orientation: HexOrientation,
+    ) -> Self {
+        let offset_coordinate = OffsetCoordinate::new(
+            random.gen_range(0..fractal_width),
+            random.gen_range(0..fractal_height),
+        );
+        let hex_coordinate = offset_coordinate.to_hex(offset, orientation);
+
+        let weakness = random.gen_range(0..6);
+
+        let hex_edge_direction = orientation.edge_direction();
+        let bias_direction = *hex_edge_direction.choose(random).unwrap();
+
+        let directional_bias_strength = random.gen_range(0..4);
+
+        VoronoiSeed {
+            hex_coordinate,
+            weakness,
+            bias_direction,
+            directional_bias_strength,
+        }
+    }
 }
 
 pub struct CvFractal {
@@ -50,18 +88,20 @@ pub struct CvFractal {
 
 #[derive(PartialEq, Eq)]
 pub struct Flags {
-    /// It determines whether the map wraps horizontally. When it's true, the rightmost and leftmost edges of the map are connected to form a circular map.
-    wrap_x: bool,
-    /// It determines whether the map wraps vertically. When it's true, the top and bottom edges of the map are connected to form a circular map.
-    wrap_y: bool,
-    /// If it's false the value of the height is in [0..=255], otherwise the value is in [0..=99]
-    percent: bool,
-    /// Sets polar regions to zero      
-    polar: bool,
+    /// It determines whether the map wraps horizontally. When it's `true`, the rightmost and leftmost edges of the map are connected to form a circular map.
+    pub wrap_x: bool,
+    /// It determines whether the map wraps vertically. When it's `true`, the top and bottom edges of the map are connected to form a circular map.
+    pub wrap_y: bool,
+    /// When it's `false` the value of the height is in `0..=255`, otherwise the value is in `0..=99`
+    pub percent: bool,
+    /// Sets polar regions to zero, the parameter is only meaningful if at least one of [`Flags::wrap_x`] or [`Flags::wrap_y`] is false.\
+    /// - When `Flags::wrap_x` is `true` and `Flags::wrap_y` is `false`, and then the parameter is `true`, the height of the top and bottom edges of the map tends towards `0`.
+    /// - When `Flags::wrap_x` is `false` and `Flags::wrap_y` is `true`, and then the parameter is `true`, the height of the left and right edges of the map tends towards `0`.
+    pub polar: bool,
     /// Draws rift in center of world    
-    center_rift: bool,
-    /// Draws inverts the heights   
-    invert_heights: bool,
+    pub center_rift: bool,
+    /// Draws inverts the heights, the value of the invert height equals to `255 - the value of the original height`
+    pub invert_heights: bool,
 }
 
 impl Default for Flags {
@@ -188,13 +228,13 @@ impl CvFractal {
             "'min(self.width_exp, self.height_exp) - grain < 8' should be true!"
         );
         // At first, We should divide the fractal into a grid of small (2^smooth) * (2^smooth) squares,
-        // When the fractal is divided into a grid of small squares, the points where adjacent grid lines meet are called `the vertices of the grid`.
-        // `hint_width` is the num of the vertices in every row after dividing.
+        // When the fractal is divided into a grid of small squares, the points where adjacent grid lines meet are called `the vertices of the grid`(abbreviated as `Vertices`).
+        // `hint_width` is the num of `Vertices` in every row after dividing.
         // Notice: when the fractal is WrapX, we don't consider the last row (row index: `self.fractal_width`),
         //      because the last row of the fractal is the same as the first row,
         //      We preprocess this case at the beginning of every iter stage in Diamond-Square algorithm.
         let hint_width = (self.fractal_width >> smooth) + if self.flags.wrap_x { 0 } else { 1 };
-        // `hint_height` is the num of the vertices in every column after dividing.
+        // `hint_height` is the num of `Vertices` in every column after dividing.
         // Notice: when the fractal is WrapY, we don't consider the last column (column index: `self.fractal_height`),
         //      because the last column of the fractal is the same as the first column,
         //      We preprocess this case at the beginning of every iter in Diamond-Square algorithm.
@@ -228,7 +268,7 @@ impl CvFractal {
         for pass in (0..smooth).rev() {
             /*********** start to preprocess fractal_array[][] at the beginning of every iter stage in Diamond-Square algorithm. ***********/
 
-            // If wrapping in the Y direction is needed, copy the bottom row to the top, otherwise set it to 0
+            // If wrapping in the Y direction is needed, copy the bottom row to the top
             if self.flags.wrap_y {
                 for x in 0..=self.fractal_width {
                     self.fractal_array[x as usize][self.fractal_height as usize] =
@@ -242,7 +282,7 @@ impl CvFractal {
                 }
             }
 
-            // If wrapping in the X direction is needed, copy the rightmost column to the leftmost, otherwise set it to 0
+            // If wrapping in the X direction is needed, copy the leftmost column to the rightmost
             if self.flags.wrap_x {
                 for y in 0..=self.fractal_height {
                     self.fractal_array[self.fractal_width as usize][y as usize] =
@@ -427,7 +467,12 @@ impl CvFractal {
     fn tectonic_action(&mut self, rifts: &CvFractal) {
         //  Assumes FRAC_WRAP_X is on.
         let rift_x = (self.fractal_width / 4) * 3;
+        // `width` is the distance from the leftmost/rightmost to the middle of the rift.
+        // The width of the rift equals [2 * width].
         let width = 16;
+        // `deep` is the maximum depth of the rift, which is in [0..=255].
+        // The deepest point is typically in the middle of the rift.
+        let deep = 0;
 
         for y in 0..=self.fractal_height {
             let rift_value = (rifts.fractal_array[rift_x as usize][y as usize] - 128)
@@ -436,9 +481,8 @@ impl CvFractal {
                 / 8;
             for x in 0..width {
                 //  Rift along edge of map.
-                let deep = 0;
-                let right_x = self.yield_x(rift_value + x);
-                let left_x = self.yield_x(rift_value - x);
+                let right_x = self.yield_x(rift_value, x);
+                let left_x = self.yield_x(rift_value, -x);
 
                 self.fractal_array[right_x as usize][y as usize] =
                     (self.fractal_array[right_x as usize][y as usize] * x + deep * (width - x))
@@ -455,27 +499,25 @@ impl CvFractal {
         }
     }
 
-    fn yield_x(&self, x: i32) -> i32 {
-        if x < 0 {
-            x + self.fractal_width
-        } else if x >= self.fractal_width {
-            x - self.fractal_width
-        } else {
-            x
-        }
+    /// In a wrap map, given the coordinates of a point and an offset epresenting the direction of movement, calculate the new coordinates of the point after it moves accordingly.
+    fn yield_x(&self, x: i32, offset_x: i32) -> i32 {
+        let width = self.fractal_width;
+        // Calculate the new coordinates without wrapping
+        let nx = x + offset_x;
+        // Wrap the coordinates and return the wrapped coordinates
+        (nx % width + width) % width
     }
 
     pub fn ridge_builder(
         &mut self,
-        mut random: &mut StdRng,
+        random: &mut StdRng,
         num_voronoi_seeds: i32,
         ridge_flags: &Flags,
         blend_ridge: i32,
         blend_fract: i32,
-        hex_layout: &HexLayout,
+        orientation: HexOrientation,
+        offset: Offset,
     ) {
-        let offset = Offset::Odd;
-        let orientation = hex_layout.orientation;
         // this will use a modified Voronoi system to give the appearance of mountain ranges
 
         let num_voronoi_seeds = max(num_voronoi_seeds, 3); // make sure that we have at least 3
@@ -483,32 +525,19 @@ impl CvFractal {
         let mut voronoi_seeds: Vec<VoronoiSeed> = Vec::with_capacity(num_voronoi_seeds as usize);
 
         for _ in 0..num_voronoi_seeds {
-            let offset_coordinate = OffsetCoordinate::new(
-                random.gen_range(0..self.fractal_width),
-                random.gen_range(0..self.fractal_height),
+            let mut voronoi_seed = VoronoiSeed::gen_random_seed(
+                random,
+                self.fractal_width,
+                self.fractal_height,
+                offset,
+                orientation,
             );
-            let hex_coordinate = offset_coordinate.to_hex(offset, orientation);
 
-            let weakness = max(0, random.gen_range(0..7) - 3);
-
-            let tile_edge_direction = hex_layout.orientation.edge_direction();
-            let bias_direction = *tile_edge_direction.choose(&mut random).unwrap();
-
-            let directional_bias_strength = max(0, random.gen_range(0..8) - 4);
-
-            let mut voronoi_seed = VoronoiSeed {
-                hex_coordinate,
-                weakness,
-                bias_direction,
-                directional_bias_strength,
-            };
-
-            // check to see if we are too close to an existing seed
-            while voronoi_seeds.iter().any(|that_voronoi_seed| {
-                let distance_between_voronoi_seeds = Hex::hex_distance(
-                    voronoi_seed.hex_coordinate,
-                    that_voronoi_seed.hex_coordinate,
-                );
+            // Check if the new random seed is too close to an existing seed
+            // If it is, generate a new random seed until it is not too close
+            while voronoi_seeds.iter().any(|existing_seed| {
+                let distance_between_voronoi_seeds =
+                    Hex::hex_distance(voronoi_seed.hex_coordinate, existing_seed.hex_coordinate);
                 distance_between_voronoi_seeds < 7
             }) {
                 let offset_coordinate = OffsetCoordinate::new(
@@ -526,47 +555,49 @@ impl CvFractal {
             for y in 0..self.fractal_height {
                 // get the hex coordinate for this position
                 let offset_coordinate = OffsetCoordinate::new(x, y);
-                let hex_coordinate = offset_coordinate.to_hex(offset, orientation);
-
-                let this_hex = hex_coordinate;
+                let current_hex = offset_coordinate.to_hex(offset, orientation);
 
                 // find the distance to each of the seeds (with modifiers for strength of the seed, directional bias, and random factors)
-                let mut closest_seed = i32::MAX;
-                let mut next_closest_seed = i32::MAX;
-                for this_voronoi_seed in &voronoi_seeds {
+                // closest seed distance is the distance to the seed with the lowest distance
+                let mut closest_seed_distance = i32::MAX;
+                // next closest seed distance is the distance to the seed with the second lowest distance
+                let mut next_closest_seed_distance = i32::MAX;
+                for current_voronoi_seed in &voronoi_seeds {
                     let mut modified_hex_distance =
-                        Hex::hex_distance(this_hex, this_voronoi_seed.hex_coordinate);
+                        Hex::hex_distance(current_hex, current_voronoi_seed.hex_coordinate);
                     // Checking if all values of ridge_flags are false by comparing it to the default value of Flags.
                     if ridge_flags != &Flags::default() {
-                        // we may decide to add more control later
-                        modified_hex_distance += this_voronoi_seed.weakness;
-                        modified_hex_distance += random.gen_range(0..3);
+                        // make the influence of the seed on its surrounding area more random
+                        modified_hex_distance += current_voronoi_seed.weakness;
 
-                        let estimate_hex = this_voronoi_seed.hex_coordinate - this_hex;
+                        let relative_direction = Self::estimate_direction(
+                            current_voronoi_seed.hex_coordinate,
+                            current_hex,
+                            orientation,
+                        );
 
-                        let relative_direction = Self::estimate_direction(estimate_hex, hex_layout);
-
-                        if relative_direction == this_voronoi_seed.bias_direction {
-                            modified_hex_distance -= this_voronoi_seed.directional_bias_strength;
+                        // make the influence of the seed more directional
+                        if relative_direction == current_voronoi_seed.bias_direction {
+                            modified_hex_distance -= current_voronoi_seed.directional_bias_strength;
                         } else if relative_direction
-                            == this_voronoi_seed.bias_direction.opposite_direction()
+                            == current_voronoi_seed.bias_direction.opposite_direction()
                         {
-                            modified_hex_distance += this_voronoi_seed.directional_bias_strength;
+                            modified_hex_distance += current_voronoi_seed.directional_bias_strength;
                         }
 
                         modified_hex_distance = max(1, modified_hex_distance);
                     }
 
-                    if modified_hex_distance < closest_seed {
-                        next_closest_seed = closest_seed;
-                        closest_seed = modified_hex_distance;
-                    } else if modified_hex_distance < next_closest_seed {
-                        next_closest_seed = modified_hex_distance;
+                    if modified_hex_distance < closest_seed_distance {
+                        next_closest_seed_distance = closest_seed_distance;
+                        closest_seed_distance = modified_hex_distance;
+                    } else if modified_hex_distance < next_closest_seed_distance {
+                        next_closest_seed_distance = modified_hex_distance;
                     }
                 }
 
                 // use the modified distance between the two closest seeds to determine the ridge height
-                let ridge_height = (255 * closest_seed) / next_closest_seed;
+                let ridge_height = (255 * closest_seed_distance) / next_closest_seed_distance;
 
                 // blend the new ridge height with the previous fractal height
                 self.fractal_array[x as usize][y as usize] = (ridge_height * blend_ridge
@@ -576,41 +607,35 @@ impl CvFractal {
         }
     }
 
-    fn estimate_direction(estimate_hex: Hex, hex_layout: &HexLayout) -> Direction {
-        // `direction_vectors` contains all the unit vectors that indicate direction.
-        let direction_vectors = match hex_layout.orientation {
-            HexOrientation::Pointy => [
-                DVec2::new(0.5, SQRT_3 / 2.),
-                DVec2::new(1.0, 0.0),
-                DVec2::new(0.5, -SQRT_3 / 2.),
-                DVec2::new(-0.5, -SQRT_3 / 2.),
-                DVec2::new(-1.0, 0.0),
-                DVec2::new(-0.5, SQRT_3 / 2.),
-            ],
-            HexOrientation::Flat => [
-                DVec2::new(SQRT_3 / 2., 0.5),
-                DVec2::new(SQRT_3 / 2., -0.5),
-                DVec2::new(0., -1.),
-                DVec2::new(-SQRT_3 / 2., -0.5),
-                DVec2::new(-SQRT_3 / 2., 0.5),
-                DVec2::new(0., 1.),
-            ],
+    /// Determine the direction of Hex-A relative to Hex-B.
+    ///
+    /// If A is located to the north of B, the function returns [Direction::North].
+    fn estimate_direction(hex_a: Hex, hex_b: Hex, orientation: HexOrientation) -> Direction {
+        let estimate_vector = hex_a - hex_b;
+        // Define hex_layout and set the size to 1/sqrt(3) to make sure we can get the unit vectors
+        // A unit vector refers to a vector whose norm is 1.
+        let hex_layout = HexLayout {
+            orientation,
+            size: DVec2::new(1. / SQRT_3, 1. / SQRT_3),
+            origin: DVec2::new(0., 0.),
         };
 
-        let estimate_dvec2 = estimate_hex.into_inner().as_dvec2();
+        // `direction_vectors` contains all the unit vectors that indicate direction.
+        let direction_vectors: [DVec2; 6] =
+            array::from_fn(|i| hex_layout.hex_to_pixel(Hex::HEX_DIRECTIONS[i]));
 
+        let estimate_vector = estimate_vector.into_inner().as_dvec2();
+
+        // Find the index of the direction vector with the largest dot product with the estimate vector.
         let max_index = direction_vectors
-            .iter()
+            .into_iter()
             .enumerate()
-            .max_by(|(_, direction_vector_a), (_, direction_vector_b)| {
-                let dot_product_a = estimate_dvec2.dot(**direction_vector_a);
-                let dot_product_b = estimate_dvec2.dot(**direction_vector_b);
-                dot_product_a.partial_cmp(&dot_product_b).unwrap()
-            })
+            .map(|(index, direction_vector)| (index, estimate_vector.dot(direction_vector)))
+            .max_by(|(_, dot_a), (_, dot_b)| dot_a.partial_cmp(&dot_b).unwrap())
             .map(|(index, _)| index)
             .unwrap();
 
-        hex_layout.orientation.edge_direction()[max_index]
+        orientation.edge_direction()[max_index]
     }
 
     pub fn write_to_file(&self, filename: &str) {

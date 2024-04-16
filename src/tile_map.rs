@@ -116,6 +116,9 @@ impl TileMap {
             }
         };
 
+        let orientation = self.map_parameters.hex_layout.orientation;
+        let offset = self.map_parameters.offset;
+
         let mut continents_fractal = CvFractal::create(
             &mut self.random_number_generator,
             self.map_parameters.map_size.width,
@@ -132,7 +135,8 @@ impl TileMap {
             &Flags::default(),
             1,
             2,
-            &self.map_parameters.hex_layout,
+            orientation,
+            offset,
         );
 
         let mut mountains_fractal = CvFractal::create(
@@ -151,7 +155,8 @@ impl TileMap {
             &Flags::default(),
             6,
             1,
-            &self.map_parameters.hex_layout,
+            orientation,
+            offset,
         );
 
         let mut hills_fractal = CvFractal::create(
@@ -170,7 +175,8 @@ impl TileMap {
             &Flags::default(),
             1,
             2,
-            &self.map_parameters.hex_layout,
+            orientation,
+            offset,
         );
 
         let [water_threshold] = continents_fractal.get_height_from_percents(&[water_percent])[..]
@@ -287,7 +293,8 @@ impl TileMap {
             }
         };
 
-        //let (seed, seed2, seed3) = self.random_number_generator.gen();
+        let orientation = self.map_parameters.hex_layout.orientation;
+        let offset = self.map_parameters.offset;
 
         let mut continents_fractal = CvFractal::create(
             &mut self.random_number_generator,
@@ -305,7 +312,8 @@ impl TileMap {
             &Flags::default(),
             1,
             2,
-            &self.map_parameters.hex_layout,
+            orientation,
+            offset,
         );
 
         let mut mountains_fractal = CvFractal::create(
@@ -324,7 +332,8 @@ impl TileMap {
             &Flags::default(),
             6,
             1,
-            &self.map_parameters.hex_layout,
+            orientation,
+            offset,
         );
 
         let mut hills_fractal = CvFractal::create(
@@ -343,7 +352,8 @@ impl TileMap {
             &Flags::default(),
             1,
             2,
-            &self.map_parameters.hex_layout,
+            orientation,
+            offset,
         );
 
         let [water_threshold] = continents_fractal.get_height_from_percents(&[water_percent])[..]
