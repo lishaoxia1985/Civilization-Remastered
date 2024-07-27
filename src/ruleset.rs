@@ -130,7 +130,7 @@ impl Ruleset {
                     technology.cost = tech_column.tech_cost
                 }
                 technology.column = tech_column.column_number;
-                technology.era = tech_column.era.as_str().to_owned();
+                technology.era.clone_from(&tech_column.era);
 
                 // set building cost
                 for building in buildings.iter_mut().filter(|building| {

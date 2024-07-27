@@ -33,6 +33,7 @@ pub struct MapParameters {
     pub natural_wonder_num: i32, // In fact, it is related to map size, don't need to set singlely.
 }
 
+#[derive(Clone, Copy)]
 pub struct MapSize {
     pub width: i32,
     pub height: i32,

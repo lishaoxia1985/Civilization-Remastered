@@ -1,11 +1,12 @@
 use std::cmp::max;
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::VecDeque;
 
 use bevy::math::IVec2;
 use bevy::utils::HashSet;
 use bevy::{math::DVec2, prelude::Res, utils::HashMap};
 use rand::seq::SliceRandom;
 use rand::{rngs::StdRng, Rng, SeedableRng};
+pub use tile::TerrainType;
 
 use crate::ruleset::{Ruleset, Unique};
 pub use crate::tile_map::hex::Direction;
@@ -23,8 +24,8 @@ pub mod hex;
 pub struct TileMap {
     pub map_parameters: MapParameters,
     pub random_number_generator: StdRng,
-    pub tile_list: BTreeMap<[i32; 2], Tile>,
-    pub river_list: HashMap<i32, Vec<([i32; 2], Direction)>>,
+    pub tile_list: Vec<Tile>,
+    pub river_list: HashMap<i32, Vec<(usize, Direction)>>,
 }
 
 impl TileMap {
@@ -51,18 +52,37 @@ impl TileMap {
         hex_layout: HexLayout,
         offset: Offset,
         ruleset: &Res<Ruleset>,
-    ) -> BTreeMap<[i32; 2], Tile> {
-        let mut tile_list = BTreeMap::new();
+    ) -> Vec<Tile> {
+        let mut tile_list = Vec::with_capacity((width * height) as usize);
         for y in 0..height {
             for x in 0..width {
                 let offset_coordinate = OffsetCoordinate::new(x, y);
                 let hex_coordinate = offset_coordinate.to_hex(offset, hex_layout.orientation);
 
                 let tile = Tile::new(hex_coordinate.to_array(), ruleset);
-                tile_list.insert(hex_coordinate.to_array(), tile);
+                tile_list.push(tile);
             }
         }
         tile_list
+    }
+
+    const fn index_to_offset_coordinate(map_width: i32, index: usize) -> OffsetCoordinate {
+        let x = index as i32 % map_width;
+        let y = index as i32 / map_width;
+        OffsetCoordinate::new(x, y)
+    }
+
+    const fn offset_coordinate_to_index(
+        map_width: i32,
+        offset_coordinate: OffsetCoordinate,
+    ) -> usize {
+        let offset_coordinate_array = offset_coordinate.to_array();
+        (offset_coordinate_array[0] + offset_coordinate_array[1] * map_width) as usize
+    }
+
+    fn tile_latitude(map_size: MapSize, index: usize) -> f64 {
+        let [_x, y] = Self::index_to_offset_coordinate(map_size.width, index).to_array();
+        ((map_size.height as f64 / 2. - y as f64) / (map_size.height as f64 / 2.)).abs()
     }
 
     pub const fn tile_edge_direction(&self) -> [Direction; 6] {
@@ -76,7 +96,7 @@ impl TileMap {
             .corner_direction()
     }
 
-    pub fn spawn_tile_type_for_fractal(&mut self, ruleset: &Res<Ruleset>) {
+    pub fn spawn_tile_type_for_fractal(&mut self) {
         let continent_grain = 2;
 
         let sea_level_low = 65;
@@ -211,51 +231,49 @@ impl TileMap {
             panic!("Vec length does not match the pattern")
         };
 
-        self.tile_list.values_mut().for_each(|tile| {
-            let hex_coord = Hex::from(tile.hex_position);
-            let offset_coord = hex_coord.to_offset_coordinate(
-                self.map_parameters.offset,
-                self.map_parameters.hex_layout.orientation,
-            );
+        self.tile_list
+            .iter_mut()
+            .enumerate()
+            .for_each(|(index, tile)| {
+                let [x, y] =
+                    Self::index_to_offset_coordinate(self.map_parameters.map_size.width, index)
+                        .to_array();
+                let height = continents_fractal.get_height(x, y);
 
-            let [x, y] = offset_coord.to_array();
-            let height = continents_fractal.get_height(x, y);
+                let mountain_height = mountains_fractal.get_height(x, y);
+                let hill_height = hills_fractal.get_height(x, y);
 
-            let mountain_height = mountains_fractal.get_height(x, y);
-            let hill_height = hills_fractal.get_height(x, y);
-
-            if height <= water_threshold {
-                tile.base_terrain = ruleset.terrains["Ocean"].clone();
-                if tectonic_islands {
-                    if mountain_height == mountain_100 {
-                        tile.base_terrain = ruleset.terrains["Mountain"].clone();
-                    } else if mountain_height == mountain_99 {
-                        tile.terrain_features.push(ruleset.terrains["Hill"].clone());
-                        tile.base_terrain = ruleset.terrains["Grassland"].clone();
-                    } else if (mountain_height == mountain_97) || (mountain_height == mountain_95) {
-                        tile.base_terrain = ruleset.terrains["Grassland"].clone();
+                if height <= water_threshold {
+                    tile.terrain_type = TerrainType::Water;
+                    if tectonic_islands {
+                        if mountain_height == mountain_100 {
+                            tile.terrain_type = TerrainType::Mountain;
+                        } else if mountain_height == mountain_99 {
+                            tile.terrain_type = TerrainType::Hill;
+                        } else if (mountain_height == mountain_97)
+                            || (mountain_height == mountain_95)
+                        {
+                            tile.terrain_type = TerrainType::Land;
+                        }
                     }
-                }
-            } else if mountain_height >= mountain_threshold {
-                if hill_height >= pass_threshold {
-                    tile.terrain_features.push(ruleset.terrains["Hill"].clone());
-                    tile.base_terrain = ruleset.terrains["Grassland"].clone();
+                } else if mountain_height >= mountain_threshold {
+                    if hill_height >= pass_threshold {
+                        tile.terrain_type = TerrainType::Hill;
+                    } else {
+                        tile.terrain_type = TerrainType::Mountain;
+                    }
+                } else if mountain_height >= hills_near_mountains
+                    || (hill_height >= hills_bottom1 && hill_height <= hills_top1)
+                    || (hill_height >= hills_bottom2 && hill_height <= hills_top2)
+                {
+                    tile.terrain_type = TerrainType::Hill;
                 } else {
-                    tile.base_terrain = ruleset.terrains["Mountain"].clone();
-                }
-            } else if mountain_height >= hills_near_mountains
-                || (hill_height >= hills_bottom1 && hill_height <= hills_top1)
-                || (hill_height >= hills_bottom2 && hill_height <= hills_top2)
-            {
-                tile.terrain_features.push(ruleset.terrains["Hill"].clone());
-                tile.base_terrain = ruleset.terrains["Grassland"].clone();
-            } else {
-                tile.base_terrain = ruleset.terrains["Grassland"].clone();
-            };
-        });
+                    tile.terrain_type = TerrainType::Land;
+                };
+            });
     }
 
-    pub fn spawn_tile_type_for_pangaea(&mut self, ruleset: &Res<Ruleset>) {
+    pub fn spawn_tile_type_for_pangaea(&mut self) {
         let continent_grain = 2;
 
         let sea_level_low = 71;
@@ -394,86 +412,76 @@ impl TileMap {
 
         let axis = center_position * 3. / 5.;
 
-        self.tile_list.values_mut().for_each(|tile| {
-            let hex_coord = Hex::from(tile.hex_position);
-            let offset_coord = hex_coord.to_offset_coordinate(
-                self.map_parameters.offset,
-                self.map_parameters.hex_layout.orientation,
-            );
-            let [x, y] = offset_coord.to_array();
-            let height = continents_fractal.get_height(x, y);
+        self.tile_list
+            .iter_mut()
+            .enumerate()
+            .for_each(|(index, tile)| {
+                let [x, y] =
+                    Self::index_to_offset_coordinate(self.map_parameters.map_size.width, index)
+                        .to_array();
+                let height = continents_fractal.get_height(x, y);
 
-            let mountain_height = mountains_fractal.get_height(x, y);
-            let hill_height = hills_fractal.get_height(x, y);
+                let mountain_height = mountains_fractal.get_height(x, y);
+                let hill_height = hills_fractal.get_height(x, y);
 
-            let mut h = water_threshold as f64;
+                let mut h = water_threshold as f64;
 
-            let delta = IVec2::from([x, y]).as_dvec2() - center_position;
-            let d = (delta / axis).length_squared();
+                let delta = IVec2::from([x, y]).as_dvec2() - center_position;
+                let d = (delta / axis).length_squared();
 
-            if d <= 1. {
-                h = h + (h * 0.125)
-            } else {
-                h = h - (h * 0.125)
-            }
-
-            let height = ((height as f64 + h + h) * 0.33) as i32;
-
-            if height <= water_threshold {
-                tile.base_terrain = ruleset.terrains["Ocean"].clone();
-                if height == mountain_100 {
-                    tile.base_terrain = ruleset.terrains["Mountain"].clone()
-                } else if height == mountain_99 {
-                    tile.base_terrain = ruleset.terrains["Hill"].clone()
-                } else if height == mountain_97 || height == mountain_95 {
-                    tile.base_terrain = ruleset.terrains["Grassland"].clone()
-                }
-            } else if mountain_height >= mountain_threshold {
-                if hill_height >= pass_threshold {
-                    tile.terrain_features.push(ruleset.terrains["Hill"].clone());
-                    tile.base_terrain = ruleset.terrains["Grassland"].clone();
+                if d <= 1. {
+                    h = h + (h * 0.125)
                 } else {
-                    tile.base_terrain = ruleset.terrains["Mountain"].clone();
+                    h = h - (h * 0.125)
                 }
-            } else if mountain_height >= hills_near_mountains
-                || (hill_height >= hills_bottom1 && hill_height <= hills_top1)
-                || (hill_height >= hills_bottom2 && hill_height <= hills_top2)
-            {
-                tile.terrain_features.push(ruleset.terrains["Hill"].clone());
-                tile.base_terrain = ruleset.terrains["Grassland"].clone();
-            } else {
-                tile.base_terrain = ruleset.terrains["Grassland"].clone();
-            };
-        });
+
+                let height = ((height as f64 + h + h) * 0.33) as i32;
+
+                if height <= water_threshold {
+                    tile.terrain_type = TerrainType::Water;
+                    if height == mountain_100 {
+                        tile.terrain_type = TerrainType::Mountain;
+                    } else if height == mountain_99 {
+                        tile.terrain_type = TerrainType::Hill;
+                    } else if height == mountain_97 || height == mountain_95 {
+                        tile.terrain_type = TerrainType::Land;
+                    }
+                } else if mountain_height >= mountain_threshold {
+                    if hill_height >= pass_threshold {
+                        tile.terrain_type = TerrainType::Hill;
+                    } else {
+                        tile.terrain_type = TerrainType::Mountain;
+                    }
+                } else if mountain_height >= hills_near_mountains
+                    || (hill_height >= hills_bottom1 && hill_height <= hills_top1)
+                    || (hill_height >= hills_bottom2 && hill_height <= hills_top2)
+                {
+                    tile.terrain_type = TerrainType::Hill;
+                } else {
+                    tile.terrain_type = TerrainType::Land;
+                };
+            });
     }
 
     pub fn generate_coasts(&mut self, ruleset: &Res<Ruleset>) {
-        let tile_list_position: Vec<_> = self.tile_list.keys().copied().collect();
-        for hex_position in tile_list_position.iter() {
-            let tile = &self.tile_list[hex_position];
-            if tile.base_terrain.name == "Ocean"
-                && tile
-                    .tiles_neighbors(self)
-                    .iter()
-                    .any(|tile| tile.base_terrain.r#type == "Land")
-            {
-                self.tile_list.get_mut(hex_position).unwrap().base_terrain =
-                    ruleset.terrains["Coast"].clone();
+        for tile_index in 0..self.tile_list.len() {
+            let tile = &self.tile_list[tile_index];
+            if tile.is_water() && tile.tiles_neighbors(self).iter().any(|tile| tile.is_land()) {
+                self.tile_list[tile_index].base_terrain = ruleset.terrains["Coast"].clone();
             }
         }
 
         for chance in &self.map_parameters.coast_expansion_chance {
-            for hex_position in tile_list_position.iter() {
-                let tile = &self.tile_list[hex_position];
-                if tile.base_terrain.name == "Ocean"
+            for tile_index in 0..self.tile_list.len() {
+                let tile = &self.tile_list[tile_index];
+                if tile.is_water()
                     && tile
                         .tiles_neighbors(self)
                         .iter()
                         .any(|tile| tile.base_terrain.name == "Coast")
                     && self.random_number_generator.gen_bool(*chance)
                 {
-                    self.tile_list.get_mut(hex_position).unwrap().base_terrain =
-                        ruleset.terrains["Coast"].clone();
+                    self.tile_list[tile_index].base_terrain = ruleset.terrains["Coast"].clone();
                 }
             }
         }
@@ -485,26 +493,30 @@ impl TileMap {
     /// situation.
     pub fn generate_lakes(&mut self, ruleset: &Res<Ruleset>) {
         self.recalculate_areas();
-        let max_area_id = self
+
+        // Get the Vec of area_id when water_area_size is smaller than lake_max_area_size
+        let candidate_water_area_ids: Vec<i32> = self
             .tile_list
-            .values()
-            .map(|tile| tile.area_id)
-            .max()
-            .unwrap();
-        for area_id in -1..=max_area_id {
-            let water_tiles: Vec<_> = self
-                .tile_list
-                .values_mut()
-                .filter(|tile| tile.area_id == area_id && tile.is_water())
-                .collect();
+            .iter()
+            .filter(|tile| tile.is_water())
+            .fold(HashMap::new(), |mut water_area_ids_and_size, tile| {
+                // Get a HashMap of water area id and its size
+                *water_area_ids_and_size.entry(tile.area_id).or_insert(0) += 1;
+                water_area_ids_and_size
+            })
+            .into_iter()
+            .filter_map(|(area_id, water_area_size)| {
+                // Get area_id when water_area_size is smaller than lake_max_area_size
+                (water_area_size <= self.map_parameters.lake_max_area_size).then_some(area_id)
+            })
+            .collect();
 
-            let water_area_size = water_tiles.len() as i32;
-
-            if (1..=self.map_parameters.lake_max_area_size).contains(&water_area_size) {
-                for tile in water_tiles {
-                    tile.base_terrain = ruleset.terrains["Lakes"].clone();
-                }
-            }
+        for tile in self
+            .tile_list
+            .iter_mut()
+            .filter(|tile| candidate_water_area_ids.contains(&tile.area_id))
+        {
+            tile.base_terrain = ruleset.terrains["Lakes"].clone();
         }
     }
 
@@ -581,26 +593,21 @@ impl TileMap {
             panic!("Vec length does not match the pattern")
         };
 
-        let width = self.map_parameters.map_size.width;
-        let height = self.map_parameters.map_size.height;
-
         self.tile_list
-            .values_mut()
-            .filter(|tile| {
-                tile.base_terrain.name != "Ocean" && tile.base_terrain.name != "Mountain"
-            })
-            .for_each(|tile| {
-                let hex_coord = Hex::from(tile.hex_position);
-                let offset_coord = hex_coord.to_offset_coordinate(
-                    self.map_parameters.offset,
-                    self.map_parameters.hex_layout.orientation,
-                );
-                let [x, y] = offset_coord.to_array();
+            .iter_mut()
+            .enumerate()
+            .filter(|(_, tile)| tile.terrain_type != TerrainType::Water)
+            .for_each(|(index, tile)| {
+                let [x, y] =
+                    Self::index_to_offset_coordinate(self.map_parameters.map_size.width, index)
+                        .to_array();
+
+                tile.base_terrain = ruleset.terrains["Grassland"].clone();
 
                 let deserts_height = deserts_fractal.get_height(x, y);
                 let plains_height = plains_fractal.get_height(x, y);
 
-                let mut latitude = ((height as f64 / 2. - y as f64) / (height as f64 / 2.)).abs();
+                let mut latitude = Self::tile_latitude(self.map_parameters.map_size, index);
                 latitude += (128 - variation_fractal.get_height(x, y)) as f64 / (255.0 * 5.0);
                 latitude = latitude.clamp(0., 1.);
 
@@ -624,9 +631,7 @@ impl TileMap {
 
     pub fn recalculate_areas(&mut self) {
         // area id of all the tiles is set to default value (-1)
-        self.tile_list
-            .values_mut()
-            .for_each(|tile| tile.area_id = -1);
+        self.tile_list.iter_mut().for_each(|tile| tile.area_id = -1);
         // water area, excluding impassable tile ( e.g. ice, natural-wonder in water)
         self.bfs(|tile| tile.is_water() && !tile.base_terrain.impassable);
         // mountain area
@@ -638,53 +643,50 @@ impl TileMap {
     }
 
     fn bfs(&mut self, filter_condition: impl Fn(&Tile) -> bool) {
-        let mut area_tiles_positions: HashSet<_> = self
+        let mut area_tiles_indexs: HashSet<_> = self
             .tile_list
-            .values()
-            .filter_map(|tile| filter_condition(tile).then_some(tile.hex_position))
+            .iter()
+            .enumerate()
+            .filter_map(|(index, tile)| filter_condition(tile).then_some(index))
             .collect();
         let mut current_area_id = self
             .tile_list
-            .values()
+            .iter()
             .map(|tile| tile.area_id)
             .max()
             .unwrap()
             + 1;
-        while let Some(&initial_area_tile_position) = area_tiles_positions.iter().next() {
-            area_tiles_positions.remove(&initial_area_tile_position);
-            let mut tiles_in_current_area_positions = HashSet::new();
-            tiles_in_current_area_positions.insert(initial_area_tile_position);
-            self.tile_list
-                .get_mut(&initial_area_tile_position)
-                .unwrap()
-                .area_id = current_area_id;
-            let mut tiles_to_check_positions = VecDeque::new();
-            tiles_to_check_positions.push_back(initial_area_tile_position);
-            while let Some(tile_we_are_checking_position) = tiles_to_check_positions.pop_front() {
-                let neighbors_tiles_positions: Vec<_> = self.tile_list
-                    [&tile_we_are_checking_position]
+        while let Some(&initial_area_tile_index) = area_tiles_indexs.iter().next() {
+            area_tiles_indexs.remove(&initial_area_tile_index);
+            let mut tiles_in_current_area_indexs = HashSet::new();
+            tiles_in_current_area_indexs.insert(initial_area_tile_index);
+            self.tile_list[initial_area_tile_index].area_id = current_area_id;
+            let mut tiles_to_check_indexs = VecDeque::new();
+            tiles_to_check_indexs.push_back(initial_area_tile_index);
+            while let Some(tile_we_are_checking_position) = tiles_to_check_indexs.pop_front() {
+                let neighbors_tiles_indexs: Vec<_> = self.tile_list[tile_we_are_checking_position]
                     .tiles_neighbors(self)
                     .iter()
                     .filter_map(|tile| {
                         {
-                            !tiles_in_current_area_positions.contains(&tile.hex_position)
+                            !tiles_in_current_area_indexs.contains(&tile.index(self))
                                 && filter_condition(tile)
                         }
-                        .then_some(tile.hex_position)
+                        .then_some(tile.index(self))
                     })
                     .collect();
-                for position in neighbors_tiles_positions.iter() {
-                    tiles_in_current_area_positions.insert(*position);
-                    self.tile_list.get_mut(position).unwrap().area_id = current_area_id;
-                    tiles_to_check_positions.push_back(*position);
-                    area_tiles_positions.remove(position);
+                for &index in neighbors_tiles_indexs.iter() {
+                    tiles_in_current_area_indexs.insert(index);
+                    self.tile_list[index].area_id = current_area_id;
+                    tiles_to_check_indexs.push_back(index);
+                    area_tiles_indexs.remove(&index);
                 }
             }
             current_area_id += 1;
         }
     }
 
-    pub fn add_rivers(&mut self, ruleset: &Res<Ruleset>) {
+    pub fn add_rivers(&mut self) {
         let river_source_range_default = 4;
         let sea_water_range_default = 3;
         const plots_per_river_edge: i32 = 12;
@@ -696,7 +698,7 @@ impl TileMap {
         ) -> [bool; 4] {
             let num_tiles = tile_map
                 .tile_list
-                .values()
+                .iter()
                 .filter(|x| x.area_id == tile.area_id)
                 .count() as i32;
             let num_river_edges = num_river_edges(tile, tile_map);
@@ -711,33 +713,44 @@ impl TileMap {
 
         // Returns the number of river edges in the area where the tile is
         // 1. Get the area where the tile is
-        // 2. Get the number of rivers edge which the tile in the area own
+        // 2. Get the number of rivers edge which the area (where the tile is) own
         fn num_river_edges(tile: &Tile, tile_map: &TileMap) -> i32 {
             let mut num_river_edges = 0;
-            let area_tile_list: Vec<_> = tile_map
+            tile_map
                 .tile_list
-                .values()
+                .iter()
                 .filter(|x| x.area_id == tile.area_id)
-                .collect();
-            area_tile_list.iter().for_each(|tile| {
-                tile_map.river_list.values().for_each(|river_plot| {
-                    num_river_edges = river_plot
-                        .iter()
-                        .filter(|(hex_position, _)| hex_position == &tile.hex_position)
-                        .count();
+                .for_each(|tile| {
+                    tile_map.river_list.values().for_each(|river_plot| {
+                        num_river_edges = river_plot
+                            .iter()
+                            .filter(|(tile_index, _)| tile_index == &tile.index(tile_map))
+                            .count();
+                    });
                 });
-            });
             num_river_edges as i32
         }
 
         let mut random_number_generator = self.random_number_generator.clone();
 
-        let candidate_start_tile_positions: Vec<_> = self
+        // The tile where the river will start shoult meet these conditions:
+        // 1. It should be not a water tile
+        // 2. It should be not a natural wonder
+        // 3. It should be not a tile which is neighbor to a natural wonder
+        // 4. Its edge directions in [0..3] should be all land because the river edge uses (tile_index, river_flow_direction) for storage.
+        //    tile_index is current tile index and river_flow_direction should be one of the edge directions in [0..3].
+        let candidate_start_tile_indexs: Vec<_> = self
             .tile_list
             .iter()
-            .filter_map(|(hex_position, tile)| {
+            .enumerate()
+            .filter_map(|(index, tile)| {
                 {
                     !tile.is_water()
+                        && !tile.is_natural_wonder()
+                        && !tile
+                            .tiles_neighbors(self)
+                            .iter()
+                            .any(|neighbor_tile| neighbor_tile.is_natural_wonder())
                         && self.tile_edge_direction()[0..3].iter().all(|&direction| {
                             if let Some(neighbor_tile) = tile.tile_neighbor(self, direction) {
                                 neighbor_tile.is_land()
@@ -746,7 +759,7 @@ impl TileMap {
                             }
                         })
                 }
-                .then_some(*hex_position)
+                .then_some(index)
             })
             .collect();
         let mut river_id = 0;
@@ -761,8 +774,8 @@ impl TileMap {
                 )
             };
 
-            for hex_position in candidate_start_tile_positions.iter() {
-                let tile = &self.tile_list[hex_position];
+            for &tile_index in candidate_start_tile_indexs.iter() {
+                let tile = &self.tile_list[tile_index];
                 if pass_conditions(tile, self, &mut random_number_generator)[index]
                     && !tile
                         .tiles_in_distance(river_source_range, self)
@@ -773,12 +786,7 @@ impl TileMap {
                         .iter()
                         .any(|tile| tile.is_water())
                 {
-                    self.do_river(
-                        hex_position,
-                        Direction::NoDirection,
-                        Direction::NoDirection,
-                        river_id,
-                    );
+                    self.do_river(tile_index, Direction::None, Direction::None, river_id);
                     river_id += 1;
                 }
             }
@@ -788,7 +796,7 @@ impl TileMap {
 
     fn do_river(
         &mut self,
-        start_plot: &[i32; 2],
+        start_plot_index: usize,
         this_flow_direction: Direction,
         original_flow_direction: Direction,
         river_id: i32,
@@ -797,25 +805,25 @@ impl TileMap {
         if self.river_list.values().any(|river| {
             river
                 .iter()
-                .any(|(hex_position, _)| hex_position == start_plot)
-        }) && original_flow_direction == Direction::NoDirection
+                .any(|(tile_index, _)| *tile_index == start_plot_index)
+        }) && original_flow_direction == Direction::None
         {
             return;
         }
 
         let mut original_flow_direction = original_flow_direction;
 
-        let mut river_plot;
-        let mut best_flow_direction = Direction::NoDirection;
+        let mut river_plot_index;
+        let mut best_flow_direction = Direction::None;
         match self.map_parameters.hex_layout.orientation {
             HexOrientation::Pointy => match this_flow_direction {
                 Direction::North => {
-                    river_plot = *start_plot;
+                    river_plot_index = start_plot_index;
                     self.river_list
                         .entry(river_id)
                         .or_default()
-                        .push((river_plot, this_flow_direction));
-                    let river_plot_tile = &self.tile_list[&river_plot];
+                        .push((river_plot_index, this_flow_direction));
+                    let river_plot_tile = &self.tile_list[river_plot_index];
                     if let Some(neighbor_tile) =
                         river_plot_tile.tile_neighbor(self, Direction::NorthEast)
                     {
@@ -825,19 +833,19 @@ impl TileMap {
                         {
                             return;
                         } else {
-                            river_plot = neighbor_tile.hex_position;
+                            river_plot_index = neighbor_tile.index(self);
                         }
                     } else {
                         return;
                     }
                 }
                 Direction::NorthEast => {
-                    river_plot = *start_plot;
+                    river_plot_index = start_plot_index;
                     self.river_list
                         .entry(river_id)
                         .or_default()
-                        .push((river_plot, this_flow_direction));
-                    let river_plot_tile = &self.tile_list[&river_plot];
+                        .push((river_plot_index, this_flow_direction));
+                    let river_plot_tile = &self.tile_list[river_plot_index];
                     if let Some(neighbor_tile) =
                         river_plot_tile.tile_neighbor(self, Direction::East)
                     {
@@ -853,17 +861,17 @@ impl TileMap {
                 }
                 Direction::East => unreachable!(),
                 Direction::SouthEast => {
-                    let start_tile = &self.tile_list[start_plot];
+                    let start_tile = &self.tile_list[start_plot_index];
                     if let Some(neighbor_tile) = start_tile.tile_neighbor(self, Direction::East) {
-                        river_plot = neighbor_tile.hex_position
+                        river_plot_index = neighbor_tile.index(self)
                     } else {
                         return;
                     };
                     self.river_list
                         .entry(river_id)
                         .or_default()
-                        .push((river_plot, this_flow_direction));
-                    let river_plot_tile = &self.tile_list[&river_plot];
+                        .push((river_plot_index, this_flow_direction));
+                    let river_plot_tile = &self.tile_list[river_plot_index];
                     if let Some(neighbor_tile) =
                         river_plot_tile.tile_neighbor(self, Direction::SouthEast)
                     {
@@ -888,19 +896,19 @@ impl TileMap {
                     }
                 }
                 Direction::South => {
-                    let start_tile = &self.tile_list[start_plot];
+                    let start_tile = &self.tile_list[start_plot_index];
                     if let Some(neighbor_tile) =
                         start_tile.tile_neighbor(self, Direction::SouthWest)
                     {
-                        river_plot = neighbor_tile.hex_position
+                        river_plot_index = neighbor_tile.index(self)
                     } else {
                         return;
                     };
                     self.river_list
                         .entry(river_id)
                         .or_default()
-                        .push((river_plot, this_flow_direction));
-                    let river_plot_tile = &self.tile_list[&river_plot];
+                        .push((river_plot_index, this_flow_direction));
+                    let river_plot_tile = &self.tile_list[river_plot_index];
                     if let Some(neighbor_tile) =
                         river_plot_tile.tile_neighbor(self, Direction::SouthEast)
                     {
@@ -923,12 +931,12 @@ impl TileMap {
                     }
                 }
                 Direction::SouthWest => {
-                    river_plot = *start_plot;
+                    river_plot_index = start_plot_index;
                     self.river_list
                         .entry(river_id)
                         .or_default()
-                        .push((river_plot, this_flow_direction));
-                    let river_plot_tile = &self.tile_list[&river_plot];
+                        .push((river_plot_index, this_flow_direction));
+                    let river_plot_tile = &self.tile_list[river_plot_index];
                     if let Some(neighbor_tile) =
                         river_plot_tile.tile_neighbor(self, Direction::SouthWest)
                     {
@@ -944,12 +952,12 @@ impl TileMap {
                 }
                 Direction::West => unreachable!(),
                 Direction::NorthWest => {
-                    river_plot = *start_plot;
+                    river_plot_index = start_plot_index;
                     self.river_list
                         .entry(river_id)
                         .or_default()
-                        .push((river_plot, this_flow_direction));
-                    let river_plot_tile = &self.tile_list[&river_plot];
+                        .push((river_plot_index, this_flow_direction));
+                    let river_plot_tile = &self.tile_list[river_plot_index];
                     if let Some(neighbor_tile) =
                         river_plot_tile.tile_neighbor(self, Direction::West)
                     {
@@ -959,25 +967,25 @@ impl TileMap {
                         {
                             return;
                         } else {
-                            river_plot = neighbor_tile.hex_position;
+                            river_plot_index = neighbor_tile.index(self);
                         }
                     } else {
                         return;
                     }
                 }
-                Direction::NoDirection => {
-                    river_plot = *start_plot;
+                Direction::None => {
+                    river_plot_index = start_plot_index;
                 }
             },
             HexOrientation::Flat => match this_flow_direction {
                 Direction::North => unreachable!(),
                 Direction::NorthEast => {
-                    river_plot = *start_plot;
+                    river_plot_index = start_plot_index;
                     self.river_list
                         .entry(river_id)
                         .or_default()
-                        .push((river_plot, this_flow_direction));
-                    let river_plot_tile = &self.tile_list[&river_plot];
+                        .push((river_plot_index, this_flow_direction));
+                    let river_plot_tile = &self.tile_list[river_plot_index];
                     if let Some(neighbor_tile) =
                         river_plot_tile.tile_neighbor(self, Direction::NorthEast)
                     {
@@ -992,19 +1000,19 @@ impl TileMap {
                     }
                 }
                 Direction::East => {
-                    let start_tile = &self.tile_list[start_plot];
+                    let start_tile = &self.tile_list[start_plot_index];
                     if let Some(neighbor_tile) =
                         start_tile.tile_neighbor(self, Direction::NorthEast)
                     {
-                        river_plot = neighbor_tile.hex_position
+                        river_plot_index = neighbor_tile.index(self)
                     } else {
                         return;
                     };
                     self.river_list
                         .entry(river_id)
                         .or_default()
-                        .push((river_plot, this_flow_direction));
-                    let river_plot_tile = &self.tile_list[&river_plot];
+                        .push((river_plot_index, this_flow_direction));
+                    let river_plot_tile = &self.tile_list[river_plot_index];
                     if let Some(neighbor_tile) =
                         river_plot_tile.tile_neighbor(self, Direction::SouthEast)
                     {
@@ -1029,17 +1037,17 @@ impl TileMap {
                     }
                 }
                 Direction::SouthEast => {
-                    let start_tile = &self.tile_list[start_plot];
+                    let start_tile = &self.tile_list[start_plot_index];
                     if let Some(neighbor_tile) = start_tile.tile_neighbor(self, Direction::South) {
-                        river_plot = neighbor_tile.hex_position
+                        river_plot_index = neighbor_tile.index(self)
                     } else {
                         return;
                     };
                     self.river_list
                         .entry(river_id)
                         .or_default()
-                        .push((river_plot, this_flow_direction));
-                    let river_plot_tile = &self.tile_list[&river_plot];
+                        .push((river_plot_index, this_flow_direction));
+                    let river_plot_tile = &self.tile_list[river_plot_index];
                     if let Some(neighbor_tile) =
                         river_plot_tile.tile_neighbor(self, Direction::SouthEast)
                     {
@@ -1065,12 +1073,12 @@ impl TileMap {
                 }
                 Direction::South => unreachable!(),
                 Direction::SouthWest => {
-                    river_plot = *start_plot;
+                    river_plot_index = start_plot_index;
                     self.river_list
                         .entry(river_id)
                         .or_default()
-                        .push((river_plot, this_flow_direction));
-                    let river_plot_tile = &self.tile_list[&river_plot];
+                        .push((river_plot_index, this_flow_direction));
+                    let river_plot_tile = &self.tile_list[river_plot_index];
                     if let Some(neighbor_tile) =
                         river_plot_tile.tile_neighbor(self, Direction::South)
                     {
@@ -1085,12 +1093,12 @@ impl TileMap {
                     }
                 }
                 Direction::West => {
-                    river_plot = *start_plot;
+                    river_plot_index = start_plot_index;
                     self.river_list
                         .entry(river_id)
                         .or_default()
-                        .push((river_plot, this_flow_direction));
-                    let river_plot_tile = &self.tile_list[&river_plot];
+                        .push((river_plot_index, this_flow_direction));
+                    let river_plot_tile = &self.tile_list[river_plot_index];
                     if let Some(neighbor_tile) =
                         river_plot_tile.tile_neighbor(self, Direction::SouthWest)
                     {
@@ -1100,19 +1108,19 @@ impl TileMap {
                         {
                             return;
                         } else {
-                            river_plot = neighbor_tile.hex_position;
+                            river_plot_index = neighbor_tile.index(self);
                         }
                     } else {
                         return;
                     }
                 }
                 Direction::NorthWest => {
-                    river_plot = *start_plot;
+                    river_plot_index = start_plot_index;
                     self.river_list
                         .entry(river_id)
                         .or_default()
-                        .push((river_plot, this_flow_direction));
-                    let river_plot_tile = &self.tile_list[&river_plot];
+                        .push((river_plot_index, this_flow_direction));
+                    let river_plot_tile = &self.tile_list[river_plot_index];
                     if let Some(neighbor_tile) =
                         river_plot_tile.tile_neighbor(self, Direction::North)
                     {
@@ -1122,19 +1130,19 @@ impl TileMap {
                         {
                             return;
                         } else {
-                            river_plot = neighbor_tile.hex_position;
+                            river_plot_index = neighbor_tile.index(self);
                         }
                     } else {
                         return;
                     }
                 }
-                Direction::NoDirection => {
-                    river_plot = *start_plot;
+                Direction::None => {
+                    river_plot_index = start_plot_index;
                 }
             },
         }
 
-        let river_plot_tile = &self.tile_list[&river_plot];
+        let river_plot_tile = &self.tile_list[river_plot_index];
         if river_plot_tile.is_water() {
             return;
         }
@@ -1173,7 +1181,7 @@ impl TileMap {
             ]
         }
 
-        fn river_value_at_plot(plot: [i32; 2], tile_map: &mut TileMap) -> i32 {
+        fn river_value_at_plot(plot_index: usize, tile_map: &mut TileMap) -> i32 {
             fn plot_elevation(tile: &Tile) -> i32 {
                 if tile.is_mountain() {
                     4
@@ -1185,7 +1193,18 @@ impl TileMap {
                     1
                 }
             }
-            let tile = &tile_map.tile_list[&plot];
+
+            let tile = &tile_map.tile_list[plot_index];
+
+            if tile.is_natural_wonder()
+                || tile
+                    .tiles_neighbors(tile_map)
+                    .iter()
+                    .any(|neighbor_tile| neighbor_tile.is_natural_wonder())
+            {
+                return -1;
+            }
+
             let mut sum = plot_elevation(tile) * 20;
             let direction_array = tile_map.tile_edge_direction();
             direction_array.iter().for_each(|&direction| {
@@ -1207,15 +1226,15 @@ impl TileMap {
             .filter_map(|(flow_direction, direction)| {
                 river_plot_tile
                     .tile_neighbor(self, direction)
-                    .and_then(|neighbor_tile| Some((flow_direction, neighbor_tile.hex_position)))
+                    .map(|neighbor_tile| (flow_direction, neighbor_tile.index(self)))
             })
             .collect::<Vec<_>>();
 
-        if best_flow_direction == Direction::NoDirection {
+        if best_flow_direction == Direction::None {
             let mut best_value = i32::MAX;
             for (flow_direction, adjacent_plot) in adjacent_plot_list.into_iter() {
                 if flow_direction.opposite_direction() != original_flow_direction
-                    && (this_flow_direction == Direction::NoDirection
+                    && (this_flow_direction == Direction::None
                         || next_flow_directions(this_flow_direction, self)
                             .contains(&flow_direction))
                 {
@@ -1231,12 +1250,12 @@ impl TileMap {
             }
         }
 
-        if best_flow_direction != Direction::NoDirection {
-            if original_flow_direction == Direction::NoDirection {
+        if best_flow_direction != Direction::None {
+            if original_flow_direction == Direction::None {
                 original_flow_direction = best_flow_direction;
             }
             self.do_river(
-                &river_plot,
+                river_plot_index,
                 best_flow_direction,
                 original_flow_direction,
                 river_id,
@@ -1252,26 +1271,30 @@ impl TileMap {
         let lake_plot_rand = 25;
         let direction_array = self.tile_edge_direction();
 
-        let tile_list_position: Vec<_> = self.tile_list.keys().copied().collect();
-        for hex_position in tile_list_position.iter() {
-            let tile = &self.tile_list[hex_position];
+        for tile_index in 0..self.tile_list.len() {
+            let tile = &self.tile_list[tile_index];
             if !tile.is_water()
                 && !tile.is_coastal_land(self)
                 && !direction_array
                     .iter()
                     .any(|&direction| tile.has_river(direction, self))
+                && !tile
+                    .tiles_neighbors(self)
+                    .iter()
+                    .any(|neighbor_tile| neighbor_tile.is_natural_wonder())
                 && self.random_number_generator.gen_range(0..lake_plot_rand) == 0
             {
                 num_lakes_added += 1;
                 if num_large_lakes_added < large_lake_num {
-                    let add_more_lakes = self.add_more_lake(hex_position, ruleset);
+                    let add_more_lakes = self.add_more_lake(tile_index, ruleset);
                     if add_more_lakes {
                         num_large_lakes_added += 1;
                     }
                 }
-                let tile = self.tile_list.get_mut(hex_position).unwrap();
+                let tile = &mut self.tile_list[tile_index];
+                tile.terrain_type = TerrainType::Water;
                 tile.base_terrain = ruleset.terrains["Lakes"].clone();
-                tile.terrain_features.clear();
+                tile.terrain_feature = None;
             }
         }
         if num_lakes_added > 0 {
@@ -1279,10 +1302,10 @@ impl TileMap {
         }
     }
 
-    fn add_more_lake(&mut self, hex_position: &[i32; 2], ruleset: &Res<Ruleset>) -> bool {
+    fn add_more_lake(&mut self, tile_index: usize, ruleset: &Res<Ruleset>) -> bool {
         let mut large_lake = 0;
         let mut lake_plots = Vec::new();
-        let tile = &self.tile_list[hex_position];
+        let tile = &self.tile_list[tile_index];
         for &direction in self.tile_edge_direction().iter() {
             let neighbor_tile = tile.tile_neighbor(self, direction);
             if let Some(neighbor_tile) = neighbor_tile {
@@ -1292,20 +1315,25 @@ impl TileMap {
                         .tile_edge_direction()
                         .iter()
                         .any(|&direction| neighbor_tile.has_river(direction, self))
+                    && !neighbor_tile
+                        .tiles_neighbors(self)
+                        .iter()
+                        .any(|neighbor_tile| neighbor_tile.is_natural_wonder())
                 {
-                    let hex_position = neighbor_tile.hex_position;
+                    let tile_index = neighbor_tile.index(self);
                     if self.random_number_generator.gen_range(0..(large_lake + 4)) < 3 {
-                        lake_plots.push(hex_position);
+                        lake_plots.push(tile_index);
                         large_lake += 1;
                     }
                 }
             }
         }
 
-        for lake_plot in lake_plots.iter() {
-            let tile = self.tile_list.get_mut(lake_plot).unwrap();
+        for &lake_plot in lake_plots.iter() {
+            let tile = &mut self.tile_list[lake_plot];
+            tile.terrain_type = TerrainType::Water;
             tile.base_terrain = ruleset.terrains["Lakes"].clone();
-            tile.terrain_features.clear();
+            tile.terrain_feature = None;
         }
 
         large_lake > 2
@@ -1347,58 +1375,49 @@ impl TileMap {
         let jungle_bottom = equator - (jungle_percent as f64 * 0.5).ceil() as i32;
         let jungle_top = equator + (jungle_percent as f64 * 0.5).ceil() as i32;
 
-        let tile_list_position: Vec<_> = self.tile_list.keys().copied().collect();
-
-        let height = self.map_parameters.map_size.height;
-
-        for hex_position in tile_list_position.iter() {
-            let tile = &self.tile_list[hex_position];
+        for tile_index in 0..self.tile_list.len() {
+            let tile = &self.tile_list[tile_index];
 
             /* **********start to add ice********** */
-            if !tile.base_terrain.impassable
-                && tile.is_water()
-                && !self
+            if tile.is_impassable() {
+                continue;
+            } else if tile.is_water() {
+                if !self
                     .tile_edge_direction()
                     .iter()
                     .any(|&direction| tile.has_river(direction, self))
-                && ruleset.terrains["Ice"]
-                    .occurs_on
-                    .contains(&tile.base_terrain.name)
-            {
-                let hex_coord = Hex::from(tile.hex_position);
-                let offset_coord = hex_coord.to_offset_coordinate(
-                    self.map_parameters.offset,
-                    self.map_parameters.hex_layout.orientation,
-                );
-                let [_x, y] = offset_coord.to_array();
+                    && ruleset.terrains["Ice"]
+                        .occurs_on
+                        .contains(&tile.base_terrain.name)
+                {
+                    let latitude = Self::tile_latitude(self.map_parameters.map_size, tile_index);
 
-                let latitude = ((height as f64 / 2. - y as f64) / (height as f64 / 2.)).abs();
-
-                if latitude > 0.78 {
-                    let mut score = self.random_number_generator.gen_range(0..100) as f64;
-                    score += latitude * 100.;
-                    let tile_neighbors = tile.tiles_neighbors(self);
-                    if tile_neighbors.iter().any(|x| x.is_land()) {
-                        score /= 2.0;
-                    }
-                    let a = tile_neighbors
-                        .iter()
-                        .filter(|x| {
-                            x.terrain_features
-                                .iter()
-                                .any(|terrain| terrain.name == "Ice")
-                        })
-                        .count();
-                    score += 10. * a as f64;
-                    if score > 130. {
-                        let tile = self.tile_list.get_mut(hex_position).unwrap();
-                        tile.terrain_features.push(ruleset.terrains["Ice"].clone());
+                    if latitude > 0.78 {
+                        let mut score = self.random_number_generator.gen_range(0..100) as f64;
+                        score += latitude * 100.;
+                        let tile_neighbors = tile.tiles_neighbors(self);
+                        if tile_neighbors.iter().any(|x| x.is_land()) {
+                            score /= 2.0;
+                        }
+                        let a = tile_neighbors
+                            .iter()
+                            .filter(|x| {
+                                x.terrain_feature
+                                    .iter()
+                                    .any(|terrain| terrain.name == "Ice")
+                            })
+                            .count();
+                        score += 10. * a as f64;
+                        if score > 130. {
+                            let tile = &mut self.tile_list[tile_index];
+                            tile.terrain_feature = Some(ruleset.terrains["Ice"].clone());
+                        }
                     }
                 }
             }
             /* **********the end of add ice********** */
-            /* **********start to add flood plains********** */
             else {
+                /* **********start to add flood plains********** */
                 num_land_plots += 1;
                 if self
                     .tile_edge_direction()
@@ -1408,9 +1427,9 @@ impl TileMap {
                         .occurs_on
                         .contains(&tile.base_terrain.name)
                 {
-                    let tile = self.tile_list.get_mut(hex_position).unwrap();
-                    tile.terrain_features
-                        .push(ruleset.terrains["Flood plains"].clone());
+                    let tile = &mut self.tile_list[tile_index];
+                    tile.terrain_feature = Some(ruleset.terrains["Flood plains"].clone());
+                    continue;
                 }
                 /* **********the end of add flood plains********** */
                 /* **********start to add oasis********** */
@@ -1421,64 +1440,49 @@ impl TileMap {
                         <= oasis_max_percent
                     && self.random_number_generator.gen_range(0..4) == 1
                 {
-                    let tile = self.tile_list.get_mut(hex_position).unwrap();
-                    tile.terrain_features
-                        .push(ruleset.terrains["Oasis"].clone());
+                    let tile = &mut self.tile_list[tile_index];
+                    tile.terrain_feature = Some(ruleset.terrains["Oasis"].clone());
                     oasis_count += 1;
+                    continue;
                 }
-            }
-            /* **********the end of add oasis********** */
+                /* **********the end of add oasis********** */
+                /* **********start to add march********** */
+                if ruleset.terrains["Marsh"]
+                    .occurs_on
+                    .contains(&tile.base_terrain.name)
+                    && (marsh_count as f64 * 100. / num_land_plots as f64).ceil() as i32
+                        <= marsh_max_percent
+                {
+                    let mut score = 300;
 
-            let mut marsh = false;
-            let mut jungle = false;
+                    let tile_neighbors = tile.tiles_neighbors(self);
 
-            /* **********start to add march********** */
-            let tile = &self.tile_list[hex_position];
-            if ruleset.terrains["Marsh"]
-                .occurs_on
-                .contains(&tile.base_terrain.name)
-                && (marsh_count as f64 * 100. / num_land_plots as f64).ceil() as i32
-                    <= marsh_max_percent
-            {
-                let mut score = 300;
-
-                let tile_neighbors = tile.tiles_neighbors(self);
-
-                let a = tile_neighbors
-                    .iter()
-                    .filter(|x| {
-                        x.terrain_features
-                            .iter()
-                            .any(|terrain| terrain.name == "Marsh")
-                    })
-                    .count();
-                match a {
-                    0 => (),
-                    1 => score += 50,
-                    2 | 3 => score += 150,
-                    4 => score -= 50,
-                    _ => score -= 200,
+                    let a = tile_neighbors
+                        .iter()
+                        .filter(|x| {
+                            x.terrain_feature
+                                .iter()
+                                .any(|terrain| terrain.name == "Marsh")
+                        })
+                        .count();
+                    match a {
+                        0 => (),
+                        1 => score += 50,
+                        2 | 3 => score += 150,
+                        4 => score -= 50,
+                        _ => score -= 200,
+                    };
+                    if self.random_number_generator.gen_range(0..300) <= score {
+                        let tile = &mut self.tile_list[tile_index];
+                        tile.terrain_feature = Some(ruleset.terrains["Marsh"].clone());
+                        marsh_count += 1;
+                        continue;
+                    }
                 };
-                if self.random_number_generator.gen_range(0..300) <= score {
-                    let tile = self.tile_list.get_mut(hex_position).unwrap();
-                    tile.terrain_features
-                        .push(ruleset.terrains["Marsh"].clone());
-                    marsh_count += 1;
-                    marsh = true;
-                }
-            };
-            /* **********the end of add march********** */
-            /* **********start to add jungle********** */
-            if !marsh {
-                let tile = &self.tile_list[hex_position];
-                let hex_coord = Hex::from(tile.hex_position);
-                let offset_coord = hex_coord.to_offset_coordinate(
-                    self.map_parameters.offset,
-                    self.map_parameters.hex_layout.orientation,
-                );
-                let [_x, y] = offset_coord.to_array();
+                /* **********the end of add march********** */
+                /* **********start to add jungle********** */
+                let latitude = Self::tile_latitude(self.map_parameters.map_size, tile_index);
 
-                let latitude = ((height as f64 / 2. - y as f64) / (height as f64 / 2.)).abs();
                 if ruleset.terrains["Jungle"]
                     .occurs_on
                     .contains(&tile.base_terrain.name)
@@ -1494,7 +1498,7 @@ impl TileMap {
                     let a = tile_neighbors
                         .iter()
                         .filter(|x| {
-                            x.terrain_features
+                            x.terrain_feature
                                 .iter()
                                 .any(|terrain| terrain.name == "Jungle")
                         })
@@ -1507,29 +1511,25 @@ impl TileMap {
                         _ => score -= 200,
                     };
                     if self.random_number_generator.gen_range(0..300) <= score {
-                        let tile = self.tile_list.get_mut(hex_position).unwrap();
-                        tile.terrain_features
-                            .push(ruleset.terrains["Jungle"].clone());
+                        let tile = &mut self.tile_list[tile_index];
+                        tile.terrain_feature = Some(ruleset.terrains["Jungle"].clone());
 
-                        if tile.terrain_features.iter().any(|x| x.name == "Hill")
+                        if tile.terrain_type == TerrainType::Hill
                             && (tile.base_terrain.name == "Grassland"
                                 || tile.base_terrain.name == "Plains")
                         {
                             tile.base_terrain = ruleset.terrains["Plains"].clone()
                         } else {
+                            tile.terrain_type = TerrainType::Land;
                             tile.base_terrain = ruleset.terrains["Plains"].clone();
-                            tile.terrain_features.retain(|x| x.name != "Hill");
                         }
 
                         jungle_count += 1;
-                        jungle = true;
+                        continue;
                     }
                 }
-            }
-            /* **********the end of add jungle********** */
-            /* **********start to add forest********** */
-            if !marsh && !jungle {
-                let tile = &self.tile_list[hex_position];
+                /* **********the end of add jungle********** */
+                /* **********start to add forest********** */
                 if ruleset.terrains["Forest"]
                     .occurs_on
                     .contains(&tile.base_terrain.name)
@@ -1543,7 +1543,7 @@ impl TileMap {
                     let a = tile_neighbors
                         .iter()
                         .filter(|x| {
-                            x.terrain_features
+                            x.terrain_feature
                                 .iter()
                                 .any(|terrain| terrain.name == "Forest")
                         })
@@ -1556,14 +1556,14 @@ impl TileMap {
                         _ => score -= 200,
                     };
                     if self.random_number_generator.gen_range(0..300) <= score {
-                        let tile = self.tile_list.get_mut(hex_position).unwrap();
-                        tile.terrain_features
-                            .push(ruleset.terrains["Forest"].clone());
+                        let tile = &mut self.tile_list[tile_index];
+                        tile.terrain_feature = Some(ruleset.terrains["Forest"].clone());
                         forest_count += 1;
+                        continue;
                     }
                 }
+                /* **********the end of add forest********** */
             }
-            /* **********the end of add jungle********** */
         }
     }
 
@@ -1582,11 +1582,11 @@ impl TileMap {
 
         let mut random_number_generator = self.random_number_generator.clone();
 
-        let mut natural_wonder_position_and_score = HashMap::new();
+        let mut natural_wonder_and_position_index_and_score = HashMap::new();
 
-        let mut land_id_and_tile_count: Vec<_> = self
+        let mut land_id_and_area_size: Vec<_> = self
             .tile_list
-            .values()
+            .iter()
             .filter(|tile| tile.is_land() && !tile.base_terrain.impassable)
             .fold(HashMap::new(), |mut map, tile| {
                 *map.entry(tile.area_id).or_insert(0) += 1;
@@ -1595,7 +1595,7 @@ impl TileMap {
             .into_iter()
             .collect();
 
-        land_id_and_tile_count.sort_by_key(|&(_, v)| std::cmp::Reverse(v));
+        land_id_and_area_size.sort_by_key(|&(_, v)| std::cmp::Reverse(v));
 
         fn matches_wonder_filter(tile: &Tile, filter: &str) -> bool {
             match filter {
@@ -1609,7 +1609,7 @@ impl TileMap {
             }
         }
 
-        for (&hex_position, tile) in &self.tile_list {
+        for (tile_index, tile) in self.tile_list.iter().enumerate() {
             for &natural_wonder_name in &natural_wonder_list {
                 let possible_natural_wonder = &ruleset.terrains[natural_wonder_name];
 
@@ -1637,14 +1637,14 @@ impl TileMap {
                             }
                             "Must not be on [] largest landmasses" => {
                                 let index = unique.params[0].parse::<usize>().unwrap();
-                                !land_id_and_tile_count
+                                !land_id_and_area_size
                                     .iter()
                                     .take(index)
                                     .any(|(id, _)| tile.area_id == *id)
                             }
                             "Must be on [] largest landmasses" => {
                                 let index = unique.params[0].parse::<usize>().unwrap();
-                                land_id_and_tile_count
+                                land_id_and_area_size
                                     .iter()
                                     .take(index)
                                     .any(|(id, _)| tile.area_id == *id)
@@ -1665,18 +1665,20 @@ impl TileMap {
                     .contains(&tile.base_terrain.name)
                     && check_unique_conditions
                 {
-                    natural_wonder_position_and_score
+                    natural_wonder_and_position_index_and_score
                         .entry(natural_wonder_name)
                         .or_insert_with(Vec::new)
-                        .push((hex_position, 1));
+                        .push((tile_index, 1));
                 }
             }
         }
 
         let mut j = 0;
 
-        let selected_natural_wonder_list: Vec<_> =
-            natural_wonder_position_and_score.keys().cloned().collect();
+        let selected_natural_wonder_list: Vec<_> = natural_wonder_and_position_index_and_score
+            .keys()
+            .cloned()
+            .collect();
 
         let mut placed_natural_wonder_position = Vec::new();
 
@@ -1687,16 +1689,23 @@ impl TileMap {
                 // the score is related to the min value of the distance from the position to all the placed natural wonders
                 // if no natural wonder has placed, we choose the random place where the current natural wonder can place for the current natural wonder
                 // the score method start
-                let position_and_score = natural_wonder_position_and_score
+                let position_index_and_score = natural_wonder_and_position_index_and_score
                     .get_mut(natural_wonder_name)
                     .unwrap();
-                for (x, score) in position_and_score.iter_mut() {
+                for (position_x_index, score) in position_index_and_score.iter_mut() {
                     let closest_natural_wonder_dist = if placed_natural_wonder_position.is_empty() {
                         1000000
                     } else {
                         placed_natural_wonder_position
                             .iter()
-                            .map(|y| Hex::hex_distance(Hex::from(*x), Hex::from(*y)))
+                            .map(|position_y_index: &usize| {
+                                let position_x_hex = self.tile_list[*position_x_index].hex_position;
+                                let position_y_hex = self.tile_list[*position_y_index].hex_position;
+                                Hex::hex_distance(
+                                    Hex::from(position_x_hex),
+                                    Hex::from(position_y_hex),
+                                )
+                            })
                             .min()
                             .unwrap()
                     };
@@ -1709,12 +1718,12 @@ impl TileMap {
                 // the score method end
 
                 // choose the max score position as the candidate position for the current natural wonder
-                let max_score_position = position_and_score
+                let max_score_position_index = position_index_and_score
                     .iter()
                     .max_by_key(|&(_, score)| score)
                     .map(|&(position, _)| position)
                     .unwrap();
-                let tile = &self.tile_list[&max_score_position];
+                let tile = &self.tile_list[max_score_position_index];
                 let natural_wonder = &ruleset.terrains[natural_wonder_name];
 
                 // check unique conditions, this code is the same as the above, need refactoring
@@ -1740,14 +1749,14 @@ impl TileMap {
                         }
                         "Must not be on [] largest landmasses" => {
                             let index = unique.params[0].parse::<usize>().unwrap();
-                            !land_id_and_tile_count
+                            !land_id_and_area_size
                                 .iter()
                                 .take(index)
                                 .any(|(id, _)| tile.area_id == *id)
                         }
                         "Must be on [] largest landmasses" => {
                             let index = unique.params[0].parse::<usize>().unwrap();
-                            land_id_and_tile_count
+                            land_id_and_area_size
                                 .iter()
                                 .take(index)
                                 .any(|(id, _)| tile.area_id == *id)
@@ -1766,12 +1775,18 @@ impl TileMap {
                 if natural_wonder.occurs_on.contains(&tile.base_terrain.name)
                     && check_unique_conditions
                 {
-                    let tile = self.tile_list.get_mut(&max_score_position).unwrap();
-                    tile.terrain_features.clear();
-                    tile.terrain_features.push(natural_wonder.clone());
+                    let tile = &mut self.tile_list[max_score_position_index];
+                    tile.terrain_feature = Some(natural_wonder.clone());
+                    // Edit the choice tile's terrain_type or base_terrain to match the natural wonder's turns_into value
                     let turn_into_terrain_name = &natural_wonder.turns_into;
-                    tile.base_terrain = ruleset.terrains[turn_into_terrain_name].clone();
-                    placed_natural_wonder_position.push(max_score_position);
+                    if turn_into_terrain_name == "Mountain" {
+                        tile.terrain_type = TerrainType::Mountain;
+                    } else if turn_into_terrain_name == "Plains"
+                        || turn_into_terrain_name == "coast"
+                    {
+                        tile.base_terrain = ruleset.terrains[turn_into_terrain_name].clone();
+                    }
+                    placed_natural_wonder_position.push(max_score_position_index);
                     j += 1;
                 }
             }

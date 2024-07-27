@@ -631,7 +631,7 @@ impl CvFractal {
             .into_iter()
             .enumerate()
             .map(|(index, direction_vector)| (index, estimate_vector.dot(direction_vector)))
-            .max_by(|(_, dot_a), (_, dot_b)| dot_a.partial_cmp(&dot_b).unwrap())
+            .max_by(|(_, dot_a), (_, dot_b)| dot_a.partial_cmp(dot_b).unwrap())
             .map(|(index, _)| index)
             .unwrap();
 

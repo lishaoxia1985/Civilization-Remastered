@@ -186,7 +186,7 @@ impl From<[i32; 2]> for Hex {
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct OffsetCoordinate(pub IVec2);
 impl OffsetCoordinate {
-    pub fn new(x: i32, y: i32) -> Self {
+    pub const fn new(x: i32, y: i32) -> Self {
         Self(IVec2::new(x, y))
     }
 
@@ -205,8 +205,8 @@ impl OffsetCoordinate {
         }
     }
 
-    pub fn to_array(&self) -> [i32; 2] {
-        self.0.into()
+    pub const fn to_array(self) -> [i32; 2] {
+        [self.0.x, self.0.y]
     }
 }
 
@@ -251,7 +251,7 @@ pub enum Direction {
     SouthWest = 23,
     West = 39,
     NorthWest = 44,
-    NoDirection = 99,
+    None = 99,
 }
 
 impl Direction {
@@ -265,7 +265,7 @@ impl Direction {
             Direction::SouthWest => Direction::NorthEast,
             Direction::West => Direction::East,
             Direction::NorthWest => Direction::SouthEast,
-            Direction::NoDirection => panic!("This direction has no opposite direction."),
+            Direction::None => panic!("This direction has no opposite direction."),
         }
     }
 }
