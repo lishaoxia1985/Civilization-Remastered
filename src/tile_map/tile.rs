@@ -42,10 +42,7 @@ impl Tile {
             tile_map.map_parameters.offset,
             tile_map.map_parameters.hex_layout.orientation,
         );
-        TileMap::offset_coordinate_to_index(
-            tile_map.map_parameters.map_size.width,
-            offset_coordinate,
-        )
+        TileMap::offset_coordinate_to_index(tile_map.map_parameters.map_size, offset_coordinate)
     }
 
     pub fn tiles_neighbors<'a>(&'a self, tile_map: &'a TileMap) -> Vec<&Tile> {
@@ -61,10 +58,24 @@ impl Tile {
         let neighbor_offset_coordinate = Hex::from(self.hex_position)
             .neighbor(orientation, direction)
             .to_offset_coordinate(tile_map.map_parameters.offset, orientation);
+
+        // Check if the offset coordinate is inside the map
+        let [x, y] = neighbor_offset_coordinate.to_array();
+        if !(x >= 0
+            && x < tile_map.map_parameters.map_size.width as i32
+            && y >= 0
+            && y < tile_map.map_parameters.map_size.height as i32)
+        {
+            return None;
+        }
+
+        // Calculate the index of the neighbor tile
         let neighbor_index = TileMap::offset_coordinate_to_index(
-            tile_map.map_parameters.map_size.width,
+            tile_map.map_parameters.map_size,
             neighbor_offset_coordinate,
         );
+
+        // Return the neighbor tile if it exists
         tile_map.tile_list.get(neighbor_index)
     }
 
@@ -130,11 +141,22 @@ impl Tile {
                     tile_map.map_parameters.offset,
                     tile_map.map_parameters.hex_layout.orientation,
                 );
-                let index = TileMap::offset_coordinate_to_index(
-                    tile_map.map_parameters.map_size.width,
-                    offset_coordinate,
-                );
-                tile_map.tile_list.get(index)
+
+                // Check if the offset coordinate is inside the map
+                let [x, y] = offset_coordinate.to_array();
+                if x >= 0
+                    && x < tile_map.map_parameters.map_size.width as i32
+                    && y >= 0
+                    && y < tile_map.map_parameters.map_size.height as i32
+                {
+                    let index = TileMap::offset_coordinate_to_index(
+                        tile_map.map_parameters.map_size,
+                        offset_coordinate,
+                    );
+                    tile_map.tile_list.get(index)
+                } else {
+                    None
+                }
             })
             .collect()
     }
@@ -148,11 +170,22 @@ impl Tile {
                     tile_map.map_parameters.offset,
                     tile_map.map_parameters.hex_layout.orientation,
                 );
-                let index = TileMap::offset_coordinate_to_index(
-                    tile_map.map_parameters.map_size.width,
-                    offset_coordinate,
-                );
-                tile_map.tile_list.get(index)
+
+                // Check if the offset coordinate is inside the map
+                let [x, y] = offset_coordinate.to_array();
+                if x >= 0
+                    && x < tile_map.map_parameters.map_size.width as i32
+                    && y >= 0
+                    && y < tile_map.map_parameters.map_size.height as i32
+                {
+                    let index = TileMap::offset_coordinate_to_index(
+                        tile_map.map_parameters.map_size,
+                        offset_coordinate,
+                    );
+                    tile_map.tile_list.get(index)
+                } else {
+                    None
+                }
             })
             .collect()
     }

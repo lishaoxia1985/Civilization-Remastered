@@ -1,8 +1,10 @@
-use bevy::{prelude::*, utils::HashMap};
+use std::{any::Any, borrow::Borrow};
+
+use bevy::{asset::LoadedFolder, prelude::*, utils::HashMap};
 
 #[derive(Resource)]
 pub struct MaterialResource {
-    textures: HashMap<String, Handle<Image>>,
+    pub textures: HashMap<String, Handle<Image>>,
 }
 
 impl MaterialResource {
@@ -16,35 +18,64 @@ impl MaterialResource {
 
 impl FromWorld for MaterialResource {
     fn from_world(world: &mut World) -> Self {
-        let world = world.cell();
-        let asset_server = world.get_resource::<AssetServer>().unwrap();
-        let mut textures: HashMap<String, Handle<Image>> = HashMap::new();
-        let mut insert_texture_handle_to_hashmap_from_folder = |path: &str| {
-            let handles = asset_server.load_folder(path).unwrap();
-            handles.into_iter().for_each(|handle| {
-                let texture_name = asset_server
-                    .get_handle_path(&handle)
-                    .unwrap()
-                    .path()
-                    .file_stem()
-                    .unwrap()
-                    .to_str()
-                    .unwrap()
-                    .to_owned();
-                textures.insert(texture_name, handle.typed());
-            });
-        };
-        insert_texture_handle_to_hashmap_from_folder("Images.Flags/FlagIcons");
-        insert_texture_handle_to_hashmap_from_folder("Images/TileSets/Default");
-        insert_texture_handle_to_hashmap_from_folder("Images/TileSets/HexaRealm/Tiles");
-
+        let textures: HashMap<String, Handle<Image>> = HashMap::new();
         MaterialResource { textures }
     }
 }
 
-pub struct AssetsPlugin;
-impl Plugin for AssetsPlugin {
-    fn build(&self, app: &mut App) {
-        app.init_resource::<MaterialResource>();
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, States)]
+pub enum AppState {
+    #[default]
+    Setup,
+    Finished,
+    GameStart,
+}
+
+#[derive(Resource, Default)]
+pub struct SpriteFolder(Handle<LoadedFolder>);
+
+pub fn load_textures(mut commands: Commands, asset_server: Res<AssetServer>) {
+    // load multiple, individual sprites from a folder
+    commands.insert_resource(SpriteFolder(
+        asset_server.load_folder("Images/TileSets/HexaRealm/Tiles"),
+    ));
+}
+
+pub fn check_textures(
+    mut next_state: ResMut<NextState<AppState>>,
+    rpg_sprite_folder: Res<SpriteFolder>,
+    mut events: EventReader<AssetEvent<LoadedFolder>>,
+) {
+    // Advance the `AppState` once all sprite handles have been loaded by the `AssetServer`
+    for event in events.read() {
+        if event.is_loaded_with_dependencies(&rpg_sprite_folder.0) {
+            next_state.set(AppState::Finished);
+        }
     }
+}
+
+pub fn setup(
+    mut next_state: ResMut<NextState<AppState>>,
+    rpg_sprite_handles: Res<SpriteFolder>,
+    loaded_folders: Res<Assets<LoadedFolder>>,
+    mut material_resource: ResMut<MaterialResource>,
+) {
+    let loaded_folder = loaded_folders.get(&rpg_sprite_handles.0).unwrap();
+
+    loaded_folder.handles.iter().for_each(|handle| {
+        let texture_name = handle
+            .path()
+            .unwrap()
+            .path()
+            .file_stem()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_owned();
+        dbg!(&texture_name);
+        material_resource
+            .textures
+            .insert(texture_name, handle.clone().typed());
+    });
+    next_state.set(AppState::GameStart);
 }

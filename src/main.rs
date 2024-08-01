@@ -2,7 +2,7 @@ mod assets;
 mod ruleset;
 mod tile_map;
 
-use assets::{AssetsPlugin, MaterialResource};
+use assets::{check_textures, load_textures, setup, AppState, MaterialResource};
 use bevy_prototype_lyon::prelude::*;
 use ruleset::Ruleset;
 use tile_map::{
@@ -10,12 +10,12 @@ use tile_map::{
     HexLayout, MapParameters, MapSize, TerrainType, TileMap,
 };
 
-use bevy::{math::DVec2, prelude::*, window::close_on_esc};
+use bevy::{math::DVec2, prelude::*};
 
 use crate::ruleset::Unique;
 
 fn main() {
-    let ruleset = Ruleset::new();
+    /* let ruleset = Ruleset::new();
     dbg!(&ruleset.terrains);
     let mut unique_list = Vec::new();
     for terrains in ruleset.terrains.values() {
@@ -28,7 +28,7 @@ fn main() {
     dbg!(unique_list);
     let unique_objects =
         Unique::new("[-33]% Strength <for [All] units> <when below [-10] Happiness>");
-    dbg!(unique_objects);
+    dbg!(unique_objects); */
     App::new()
         .insert_resource(Msaa::Sample4)
         .add_plugins(DefaultPlugins.set(WindowPlugin {
@@ -40,12 +40,34 @@ fn main() {
             }),
             ..default()
         }))
+        .init_state::<AppState>()
+        .init_resource::<MaterialResource>()
         .insert_resource(Ruleset::new())
         .add_plugins(ShapePlugin)
-        .add_plugins(AssetsPlugin)
-        .add_systems(Startup, (camera_setup, start_up_system))
-        .add_systems(Update, close_on_esc)
+        .add_systems(OnEnter(AppState::Setup), (load_textures, camera_setup))
+        .add_systems(Update, check_textures.run_if(in_state(AppState::Setup)))
+        .add_systems(OnEnter(AppState::Finished), setup)
+        .add_systems(
+            OnEnter(AppState::GameStart),
+            (close_on_esc, start_up_system),
+        )
         .run();
+}
+
+pub fn close_on_esc(
+    mut commands: Commands,
+    focused_windows: Query<(Entity, &Window)>,
+    input: Res<ButtonInput<KeyCode>>,
+) {
+    for (window, focus) in focused_windows.iter() {
+        if !focus.focused {
+            continue;
+        }
+
+        if input.just_pressed(KeyCode::Escape) {
+            commands.entity(window).despawn();
+        }
+    }
 }
 
 fn camera_setup(mut commands: Commands) {
@@ -74,8 +96,8 @@ fn start_up_system(
         &ruleset,
     );
     let tile_pixel_size = tile_map.map_parameters.hex_layout.size * DVec2::new(2.0, 3_f64.sqrt());
-    tile_map.spawn_tile_type_for_pangaea();
-    //tile_map.spawn_tile_type_for_fractal();
+    tile_map.spawn_tile_type_for_pangaea(&ruleset);
+    //tile_map.spawn_tile_type_for_fractal(&ruleset);
     tile_map.generate_terrain(&ruleset);
     tile_map.generate_coasts(&ruleset);
     tile_map.generate_lakes(&ruleset);
@@ -166,11 +188,13 @@ fn start_up_system(
         commands.spawn((
             ShapeBundle {
                 path: GeometryBuilder::build_as(&path),
-                transform: Transform::from_translation(Vec3::new(0., 0., 10.)),
+                spatial: SpatialBundle {
+                    transform: Transform::from_xyz(0., 0., 10.),
+                    ..default()
+                },
                 ..default()
             },
             Stroke::new(Color::BLACK, 2.0),
-            //Fill::color(Color::RED),
         ));
     });
 

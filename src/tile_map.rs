@@ -66,22 +66,24 @@ impl TileMap {
         tile_list
     }
 
-    const fn index_to_offset_coordinate(map_width: i32, index: usize) -> OffsetCoordinate {
-        let x = index as i32 % map_width;
-        let y = index as i32 / map_width;
+    pub const fn index_to_offset_coordinate(map_size: MapSize, index: usize) -> OffsetCoordinate {
+        assert!(index < (map_size.width * map_size.height) as usize);
+        let x = index as i32 % map_size.width;
+        let y = index as i32 / map_size.width;
         OffsetCoordinate::new(x, y)
     }
 
     const fn offset_coordinate_to_index(
-        map_width: i32,
+        map_size: MapSize,
         offset_coordinate: OffsetCoordinate,
     ) -> usize {
-        let offset_coordinate_array = offset_coordinate.to_array();
-        (offset_coordinate_array[0] + offset_coordinate_array[1] * map_width) as usize
+        let [x, y] = offset_coordinate.to_array();
+        assert!((x >= 0) && (x < map_size.width) && (y >= 0) && (y < map_size.height));
+        (x + y * map_size.width) as usize
     }
 
     fn tile_latitude(map_size: MapSize, index: usize) -> f64 {
-        let [_x, y] = Self::index_to_offset_coordinate(map_size.width, index).to_array();
+        let [_x, y] = Self::index_to_offset_coordinate(map_size, index).to_array();
         ((map_size.height as f64 / 2. - y as f64) / (map_size.height as f64 / 2.)).abs()
     }
 
@@ -96,7 +98,7 @@ impl TileMap {
             .corner_direction()
     }
 
-    pub fn spawn_tile_type_for_fractal(&mut self) {
+    pub fn spawn_tile_type_for_fractal(&mut self, ruleset: &Res<Ruleset>) {
         let continent_grain = 2;
 
         let sea_level_low = 65;
@@ -235,9 +237,8 @@ impl TileMap {
             .iter_mut()
             .enumerate()
             .for_each(|(index, tile)| {
-                let [x, y] =
-                    Self::index_to_offset_coordinate(self.map_parameters.map_size.width, index)
-                        .to_array();
+                let [x, y] = Self::index_to_offset_coordinate(self.map_parameters.map_size, index)
+                    .to_array();
                 let height = continents_fractal.get_height(x, y);
 
                 let mountain_height = mountains_fractal.get_height(x, y);
@@ -271,9 +272,16 @@ impl TileMap {
                     tile.terrain_type = TerrainType::Land;
                 };
             });
+
+        self.tile_list
+            .iter_mut()
+            .filter(|tile| !tile.is_water())
+            .for_each(|tile| {
+                tile.base_terrain = ruleset.terrains["Grassland"].clone();
+            });
     }
 
-    pub fn spawn_tile_type_for_pangaea(&mut self) {
+    pub fn spawn_tile_type_for_pangaea(&mut self, ruleset: &Res<Ruleset>) {
         let continent_grain = 2;
 
         let sea_level_low = 71;
@@ -416,9 +424,8 @@ impl TileMap {
             .iter_mut()
             .enumerate()
             .for_each(|(index, tile)| {
-                let [x, y] =
-                    Self::index_to_offset_coordinate(self.map_parameters.map_size.width, index)
-                        .to_array();
+                let [x, y] = Self::index_to_offset_coordinate(self.map_parameters.map_size, index)
+                    .to_array();
                 let height = continents_fractal.get_height(x, y);
 
                 let mountain_height = mountains_fractal.get_height(x, y);
@@ -461,27 +468,39 @@ impl TileMap {
                     tile.terrain_type = TerrainType::Land;
                 };
             });
+
+        self.tile_list
+            .iter_mut()
+            .filter(|tile| !tile.is_water())
+            .for_each(|tile| {
+                tile.base_terrain = ruleset.terrains["Grassland"].clone();
+            });
     }
 
     pub fn generate_coasts(&mut self, ruleset: &Res<Ruleset>) {
-        for tile_index in 0..self.tile_list.len() {
-            let tile = &self.tile_list[tile_index];
-            if tile.is_water() && tile.tiles_neighbors(self).iter().any(|tile| tile.is_land()) {
-                self.tile_list[tile_index].base_terrain = ruleset.terrains["Coast"].clone();
+        for index in 0..self.tile_list.len() {
+            let tile = &self.tile_list[index];
+            if tile.base_terrain.name == "Ocean"
+                && tile
+                    .tiles_neighbors(self)
+                    .iter()
+                    .any(|neigbor_tile| neigbor_tile.is_land())
+            {
+                self.tile_list[index].base_terrain = ruleset.terrains["Coast"].clone();
             }
         }
 
         for chance in &self.map_parameters.coast_expansion_chance {
-            for tile_index in 0..self.tile_list.len() {
-                let tile = &self.tile_list[tile_index];
-                if tile.is_water()
+            for index in 0..self.tile_list.len() {
+                let tile = &self.tile_list[index];
+                if tile.base_terrain.name == "Ocean"
                     && tile
                         .tiles_neighbors(self)
                         .iter()
                         .any(|tile| tile.base_terrain.name == "Coast")
                     && self.random_number_generator.gen_bool(*chance)
                 {
-                    self.tile_list[tile_index].base_terrain = ruleset.terrains["Coast"].clone();
+                    self.tile_list[index].base_terrain = ruleset.terrains["Coast"].clone();
                 }
             }
         }
@@ -598,9 +617,8 @@ impl TileMap {
             .enumerate()
             .filter(|(_, tile)| tile.terrain_type != TerrainType::Water)
             .for_each(|(index, tile)| {
-                let [x, y] =
-                    Self::index_to_offset_coordinate(self.map_parameters.map_size.width, index)
-                        .to_array();
+                let [x, y] = Self::index_to_offset_coordinate(self.map_parameters.map_size, index)
+                    .to_array();
 
                 tile.base_terrain = ruleset.terrains["Grassland"].clone();
 
@@ -754,6 +772,11 @@ impl TileMap {
                         && self.tile_edge_direction()[0..3].iter().all(|&direction| {
                             if let Some(neighbor_tile) = tile.tile_neighbor(self, direction) {
                                 neighbor_tile.is_land()
+                                    && !neighbor_tile.is_natural_wonder()
+                                    && !neighbor_tile
+                                        .tiles_neighbors(self)
+                                        .iter()
+                                        .any(|neighbor_tile| neighbor_tile.is_natural_wonder())
                             } else {
                                 false
                             }
@@ -1782,7 +1805,7 @@ impl TileMap {
                     if turn_into_terrain_name == "Mountain" {
                         tile.terrain_type = TerrainType::Mountain;
                     } else if turn_into_terrain_name == "Plains"
-                        || turn_into_terrain_name == "coast"
+                        || turn_into_terrain_name == "Coast"
                     {
                         tile.base_terrain = ruleset.terrains[turn_into_terrain_name].clone();
                     }
