@@ -1615,7 +1615,7 @@ impl TileMap {
 
         let mut random_number_generator = self.random_number_generator.clone();
 
-        let mut natural_wonder_and_position_index_and_score = HashMap::new();
+        let mut natural_wonder_and_tile_index_and_score = HashMap::new();
 
         let mut land_id_and_area_size: Vec<_> = self
             .tile_list
@@ -1698,7 +1698,7 @@ impl TileMap {
                     .contains(&tile.base_terrain.name)
                     && check_unique_conditions
                 {
-                    natural_wonder_and_position_index_and_score
+                    natural_wonder_and_tile_index_and_score
                         .entry(natural_wonder_name)
                         .or_insert_with(Vec::new)
                         .push((index, 1));
@@ -1706,30 +1706,35 @@ impl TileMap {
             }
         }
 
-        let mut j = 0;
-
-        let selected_natural_wonder_list: Vec<_> = natural_wonder_and_position_index_and_score
-            .keys()
-            .cloned()
+        let selected_natural_wonder_list: Vec<_> = natural_wonder_list
+            .iter()
+            .filter(|&natural_wonder| {
+                natural_wonder_and_tile_index_and_score.contains_key(natural_wonder)
+            })
             .collect();
 
-        let mut placed_natural_wonder_position = Vec::new();
+        // Store current how many natural wonders have been placed
+        let mut j = 0;
+        // Store the index of the tile where the natural wonder has been placed
+        let mut placed_natural_wonder_tile_index = Vec::new();
 
         // start to place wonder
-        for &natural_wonder_name in &selected_natural_wonder_list {
+        for &natural_wonder_name in selected_natural_wonder_list {
             if j <= self.map_parameters.natural_wonder_num {
-                // for every natural wonder, give a score to the position where the natural wonder can place
-                // the score is related to the min value of the distance from the position to all the placed natural wonders
-                // if no natural wonder has placed, we choose the random place where the current natural wonder can place for the current natural wonder
+                // For every natural wonder, give a score to the position where the natural wonder can place.
+                // The score is related to the min value of the distance from the position to all the placed natural wonders
+                // If no natural wonder has placed, we choose the random place where the current natural wonder can place for the current natural wonder
+
                 // the score method start
-                let position_index_and_score = natural_wonder_and_position_index_and_score
+                let tile_index_and_score = natural_wonder_and_tile_index_and_score
                     .get_mut(natural_wonder_name)
                     .unwrap();
-                for (position_x_index, score) in position_index_and_score.iter_mut() {
-                    let closest_natural_wonder_dist = if placed_natural_wonder_position.is_empty() {
+                for (position_x_index, score) in tile_index_and_score.iter_mut() {
+                    let closest_natural_wonder_dist = if placed_natural_wonder_tile_index.is_empty()
+                    {
                         1000000
                     } else {
-                        placed_natural_wonder_position
+                        placed_natural_wonder_tile_index
                             .iter()
                             .map(|position_y_index: &usize| {
                                 let position_x_hex = self.tile_list[*position_x_index].hex_position;
@@ -1751,7 +1756,7 @@ impl TileMap {
                 // the score method end
 
                 // choose the max score position as the candidate position for the current natural wonder
-                let max_score_position_index = position_index_and_score
+                let max_score_position_index = tile_index_and_score
                     .iter()
                     .max_by_key(|&(_, score)| score)
                     .map(|&(index, _)| index)
@@ -1819,7 +1824,7 @@ impl TileMap {
                     {
                         tile.base_terrain = ruleset.terrains[turn_into_terrain_name].clone();
                     }
-                    placed_natural_wonder_position.push(max_score_position_index);
+                    placed_natural_wonder_tile_index.push(max_score_position_index);
                     j += 1;
                 }
             }
