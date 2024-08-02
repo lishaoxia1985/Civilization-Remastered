@@ -96,8 +96,8 @@ fn start_up_system(
         &ruleset,
     );
     let tile_pixel_size = tile_map.map_parameters.hex_layout.size * DVec2::new(2.0, 3_f64.sqrt());
-    tile_map.spawn_tile_type_for_pangaea(&ruleset);
-    //tile_map.spawn_tile_type_for_fractal(&ruleset);
+    tile_map.spawn_tile_type_for_pangaea();
+    //tile_map.spawn_tile_type_for_fractal();
     tile_map.generate_terrain(&ruleset);
     tile_map.generate_coasts(&ruleset);
     tile_map.generate_lakes(&ruleset);

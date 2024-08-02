@@ -98,7 +98,7 @@ impl TileMap {
             .corner_direction()
     }
 
-    pub fn spawn_tile_type_for_fractal(&mut self, ruleset: &Res<Ruleset>) {
+    pub fn spawn_tile_type_for_fractal(&mut self) {
         let continent_grain = 2;
 
         let sea_level_low = 65;
@@ -272,16 +272,9 @@ impl TileMap {
                     tile.terrain_type = TerrainType::Land;
                 };
             });
-
-        self.tile_list
-            .iter_mut()
-            .filter(|tile| !tile.is_water())
-            .for_each(|tile| {
-                tile.base_terrain = ruleset.terrains["Grassland"].clone();
-            });
     }
 
-    pub fn spawn_tile_type_for_pangaea(&mut self, ruleset: &Res<Ruleset>) {
+    pub fn spawn_tile_type_for_pangaea(&mut self) {
         let continent_grain = 2;
 
         let sea_level_low = 71;
@@ -468,40 +461,43 @@ impl TileMap {
                     tile.terrain_type = TerrainType::Land;
                 };
             });
-
-        self.tile_list
-            .iter_mut()
-            .filter(|tile| !tile.is_water())
-            .for_each(|tile| {
-                tile.base_terrain = ruleset.terrains["Grassland"].clone();
-            });
     }
 
     pub fn generate_coasts(&mut self, ruleset: &Res<Ruleset>) {
         for index in 0..self.tile_list.len() {
             let tile = &self.tile_list[index];
-            if tile.base_terrain.name == "Ocean"
+            if tile.is_water()
                 && tile
                     .tiles_neighbors(self)
                     .iter()
-                    .any(|neigbor_tile| neigbor_tile.is_land())
+                    .any(|neigbor_tile| !neigbor_tile.is_water())
             {
                 self.tile_list[index].base_terrain = ruleset.terrains["Coast"].clone();
             }
         }
 
         for chance in &self.map_parameters.coast_expansion_chance {
+            let mut expansion_index = Vec::new();
+            /* Don't update the base_terrain of the tile in the iteration.
+            Because if we update the base_terrain of the tile in the iteration,
+            the tile will be used in the next iteration(e.g. tile.tiles_neighbors().iter().any()),
+            which will cause the result to be wrong. */
             for index in 0..self.tile_list.len() {
                 let tile = &self.tile_list[index];
-                if tile.base_terrain.name == "Ocean"
+                if tile.is_water()
+                    && tile.base_terrain.name != "Coast"
                     && tile
                         .tiles_neighbors(self)
                         .iter()
                         .any(|tile| tile.base_terrain.name == "Coast")
                     && self.random_number_generator.gen_bool(*chance)
                 {
-                    self.tile_list[index].base_terrain = ruleset.terrains["Coast"].clone();
+                    expansion_index.push(index);
                 }
+            }
+
+            for index in expansion_index {
+                self.tile_list[index].base_terrain = ruleset.terrains["Coast"].clone();
             }
         }
     }
@@ -654,10 +650,24 @@ impl TileMap {
         self.bfs(|tile| tile.is_water() && !tile.base_terrain.impassable);
         // mountain area
         self.bfs(|tile| tile.is_mountain());
-        // other land area (including hill, excluding natural-wonder and mountain)
-        self.bfs(|tile| tile.is_land() && !tile.base_terrain.impassable);
+        // other land area (including land and hill, excluding natural-wonder and mountain)
+        self.bfs(|tile| {
+            (tile.is_land() || tile.is_hill())
+                && !tile
+                    .terrain_feature
+                    .clone()
+                    .map_or(false, |terrain_feature| {
+                        terrain_feature.r#type == "NaturalWonder"
+                    })
+        });
         // impassable area (including ice and natural-wonder, excluding mountain)
-        self.bfs(|tile| tile.base_terrain.impassable && !tile.is_mountain());
+        self.bfs(|tile| {
+            tile.terrain_feature
+                .clone()
+                .map_or(false, |terrain_feature| {
+                    terrain_feature.name == "Ice" || terrain_feature.r#type == "NaturalWonder"
+                })
+        });
     }
 
     fn bfs(&mut self, filter_condition: impl Fn(&Tile) -> bool) {
@@ -771,7 +781,7 @@ impl TileMap {
                             .any(|neighbor_tile| neighbor_tile.is_natural_wonder())
                         && self.tile_edge_direction()[0..3].iter().all(|&direction| {
                             if let Some(neighbor_tile) = tile.tile_neighbor(self, direction) {
-                                neighbor_tile.is_land()
+                                !neighbor_tile.is_water()
                                     && !neighbor_tile.is_natural_wonder()
                                     && !neighbor_tile
                                         .tiles_neighbors(self)
@@ -1419,7 +1429,7 @@ impl TileMap {
                         let mut score = self.random_number_generator.gen_range(0..100) as f64;
                         score += latitude * 100.;
                         let tile_neighbors = tile.tiles_neighbors(self);
-                        if tile_neighbors.iter().any(|x| x.is_land()) {
+                        if tile_neighbors.iter().any(|tile| !tile.is_water()) {
                             score /= 2.0;
                         }
                         let a = tile_neighbors
@@ -1610,7 +1620,7 @@ impl TileMap {
         let mut land_id_and_area_size: Vec<_> = self
             .tile_list
             .iter()
-            .filter(|tile| tile.is_land() && !tile.base_terrain.impassable)
+            .filter(|tile| tile.is_hill() || tile.is_land())
             .fold(HashMap::new(), |mut map, tile| {
                 *map.entry(tile.area_id).or_insert(0) += 1;
                 map
@@ -1624,7 +1634,7 @@ impl TileMap {
             match filter {
                 "Elevated" => tile.is_mountain() || tile.is_hill(),
                 "Water" => tile.is_water(),
-                "Land" => tile.is_land(),
+                "Land" => tile.is_land(), // that is never used in wonder place condition
                 "Hill" => tile.is_hill(),
                 //naturalWonder -> true
                 //in allTerrainFeatures -> lastTerrain.name == filter
@@ -1632,7 +1642,7 @@ impl TileMap {
             }
         }
 
-        for (tile_index, tile) in self.tile_list.iter().enumerate() {
+        for (index, tile) in self.tile_list.iter().enumerate() {
             for &natural_wonder_name in &natural_wonder_list {
                 let possible_natural_wonder = &ruleset.terrains[natural_wonder_name];
 
@@ -1691,7 +1701,7 @@ impl TileMap {
                     natural_wonder_and_position_index_and_score
                         .entry(natural_wonder_name)
                         .or_insert_with(Vec::new)
-                        .push((tile_index, 1));
+                        .push((index, 1));
                 }
             }
         }
@@ -1744,7 +1754,7 @@ impl TileMap {
                 let max_score_position_index = position_index_and_score
                     .iter()
                     .max_by_key(|&(_, score)| score)
-                    .map(|&(position, _)| position)
+                    .map(|&(index, _)| index)
                     .unwrap();
                 let tile = &self.tile_list[max_score_position_index];
                 let natural_wonder = &ruleset.terrains[natural_wonder_name];

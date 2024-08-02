@@ -20,7 +20,12 @@ pub enum TerrainType {
 pub struct Tile {
     pub hex_position: [i32; 2],
     pub terrain_type: TerrainType,
+    /// Base Terrain's name may be one of the following:
+    /// - Ocean, Lakes, Coast, Grassland, Plains, Desert, Tundra, Snow.
     pub base_terrain: Arc<Terrain>,
+    /// if it's not None, Terrain Feature's name may be one of the following:
+    /// - Forest, Jungle, Marsh, Flood plains, Oasis, Ice, Fallout.
+    /// - Any natural wonder.
     pub terrain_feature: Option<Arc<Terrain>>,
     pub area_id: i32,
 }
@@ -242,18 +247,19 @@ impl Tile {
         let has_river = direction_array
             .iter()
             .any(|&direction| self.has_river(direction, tile_map));
-        self.is_land()
+        (!self.is_water())
             && (self.is_adjacent_to("Lakes", tile_map)
                 || self.is_adjacent_to("Oasis", tile_map)
                 || has_river)
     }
 
+    /// Check if the tile is land, when it returns true, it means it is not water or hill or mountain.
     pub fn is_land(&self) -> bool {
-        self.base_terrain.r#type == "Land"
+        self.terrain_type == TerrainType::Land
     }
 
     pub fn is_coastal_land(&self, tile_map: &TileMap) -> bool {
-        self.is_land()
+        !self.is_water()
             && self
                 .tiles_neighbors(tile_map)
                 .iter()
