@@ -12,7 +12,7 @@ use super::{
 #[derive(PartialEq, Eq)]
 pub enum TerrainType {
     Water,
-    Land,
+    Flatland,
     Mountain,
     Hill,
 }
@@ -221,6 +221,11 @@ impl Tile {
         self.terrain_type == TerrainType::Hill
     }
 
+    /// Check if the tile is land, when it returns true, it means it is not water or hill or mountain.
+    pub fn is_flatland(&self) -> bool {
+        self.terrain_type == TerrainType::Flatland
+    }
+
     pub fn is_water(&self) -> bool {
         self.terrain_type == TerrainType::Water
     }
@@ -251,11 +256,6 @@ impl Tile {
             && (self.is_adjacent_to("Lakes", tile_map)
                 || self.is_adjacent_to("Oasis", tile_map)
                 || has_river)
-    }
-
-    /// Check if the tile is land, when it returns true, it means it is not water or hill or mountain.
-    pub fn is_land(&self) -> bool {
-        self.terrain_type == TerrainType::Land
     }
 
     pub fn is_coastal_land(&self, tile_map: &TileMap) -> bool {

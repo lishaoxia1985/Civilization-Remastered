@@ -254,7 +254,7 @@ impl TileMap {
                         } else if (mountain_height == mountain_97)
                             || (mountain_height == mountain_95)
                         {
-                            tile.terrain_type = TerrainType::Land;
+                            tile.terrain_type = TerrainType::Flatland;
                         }
                     }
                 } else if mountain_height >= mountain_threshold {
@@ -269,7 +269,7 @@ impl TileMap {
                 {
                     tile.terrain_type = TerrainType::Hill;
                 } else {
-                    tile.terrain_type = TerrainType::Land;
+                    tile.terrain_type = TerrainType::Flatland;
                 };
             });
     }
@@ -444,7 +444,7 @@ impl TileMap {
                     } else if height == mountain_99 {
                         tile.terrain_type = TerrainType::Hill;
                     } else if height == mountain_97 || height == mountain_95 {
-                        tile.terrain_type = TerrainType::Land;
+                        tile.terrain_type = TerrainType::Flatland;
                     }
                 } else if mountain_height >= mountain_threshold {
                     if hill_height >= pass_threshold {
@@ -458,7 +458,7 @@ impl TileMap {
                 {
                     tile.terrain_type = TerrainType::Hill;
                 } else {
-                    tile.terrain_type = TerrainType::Land;
+                    tile.terrain_type = TerrainType::Flatland;
                 };
             });
     }
@@ -650,9 +650,9 @@ impl TileMap {
         self.bfs(|tile| tile.is_water() && !tile.base_terrain.impassable);
         // mountain area
         self.bfs(|tile| tile.is_mountain());
-        // other land area (including land and hill, excluding natural-wonder and mountain)
+        // other land area (including flatland and hill, excluding natural-wonder and mountain)
         self.bfs(|tile| {
-            (tile.is_land() || tile.is_hill())
+            (tile.is_flatland() || tile.is_hill())
                 && !tile
                     .terrain_feature
                     .clone()
@@ -765,7 +765,7 @@ impl TileMap {
         // 1. It should be not a water tile
         // 2. It should be not a natural wonder
         // 3. It should be not a tile which is neighbor to a natural wonder
-        // 4. Its edge directions in [0..3] should be all land because the river edge uses (tile_index, river_flow_direction) for storage.
+        // 4. Its edge directions in [0..3] should be not water because the river edge uses (tile_index, river_flow_direction) for storage.
         //    tile_index is current tile index and river_flow_direction should be one of the edge directions in [0..3].
         let candidate_start_tile_indexs: Vec<_> = self
             .tile_list
@@ -1553,7 +1553,7 @@ impl TileMap {
                         {
                             tile.base_terrain = ruleset.terrains["Plains"].clone()
                         } else {
-                            tile.terrain_type = TerrainType::Land;
+                            tile.terrain_type = TerrainType::Flatland;
                             tile.base_terrain = ruleset.terrains["Plains"].clone();
                         }
 
@@ -1620,7 +1620,7 @@ impl TileMap {
         let mut land_id_and_area_size: Vec<_> = self
             .tile_list
             .iter()
-            .filter(|tile| tile.is_hill() || tile.is_land())
+            .filter(|tile| tile.is_hill() || tile.is_flatland())
             .fold(HashMap::new(), |mut map, tile| {
                 *map.entry(tile.area_id).or_insert(0) += 1;
                 map
@@ -1634,7 +1634,7 @@ impl TileMap {
             match filter {
                 "Elevated" => tile.is_mountain() || tile.is_hill(),
                 "Water" => tile.is_water(),
-                "Land" => tile.is_land(), // that is never used in wonder place condition
+                "Land" => tile.is_flatland(), // that is never used in wonder place condition
                 "Hill" => tile.is_hill(),
                 //naturalWonder -> true
                 //in allTerrainFeatures -> lastTerrain.name == filter
