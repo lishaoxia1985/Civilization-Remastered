@@ -28,7 +28,9 @@ pub struct Terrain {
     #[serde(default)]
     pub movement_cost: i8,
     #[serde(default)]
-    pub turns_into: String,
+    pub turns_into_type: String,
+    #[serde(default)]
+    pub turns_into_base: String,
     #[serde(default)]
     pub impassable: bool,
     #[serde(default)]

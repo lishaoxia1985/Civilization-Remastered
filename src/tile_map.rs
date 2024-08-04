@@ -1600,6 +1600,9 @@ impl TileMap {
         }
     }
 
+    /// This function is used to generate natural wonders.
+    /// # Notice
+    /// Now we have not tackle with "Great Barrier Reef" and "Rock of Gibraltar" correctly, so when we generate these two natural wonders, it will not like the origin game.
     pub fn natural_wonder_generator(&mut self, ruleset: &Res<Ruleset>) {
         let mut natural_wonder_list: Vec<_> = ruleset
             .terrains
@@ -1761,72 +1764,34 @@ impl TileMap {
                     .max_by_key(|&(_, score)| score)
                     .map(|&(index, _)| index)
                     .unwrap();
-                let tile = &self.tile_list[max_score_position_index];
+                // place the natural wonder on the candidate position
                 let natural_wonder = &ruleset.terrains[natural_wonder_name];
-
-                // check unique conditions, this code is the same as the above, need refactoring
-                let check_unique_conditions = natural_wonder.uniques.iter().all(|unique| {
-                    let unique = Unique::new(unique);
-                    match unique.placeholder_text.as_str() {
-                        "Must be adjacent to [] [] tiles" => {
-                            let count = tile
-                                .tiles_neighbors(self)
-                                .iter()
-                                .filter(|x| matches_wonder_filter(x, unique.params[1].as_str()))
-                                .count();
-                            count == unique.params[0].parse::<usize>().unwrap()
+                let tile = &mut self.tile_list[max_score_position_index];
+                tile.terrain_feature = Some(natural_wonder.clone());
+                // Edit the choice tile's terrain_type to match the natural wonder
+                let turn_into_terrain_type_name = &natural_wonder.turns_into_type;
+                if turn_into_terrain_type_name != "" {
+                    match turn_into_terrain_type_name.as_str() {
+                        "Water" => tile.terrain_type = TerrainType::Water,
+                        "Flatland" => tile.terrain_type = TerrainType::Flatland,
+                        "Hill" => tile.terrain_type = TerrainType::Hill,
+                        "Mountain" => tile.terrain_type = TerrainType::Mountain,
+                        _ => {
+                            panic!(
+                                "Invalid terrain type in {}: {}",
+                                natural_wonder.name, turn_into_terrain_type_name
+                            )
                         }
-                        "Must be adjacent to [] to [] [] tiles" => {
-                            let count = tile
-                                .tiles_neighbors(self)
-                                .iter()
-                                .filter(|x| matches_wonder_filter(x, unique.params[2].as_str()))
-                                .count();
-                            count >= unique.params[0].parse::<usize>().unwrap()
-                                && count <= unique.params[1].parse::<usize>().unwrap()
-                        }
-                        "Must not be on [] largest landmasses" => {
-                            let index = unique.params[0].parse::<usize>().unwrap();
-                            !land_id_and_area_size
-                                .iter()
-                                .take(index)
-                                .any(|(id, _)| tile.area_id == *id)
-                        }
-                        "Must be on [] largest landmasses" => {
-                            let index = unique.params[0].parse::<usize>().unwrap();
-                            land_id_and_area_size
-                                .iter()
-                                .take(index)
-                                .any(|(id, _)| tile.area_id == *id)
-                        }
-                        /* "Occurs on latitudes from [] to [] percent of distance equator to pole"=>{
-
-                        } */
-                        /* "Occurs in groups of [] to [] tiles"=>{
-
-                        } */
-                        _ => true,
                     }
-                });
-                // end check unique conditions
-
-                if natural_wonder.occurs_on.contains(&tile.base_terrain.name)
-                    && check_unique_conditions
-                {
-                    let tile = &mut self.tile_list[max_score_position_index];
-                    tile.terrain_feature = Some(natural_wonder.clone());
-                    // Edit the choice tile's terrain_type or base_terrain to match the natural wonder's turns_into value
-                    let turn_into_terrain_name = &natural_wonder.turns_into;
-                    if turn_into_terrain_name == "Mountain" {
-                        tile.terrain_type = TerrainType::Mountain;
-                    } else if turn_into_terrain_name == "Plains"
-                        || turn_into_terrain_name == "Coast"
-                    {
-                        tile.base_terrain = ruleset.terrains[turn_into_terrain_name].clone();
-                    }
-                    placed_natural_wonder_tile_index.push(max_score_position_index);
-                    j += 1;
+                };
+                // Edit the choice tile's base_terrain to match the natural wonder
+                let turn_into_base_terrain_name = &natural_wonder.turns_into_base;
+                if turn_into_base_terrain_name != "" {
+                    tile.base_terrain = ruleset.terrains[turn_into_base_terrain_name].clone();
                 }
+                // add the position of the placed natural wonder to the list of placed natural wonder positions
+                placed_natural_wonder_tile_index.push(max_score_position_index);
+                j += 1;
             }
         }
         self.random_number_generator = random_number_generator;
