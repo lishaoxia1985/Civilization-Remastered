@@ -2,20 +2,12 @@ use std::sync::Arc;
 
 use bevy::{math::DVec2, prelude::Res};
 
-use crate::ruleset::{Ruleset, Terrain};
+use crate::ruleset::{Ruleset, Terrain, TerrainType};
 
 use super::{
     hex::{Direction, Hex, HexLayout},
     HexOrientation, TileMap,
 };
-
-#[derive(PartialEq, Eq)]
-pub enum TerrainType {
-    Water,
-    Flatland,
-    Mountain,
-    Hill,
-}
 
 pub struct Tile {
     pub hex_position: [i32; 2],

@@ -6,9 +6,9 @@ use bevy::utils::HashSet;
 use bevy::{math::DVec2, prelude::Res, utils::HashMap};
 use rand::seq::SliceRandom;
 use rand::{rngs::StdRng, Rng, SeedableRng};
-pub use tile::TerrainType;
+pub use ruleset::TerrainType;
 
-use crate::ruleset::{Ruleset, Unique};
+use crate::ruleset::{self, Ruleset, Unique};
 pub use crate::tile_map::hex::Direction;
 mod fractal;
 mod map_parameters;
@@ -1769,20 +1769,8 @@ impl TileMap {
                 let tile = &mut self.tile_list[max_score_position_index];
                 tile.terrain_feature = Some(natural_wonder.clone());
                 // Edit the choice tile's terrain_type to match the natural wonder
-                let turn_into_terrain_type_name = &natural_wonder.turns_into_type;
-                if turn_into_terrain_type_name != "" {
-                    match turn_into_terrain_type_name.as_str() {
-                        "Water" => tile.terrain_type = TerrainType::Water,
-                        "Flatland" => tile.terrain_type = TerrainType::Flatland,
-                        "Hill" => tile.terrain_type = TerrainType::Hill,
-                        "Mountain" => tile.terrain_type = TerrainType::Mountain,
-                        _ => {
-                            panic!(
-                                "Invalid terrain type in {}: {}",
-                                natural_wonder.name, turn_into_terrain_type_name
-                            )
-                        }
-                    }
+                if let Some(turn_into_terrain_type) = natural_wonder.turns_into_type {
+                    tile.terrain_type = turn_into_terrain_type;
                 };
                 // Edit the choice tile's base_terrain to match the natural wonder
                 let turn_into_base_terrain_name = &natural_wonder.turns_into_base;
@@ -1794,6 +1782,35 @@ impl TileMap {
                 j += 1;
             }
         }
+
+        // If the natural wonder is not water, and its neighbors have water tile, then change the neighbor tiles to lake or coast
+        placed_natural_wonder_tile_index.iter().for_each(|&index| {
+            let tile = &self.tile_list[index];
+            if tile.terrain_type != TerrainType::Water {
+                let tiles_neighbors_index: Vec<_> = tile
+                    .tiles_neighbors(self)
+                    .iter()
+                    .map(|tile| tile.index(self))
+                    .collect();
+
+                tiles_neighbors_index.iter().for_each(|&index| {
+                    let tile = &self.tile_list[index];
+                    if tile.terrain_type == TerrainType::Water {
+                        if tile
+                            .tiles_neighbors(self)
+                            .iter()
+                            .any(|tile_neighbor_neighbor| {
+                                tile_neighbor_neighbor.base_terrain.name == "Lakes"
+                            })
+                        {
+                            self.tile_list[index].base_terrain = ruleset.terrains["Lakes"].clone();
+                        } else {
+                            self.tile_list[index].base_terrain = ruleset.terrains["Coast"].clone()
+                        };
+                    };
+                });
+            }
+        });
         self.random_number_generator = random_number_generator;
     }
 }

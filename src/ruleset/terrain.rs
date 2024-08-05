@@ -28,7 +28,7 @@ pub struct Terrain {
     #[serde(default)]
     pub movement_cost: i8,
     #[serde(default)]
-    pub turns_into_type: String,
+    pub turns_into_type: Option<TerrainType>,
     #[serde(default)]
     pub turns_into_base: String,
     #[serde(default)]
@@ -46,6 +46,14 @@ pub struct Terrain {
     #[serde(default)]
     pub uniques: Vec<String>,
     pub civilopedia_text: Option<Vec<HashMap<String, String>>>,
+}
+
+#[derive(PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Debug)]
+pub enum TerrainType {
+    Water,
+    Flatland,
+    Mountain,
+    Hill,
 }
 
 impl Name for Terrain {

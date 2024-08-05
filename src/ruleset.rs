@@ -22,6 +22,7 @@ mod unit_promotion;
 mod unit_type;
 
 pub use terrain::Terrain;
+pub use terrain::TerrainType;
 pub use unique::Unique;
 
 use crate::ruleset::{
