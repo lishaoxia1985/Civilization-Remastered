@@ -10,8 +10,8 @@
 		
         //Special forest and jungle
         "Grassland+Forest": ["Grassland","GrasslandForest"],
-        "Plains+Forest": ["Plains","PlainsForest"],
-        "Plains+Jungle": ["Plains","PlainsJungle"],
+        "Plains+Forest": ["Plain","PlainsForest"],
+        "Plains+Jungle": ["Plain","PlainsJungle"],
         "Tundra+Forest": ["Tundra","TundraForest"],
         "Tundra+Hill+Forest": ["Tundra","Hill","TundraForest"],
 
@@ -32,7 +32,7 @@
 
         //Jungle improvements for Jungle
         "Grassland+Jungle+Ancient ruins": ["Grassland","Ancient ruins-Jungle","Jungle"],
-        "Plains+Jungle+Ancient ruins": ["Plains","Ancient ruins-Jungle","PlainsJungle"],
+        "Plains+Jungle+Ancient ruins": ["Plain","Ancient ruins-Jungle","PlainsJungle"],
 	    
 	// Farms on hills
 	"Grassland+Hill+Farm": ["Grassland+Farm","Hill"],
@@ -63,25 +63,25 @@
         "Grassland+Hill+Forest+Deer": ["Grassland","Hill","Deer","Forest"],
 	"Grassland+Hill+Forest+Truffles": ["Grassland","Hill","Truffles","Forest"],
         //Plains
-        "Plains+Jungle+Oil": ["Plains","Oil","PlainsJungle"],
-        "Plains+Forest+Horses": ["Plains","Horses","PlainsForest"],
-        "Plains+Forest+Iron": ["Plains","Iron","PlainsForest"],
-        "Plains+Forest+Coal": ["Plains","Coal","PlainsForest"],
-        "Plains+Forest+Aluminum": ["Plains","Aluminum","PlainsForest"],
-        "Plains+Forest+Uranium": ["Plains","Uranium","PlainsForest"],
-        "Plains+Forest+Deer": ["Plains","Deer","PlainsForest"],
-        "Plains+Forest+Furs": ["Plains","Furs","PlainsForest"],
-	"Plains+Forest+Truffles": ["Plains","Truffles","PlainsForest"],
+        "Plains+Jungle+Oil": ["Plain","Oil","PlainsJungle"],
+        "Plains+Forest+Horses": ["Plain","Horses","PlainsForest"],
+        "Plains+Forest+Iron": ["Plain","Iron","PlainsForest"],
+        "Plains+Forest+Coal": ["Plain","Coal","PlainsForest"],
+        "Plains+Forest+Aluminum": ["Plain","Aluminum","PlainsForest"],
+        "Plains+Forest+Uranium": ["Plain","Uranium","PlainsForest"],
+        "Plains+Forest+Deer": ["Plain","Deer","PlainsForest"],
+        "Plains+Forest+Furs": ["Plain","Furs","PlainsForest"],
+	"Plains+Forest+Truffles": ["Plain","Truffles","PlainsForest"],
         "Plains+Wheat+Farm": ["Plains+Farm","Wheat"],
         //Plains+Hill
-        "Plains+Hill+Forest+Horses": ["Plains","Hill","Horses","Forest"],
-        "Plains+Hill+Forest+Iron": ["Plains","Hill","Iron","Forest"],
-        "Plains+Hill+Forest+Coal": ["Plains","Hill","Coal","Forest"],
-        "Plains+Hill+Forest+Aluminum": ["Plains","Hill","Aluminum","Forest"],
-        "Plains+Hill+Forest+Uranium": ["Plains","Hill","Uranium","Forest"],
-        "Plains+Hill+Forest+Furs": ["Plains","Hill","Furs","Forest"],
-        "Plains+Hill+Forest+Deer": ["Plains","Hill","Deer","Forest"],
-	"Plains+Hill+Forest+Truffles": ["Plains","Hill","Truffles","Forest"],
+        "Plains+Hill+Forest+Horses": ["Plain","Hill","Horses","Forest"],
+        "Plains+Hill+Forest+Iron": ["Plain","Hill","Iron","Forest"],
+        "Plains+Hill+Forest+Coal": ["Plain","Hill","Coal","Forest"],
+        "Plains+Hill+Forest+Aluminum": ["Plain","Hill","Aluminum","Forest"],
+        "Plains+Hill+Forest+Uranium": ["Plain","Hill","Uranium","Forest"],
+        "Plains+Hill+Forest+Furs": ["Plain","Hill","Furs","Forest"],
+        "Plains+Hill+Forest+Deer": ["Plain","Hill","Deer","Forest"],
+	"Plains+Hill+Forest+Truffles": ["Plain","Hill","Truffles","Forest"],
         //Tundra
         "Tundra+Jungle+Oil": ["Tundra","Oil","TundraForest"],
         "Tundra+Forest+Horses": ["Tundra","Horses","TundraForest"],

@@ -21,6 +21,7 @@ mod unit;
 mod unit_promotion;
 mod unit_type;
 
+pub use terrain::BaseTerrain;
 pub use terrain::Terrain;
 pub use terrain::TerrainType;
 pub use unique::Unique;

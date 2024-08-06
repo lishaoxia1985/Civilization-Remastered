@@ -47,7 +47,7 @@
 	{
 		"name": "Wheat",
 		"resourceType": "Bonus",
-		"terrainsCanBeFoundOn": ["Plains","Flood plains","Desert"],
+		"terrainsCanBeFoundOn": ["Plain","Flood plains","Desert"],
 		"food": 1,
 		"improvement": "Farm",
 		"improvementStats": {"food": 1},
@@ -80,7 +80,7 @@
 	{
 		"name": "Bison",
 		"resourceType": "Bonus",
-		"terrainsCanBeFoundOn": ["Plains","Grassland"],
+		"terrainsCanBeFoundOn": ["Plain","Grassland"],
 		"food": 1,
 		"improvement": "Camp",
 		"improvementStats": {"food": 1}
@@ -92,7 +92,7 @@
 		"name": "Horses",
 		"resourceType": "Strategic",
 		"revealedBy": "Animal Husbandry",
-		"terrainsCanBeFoundOn": ["Plains","Grassland","Hill"],
+		"terrainsCanBeFoundOn": ["Plain","Grassland","Hill"],
 		"production": 1,
 		"improvement": "Pasture",
 		"improvementStats": {"production": 1},
@@ -111,7 +111,7 @@
 		"name": "Iron",
 		"resourceType": "Strategic",
 		"revealedBy": "Iron Working",
-		"terrainsCanBeFoundOn": ["Grassland","Plains","Desert","Tundra","Snow","Hill","Marsh"],
+		"terrainsCanBeFoundOn": ["Grassland","Plain","Desert","Tundra","Snow","Hill","Marsh"],
 		"production": 1,
 		"improvement": "Mine",
 		"improvementStats": {"production": 1},
@@ -136,7 +136,7 @@
 		"name": "Coal",
 		"resourceType": "Strategic",
 		"revealedBy": "Scientific Theory",
-		"terrainsCanBeFoundOn": ["Grassland","Plains","Hill","Jungle","Forest","Marsh"],
+		"terrainsCanBeFoundOn": ["Grassland","Plain","Hill","Jungle","Forest","Marsh"],
 		"production": 1,
 		"improvement": "Mine",
 		"improvementStats": {"production": 2},
@@ -301,7 +301,7 @@
 	{
 		"name": "Incense",
 		"resourceType": "Luxury",
-		"terrainsCanBeFoundOn": ["Plains","Desert","Flood plains"],
+		"terrainsCanBeFoundOn": ["Plain","Desert","Flood plains"],
 		"gold": 2,
 		"improvement": "Plantation",
 		"improvementStats": {"gold": 1},
@@ -313,7 +313,7 @@
 	{
 		"name": "Ivory",
 		"resourceType": "Luxury",
-		"terrainsCanBeFoundOn": ["Plains","Grassland"],
+		"terrainsCanBeFoundOn": ["Plain","Grassland"],
 		"gold": 2,
 		"improvement": "Camp",
 		"improvementStats": {"gold": 1},
@@ -354,7 +354,7 @@
 	{
 		"name": "Wine",
 		"resourceType": "Luxury",
-		"terrainsCanBeFoundOn": ["Grassland","Plains"],
+		"terrainsCanBeFoundOn": ["Grassland","Plain"],
 		"gold": 2,
 		"improvement": "Plantation",
 		"improvementStats": {"gold": 1},
@@ -380,7 +380,7 @@
 	{
 		"name": "Marble",
 		"resourceType": "Luxury",
-		"terrainsCanBeFoundOn": ["Desert","Plains","Hill","Grassland"],
+		"terrainsCanBeFoundOn": ["Desert","Plain","Hill","Grassland"],
 		"gold": 2,
 		"improvement": "Quarry",
 		"improvementStats": {"production": 1},

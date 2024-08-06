@@ -79,34 +79,31 @@ fn start_up_system(
     materials: Res<MaterialResource>,
     ruleset: Res<Ruleset>,
 ) {
-    let mut tile_map = TileMap::new(
-        MapParameters {
-            map_size: MapSize {
-                width: 80,
-                height: 40,
-            },
-            hex_layout: HexLayout {
-                orientation: HexOrientation::Pointy,
-                size: DVec2::new(8., 8.),
-                origin: DVec2::new(0., 0.),
-            },
-            offset: Offset::Odd,
-            ..Default::default()
+    let mut tile_map = TileMap::new(MapParameters {
+        map_size: MapSize {
+            width: 80,
+            height: 40,
         },
-        &ruleset,
-    );
+        hex_layout: HexLayout {
+            orientation: HexOrientation::Pointy,
+            size: DVec2::new(8., 8.),
+            origin: DVec2::new(0., 0.),
+        },
+        offset: Offset::Odd,
+        ..Default::default()
+    });
     let tile_pixel_size = tile_map.map_parameters.hex_layout.size * DVec2::new(2.0, 3_f64.sqrt());
     tile_map.spawn_tile_type_for_pangaea();
     //tile_map.spawn_tile_type_for_fractal();
     tile_map.generate_terrain(&ruleset);
     tile_map.generate_coasts(&ruleset);
     tile_map.generate_lakes(&ruleset);
-    tile_map.recalculate_areas();
+    tile_map.recalculate_areas(&ruleset);
     tile_map.add_rivers();
     tile_map.add_lakes(&ruleset);
     tile_map.add_features(&ruleset);
     tile_map.natural_wonder_generator(&ruleset);
-    tile_map.recalculate_areas();
+    tile_map.recalculate_areas(&ruleset);
 
     let width = tile_map.map_parameters.map_size.width;
     let height = tile_map.map_parameters.map_size.height;
@@ -212,9 +209,9 @@ fn start_up_system(
         let terrain = if tile.terrain_type == TerrainType::Mountain {
             "Mountain".to_owned()
         } else if tile.terrain_type == TerrainType::Hill {
-            format!("{}+Hill", &tile.base_terrain.name)
+            format!("{}+Hill", &tile.base_terrain.name())
         } else {
-            tile.base_terrain.name.to_owned()
+            tile.base_terrain.name().to_owned()
         };
 
         commands

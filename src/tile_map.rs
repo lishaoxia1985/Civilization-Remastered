@@ -8,7 +8,7 @@ use rand::seq::SliceRandom;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 pub use ruleset::TerrainType;
 
-use crate::ruleset::{self, Ruleset, Unique};
+use crate::ruleset::{self, BaseTerrain, Ruleset, Unique};
 pub use crate::tile_map::hex::Direction;
 mod fractal;
 mod map_parameters;
@@ -29,14 +29,13 @@ pub struct TileMap {
 }
 
 impl TileMap {
-    pub fn new(map_parameters: MapParameters, ruleset: &Res<Ruleset>) -> Self {
+    pub fn new(map_parameters: MapParameters) -> Self {
         let random_number_generator = StdRng::seed_from_u64(map_parameters.seed);
         let tile_list = Self::rectangular_map(
             map_parameters.map_size.width,
             map_parameters.map_size.height,
             map_parameters.hex_layout,
             map_parameters.offset,
-            ruleset,
         );
         Self {
             map_parameters,
@@ -51,7 +50,6 @@ impl TileMap {
         height: i32,
         hex_layout: HexLayout,
         offset: Offset,
-        ruleset: &Res<Ruleset>,
     ) -> Vec<Tile> {
         let mut tile_list = Vec::with_capacity((width * height) as usize);
         for y in 0..height {
@@ -59,7 +57,7 @@ impl TileMap {
                 let offset_coordinate = OffsetCoordinate::new(x, y);
                 let hex_coordinate = offset_coordinate.to_hex(offset, hex_layout.orientation);
 
-                let tile = Tile::new(hex_coordinate.to_array(), ruleset);
+                let tile = Tile::new(hex_coordinate.to_array());
                 tile_list.push(tile);
             }
         }
@@ -472,7 +470,7 @@ impl TileMap {
                     .iter()
                     .any(|neigbor_tile| !neigbor_tile.is_water())
             {
-                self.tile_list[index].base_terrain = ruleset.terrains["Coast"].clone();
+                self.tile_list[index].base_terrain = BaseTerrain::Coast;
             }
         }
 
@@ -485,11 +483,11 @@ impl TileMap {
             for index in 0..self.tile_list.len() {
                 let tile = &self.tile_list[index];
                 if tile.is_water()
-                    && tile.base_terrain.name != "Coast"
+                    && tile.base_terrain != BaseTerrain::Coast
                     && tile
                         .tiles_neighbors(self)
                         .iter()
-                        .any(|tile| tile.base_terrain.name == "Coast")
+                        .any(|tile| tile.base_terrain == BaseTerrain::Coast)
                     && self.random_number_generator.gen_bool(*chance)
                 {
                     expansion_index.push(index);
@@ -497,7 +495,7 @@ impl TileMap {
             }
 
             for index in expansion_index {
-                self.tile_list[index].base_terrain = ruleset.terrains["Coast"].clone();
+                self.tile_list[index].base_terrain = BaseTerrain::Coast;
             }
         }
     }
@@ -507,7 +505,7 @@ impl TileMap {
     /// is only used when we create the world by ourselves. But in our code, we should tackle with this
     /// situation.
     pub fn generate_lakes(&mut self, ruleset: &Res<Ruleset>) {
-        self.recalculate_areas();
+        self.recalculate_areas(ruleset);
 
         // Get the Vec of area_id when water_area_size is smaller than lake_max_area_size
         let candidate_water_area_ids: Vec<i32> = self
@@ -531,7 +529,7 @@ impl TileMap {
             .iter_mut()
             .filter(|tile| candidate_water_area_ids.contains(&tile.area_id))
         {
-            tile.base_terrain = ruleset.terrains["Lakes"].clone();
+            tile.base_terrain = BaseTerrain::Lake;
         }
     }
 
@@ -616,7 +614,7 @@ impl TileMap {
                 let [x, y] = Self::index_to_offset_coordinate(self.map_parameters.map_size, index)
                     .to_array();
 
-                tile.base_terrain = ruleset.terrains["Grassland"].clone();
+                tile.base_terrain = BaseTerrain::Grassland;
 
                 let deserts_height = deserts_fractal.get_height(x, y);
                 let plains_height = plains_fractal.get_height(x, y);
@@ -626,28 +624,28 @@ impl TileMap {
                 latitude = latitude.clamp(0., 1.);
 
                 if latitude >= snow_latitude {
-                    tile.base_terrain = ruleset.terrains["Snow"].clone()
+                    tile.base_terrain = BaseTerrain::Snow
                 } else if latitude >= tundra_latitude {
-                    tile.base_terrain = ruleset.terrains["Tundra"].clone()
+                    tile.base_terrain = BaseTerrain::Tundra;
                 } else if latitude < grass_latitude {
-                    tile.base_terrain = ruleset.terrains["Grassland"].clone()
+                    tile.base_terrain = BaseTerrain::Grassland;
                 } else if deserts_height >= desert_bottom
                     && deserts_height <= desert_top
                     && latitude >= desert_bottom_latitude
                     && latitude < desert_top_latitude
                 {
-                    tile.base_terrain = ruleset.terrains["Desert"].clone()
+                    tile.base_terrain = BaseTerrain::Desert;
                 } else if plains_height >= plains_bottom && plains_height <= plains_top {
-                    tile.base_terrain = ruleset.terrains["Plains"].clone()
+                    tile.base_terrain = BaseTerrain::Plain;
                 }
             });
     }
 
-    pub fn recalculate_areas(&mut self) {
+    pub fn recalculate_areas(&mut self, ruleset: &Res<Ruleset>) {
         // area id of all the tiles is set to default value (-1)
         self.tile_list.iter_mut().for_each(|tile| tile.area_id = -1);
         // water area, excluding impassable tile ( e.g. ice, natural-wonder in water)
-        self.bfs(|tile| tile.is_water() && !tile.base_terrain.impassable);
+        self.bfs(|tile| tile.is_water() && !tile.is_impassable(ruleset));
         // mountain area
         self.bfs(|tile| tile.is_mountain());
         // other land area (including flatland and hill, excluding natural-wonder and mountain)
@@ -1243,7 +1241,7 @@ impl TileMap {
             direction_array.iter().for_each(|&direction| {
                 if let Some(adjacent_tile) = tile.tile_neighbor(tile_map, direction) {
                     sum += plot_elevation(adjacent_tile);
-                    if adjacent_tile.base_terrain.name == "Desert" {
+                    if adjacent_tile.base_terrain == BaseTerrain::Desert {
                         sum += 4;
                     }
                 } else {
@@ -1326,12 +1324,12 @@ impl TileMap {
                 }
                 let tile = &mut self.tile_list[tile_index];
                 tile.terrain_type = TerrainType::Water;
-                tile.base_terrain = ruleset.terrains["Lakes"].clone();
+                tile.base_terrain = BaseTerrain::Lake;
                 tile.terrain_feature = None;
             }
         }
         if num_lakes_added > 0 {
-            self.recalculate_areas()
+            self.recalculate_areas(ruleset)
         }
     }
 
@@ -1365,7 +1363,7 @@ impl TileMap {
         for &lake_plot in lake_plots.iter() {
             let tile = &mut self.tile_list[lake_plot];
             tile.terrain_type = TerrainType::Water;
-            tile.base_terrain = ruleset.terrains["Lakes"].clone();
+            tile.base_terrain = BaseTerrain::Lake;
             tile.terrain_feature = None;
         }
 
@@ -1412,7 +1410,7 @@ impl TileMap {
             let tile = &self.tile_list[tile_index];
 
             /* **********start to add ice********** */
-            if tile.is_impassable() {
+            if tile.is_impassable(ruleset) {
                 continue;
             } else if tile.is_water() {
                 if !self
@@ -1420,8 +1418,8 @@ impl TileMap {
                     .iter()
                     .any(|&direction| tile.has_river(direction, self))
                     && ruleset.terrains["Ice"]
-                        .occurs_on
-                        .contains(&tile.base_terrain.name)
+                        .occurs_on_base
+                        .contains(&tile.base_terrain)
                 {
                     let latitude = Self::tile_latitude(self.map_parameters.map_size, tile_index);
 
@@ -1457,8 +1455,8 @@ impl TileMap {
                     .iter()
                     .any(|&direction| tile.has_river(direction, self))
                     && ruleset.terrains["Flood plains"]
-                        .occurs_on
-                        .contains(&tile.base_terrain.name)
+                        .occurs_on_base
+                        .contains(&tile.base_terrain)
                 {
                     let tile = &mut self.tile_list[tile_index];
                     tile.terrain_feature = Some(ruleset.terrains["Flood plains"].clone());
@@ -1467,8 +1465,8 @@ impl TileMap {
                 /* **********the end of add flood plains********** */
                 /* **********start to add oasis********** */
                 else if ruleset.terrains["Oasis"]
-                    .occurs_on
-                    .contains(&tile.base_terrain.name)
+                    .occurs_on_base
+                    .contains(&tile.base_terrain)
                     && (oasis_count as f64 * 100. / num_land_plots as f64).ceil() as i32
                         <= oasis_max_percent
                     && self.random_number_generator.gen_range(0..4) == 1
@@ -1481,8 +1479,8 @@ impl TileMap {
                 /* **********the end of add oasis********** */
                 /* **********start to add march********** */
                 if ruleset.terrains["Marsh"]
-                    .occurs_on
-                    .contains(&tile.base_terrain.name)
+                    .occurs_on_base
+                    .contains(&tile.base_terrain)
                     && (marsh_count as f64 * 100. / num_land_plots as f64).ceil() as i32
                         <= marsh_max_percent
                 {
@@ -1517,8 +1515,8 @@ impl TileMap {
                 let latitude = Self::tile_latitude(self.map_parameters.map_size, tile_index);
 
                 if ruleset.terrains["Jungle"]
-                    .occurs_on
-                    .contains(&tile.base_terrain.name)
+                    .occurs_on_base
+                    .contains(&tile.base_terrain)
                     && (jungle_count as f64 * 100. / num_land_plots as f64).ceil() as i32
                         <= jungle_max_percent
                     && (latitude >= jungle_bottom as f64 / 100.
@@ -1548,13 +1546,13 @@ impl TileMap {
                         tile.terrain_feature = Some(ruleset.terrains["Jungle"].clone());
 
                         if tile.terrain_type == TerrainType::Hill
-                            && (tile.base_terrain.name == "Grassland"
-                                || tile.base_terrain.name == "Plains")
+                            && (tile.base_terrain == BaseTerrain::Grassland
+                                || tile.base_terrain == BaseTerrain::Plain)
                         {
-                            tile.base_terrain = ruleset.terrains["Plains"].clone()
+                            tile.base_terrain = BaseTerrain::Plain;
                         } else {
                             tile.terrain_type = TerrainType::Flatland;
-                            tile.base_terrain = ruleset.terrains["Plains"].clone();
+                            tile.base_terrain = BaseTerrain::Plain;
                         }
 
                         jungle_count += 1;
@@ -1564,8 +1562,8 @@ impl TileMap {
                 /* **********the end of add jungle********** */
                 /* **********start to add forest********** */
                 if ruleset.terrains["Forest"]
-                    .occurs_on
-                    .contains(&tile.base_terrain.name)
+                    .occurs_on_base
+                    .contains(&tile.base_terrain)
                     && (forest_count as f64 * 100. / num_land_plots as f64).ceil() as i32
                         <= forest_max_percent
                 {
@@ -1641,7 +1639,7 @@ impl TileMap {
                 "Hill" => tile.is_hill(),
                 //naturalWonder -> true
                 //in allTerrainFeatures -> lastTerrain.name == filter
-                _ => tile.base_terrain.name == filter,
+                _ => tile.base_terrain.name() == filter,
             }
         }
 
@@ -1697,8 +1695,11 @@ impl TileMap {
                 // end check unique conditions
 
                 if possible_natural_wonder
-                    .occurs_on
-                    .contains(&tile.base_terrain.name)
+                    .occurs_on_type
+                    .contains(&tile.terrain_type)
+                    && possible_natural_wonder
+                        .occurs_on_base
+                        .contains(&tile.base_terrain)
                     && check_unique_conditions
                 {
                     natural_wonder_and_tile_index_and_score
@@ -1773,9 +1774,8 @@ impl TileMap {
                     tile.terrain_type = turn_into_terrain_type;
                 };
                 // Edit the choice tile's base_terrain to match the natural wonder
-                let turn_into_base_terrain_name = &natural_wonder.turns_into_base;
-                if turn_into_base_terrain_name != "" {
-                    tile.base_terrain = ruleset.terrains[turn_into_base_terrain_name].clone();
+                if let Some(turn_into_base_terrain) = natural_wonder.turns_into_base {
+                    tile.base_terrain = turn_into_base_terrain;
                 }
                 // add the position of the placed natural wonder to the list of placed natural wonder positions
                 placed_natural_wonder_tile_index.push(max_score_position_index);
@@ -1800,12 +1800,12 @@ impl TileMap {
                             .tiles_neighbors(self)
                             .iter()
                             .any(|tile_neighbor_neighbor| {
-                                tile_neighbor_neighbor.base_terrain.name == "Lakes"
+                                tile_neighbor_neighbor.base_terrain == BaseTerrain::Lake
                             })
                         {
-                            self.tile_list[index].base_terrain = ruleset.terrains["Lakes"].clone();
+                            self.tile_list[index].base_terrain = BaseTerrain::Lake;
                         } else {
-                            self.tile_list[index].base_terrain = ruleset.terrains["Coast"].clone()
+                            self.tile_list[index].base_terrain = BaseTerrain::Coast;
                         };
                     };
                 });

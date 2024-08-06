@@ -30,7 +30,7 @@ pub struct Terrain {
     #[serde(default)]
     pub turns_into_type: Option<TerrainType>,
     #[serde(default)]
-    pub turns_into_base: String,
+    pub turns_into_base: Option<BaseTerrain>,
     #[serde(default)]
     pub impassable: bool,
     #[serde(default)]
@@ -40,7 +40,11 @@ pub struct Terrain {
     #[serde(default)]
     pub override_stats: bool,
     #[serde(default)]
-    pub occurs_on: Vec<String>,
+    pub occurs_on_type: Vec<TerrainType>,
+    #[serde(default)]
+    pub occurs_on_base: Vec<BaseTerrain>,
+    #[serde(default)]
+    pub occurs_on_feature: Vec<String>,
     #[serde(rename = "RGB")]
     pub rgb: Option<[u8; 3]>,
     #[serde(default)]
@@ -54,6 +58,33 @@ pub enum TerrainType {
     Flatland,
     Mountain,
     Hill,
+}
+
+#[derive(PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Debug)]
+pub enum BaseTerrain {
+    Ocean,
+    Lake,
+    Coast,
+    Grassland,
+    Desert,
+    Plain,
+    Tundra,
+    Snow,
+}
+
+impl BaseTerrain {
+    pub const fn name(&self) -> &str {
+        match self {
+            BaseTerrain::Ocean => "Ocean",
+            BaseTerrain::Lake => "Lake",
+            BaseTerrain::Coast => "Coast",
+            BaseTerrain::Grassland => "Grassland",
+            BaseTerrain::Desert => "Desert",
+            BaseTerrain::Plain => "Plain",
+            BaseTerrain::Tundra => "Tundra",
+            BaseTerrain::Snow => "Snow",
+        }
+    }
 }
 
 impl Name for Terrain {

@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use bevy::{math::DVec2, prelude::Res};
 
-use crate::ruleset::{Ruleset, Terrain, TerrainType};
+use crate::ruleset::{BaseTerrain, Ruleset, Terrain, TerrainType};
 
 use super::{
     hex::{Direction, Hex, HexLayout},
@@ -12,9 +12,7 @@ use super::{
 pub struct Tile {
     pub hex_position: [i32; 2],
     pub terrain_type: TerrainType,
-    /// Base Terrain's name may be one of the following:
-    /// - Ocean, Lakes, Coast, Grassland, Plains, Desert, Tundra, Snow.
-    pub base_terrain: Arc<Terrain>,
+    pub base_terrain: BaseTerrain,
     /// if it's not None, Terrain Feature's name may be one of the following:
     /// - Forest, Jungle, Marsh, Flood plains, Oasis, Ice, Fallout.
     /// - Any natural wonder.
@@ -23,11 +21,11 @@ pub struct Tile {
 }
 
 impl Tile {
-    pub fn new(hex_position: [i32; 2], ruleset: &Res<Ruleset>) -> Tile {
+    pub fn new(hex_position: [i32; 2]) -> Tile {
         Tile {
             hex_position,
             terrain_type: TerrainType::Water,
-            base_terrain: ruleset.terrains["Ocean"].clone(),
+            base_terrain: BaseTerrain::Ocean,
             terrain_feature: None,
             area_id: -1,
         }
@@ -200,7 +198,7 @@ impl Tile {
 
     pub fn is_adjacent_to(&self, terrain: &str, tile_map: &TileMap) -> bool {
         self.tiles_neighbors(tile_map).iter().any(|tile| {
-            tile.base_terrain.name == terrain
+            tile.base_terrain.name() == terrain
                 || tile.terrain_feature.iter().any(|x| x.name == terrain)
         })
     }
@@ -230,9 +228,9 @@ impl Tile {
             })
     }
 
-    pub fn is_impassable(&self) -> bool {
+    pub fn is_impassable(&self, ruleset: &Res<Ruleset>) -> bool {
         self.is_mountain()
-            || self.base_terrain.impassable
+            || ruleset.terrains[self.base_terrain.name()].impassable
             || self
                 .terrain_feature
                 .as_ref()
@@ -245,7 +243,7 @@ impl Tile {
             .iter()
             .any(|&direction| self.has_river(direction, tile_map));
         (!self.is_water())
-            && (self.is_adjacent_to("Lakes", tile_map)
+            && (self.is_adjacent_to("Lake", tile_map)
                 || self.is_adjacent_to("Oasis", tile_map)
                 || has_river)
     }
