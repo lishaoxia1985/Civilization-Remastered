@@ -1,6 +1,11 @@
 use bevy::{prelude::Resource, utils::HashMap};
 use serde::de::DeserializeOwned;
 use std::{fs, sync::Arc};
+use terrain::base_terrain::BaseTerrainInfo;
+use terrain::feature::FeatureInfo;
+use terrain::natural_wonder::NaturalWonderInfo;
+pub use terrain::terrain_type::TerrainType;
+use terrain::terrain_type::TerrainTypeInfo;
 
 mod belief;
 mod building;
@@ -22,8 +27,7 @@ mod unit_promotion;
 mod unit_type;
 
 pub use terrain::BaseTerrain;
-pub use terrain::Terrain;
-pub use terrain::TerrainType;
+pub use terrain::TerrainFeature;
 pub use unique::Unique;
 
 use crate::ruleset::{
@@ -62,7 +66,12 @@ pub struct Ruleset {
     pub quests: HashMap<String, Arc<Quest>>,
     pub specialists: HashMap<String, Arc<Specialist>>,
     pub technologies: HashMap<String, Arc<Technology>>,
-    pub terrains: HashMap<String, Arc<Terrain>>,
+
+    pub terrain_types: HashMap<String, Arc<TerrainTypeInfo>>,
+    pub base_terrains: HashMap<String, Arc<BaseTerrainInfo>>,
+    pub features: HashMap<String, Arc<FeatureInfo>>,
+    pub natural_wonders: HashMap<String, Arc<NaturalWonderInfo>>,
+
     pub tile_improvements: HashMap<String, Arc<TileImprovement>>,
     pub tile_resources: HashMap<String, Arc<TileResource>>,
     pub units: HashMap<String, Arc<Unit>>,
@@ -105,7 +114,17 @@ impl Ruleset {
         let specialists: HashMap<_, _> =
             create_hashmap_from_json_file(&full_path("Specialists.json"));
 
-        let terrains: HashMap<_, _> = create_hashmap_from_json_file(&full_path("Terrains.json"));
+        // serde terrains
+        let terrain_types: HashMap<_, _> =
+            create_hashmap_from_json_file(&full_path("TerrainTypes.json"));
+
+        let base_terrains: HashMap<_, _> =
+            create_hashmap_from_json_file(&full_path("BaseTerrains.json"));
+
+        let features: HashMap<_, _> = create_hashmap_from_json_file(&full_path("Features.json"));
+
+        let natural_wonders: HashMap<_, _> =
+            create_hashmap_from_json_file(&full_path("NaturalWonders.json"));
 
         let tile_improvements: HashMap<_, _> =
             create_hashmap_from_json_file(&full_path("TileImprovements.json"));
@@ -183,7 +202,10 @@ impl Ruleset {
             quests,
             specialists,
             technologies,
-            terrains,
+            terrain_types,
+            base_terrains,
+            features,
+            natural_wonders,
             tile_improvements,
             tile_resources,
             units,

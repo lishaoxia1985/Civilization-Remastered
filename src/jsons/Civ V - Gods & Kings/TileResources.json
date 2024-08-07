@@ -3,7 +3,7 @@
 	{
 		"name": "Cattle",
 		"resourceType": "Bonus",
-		"terrainsCanBeFoundOn": ["Grassland"],
+		"canBeFoundOnBase": ["Grassland"],
 		"food": 1,
 		"improvement": "Pasture",
 		"improvementStats": {"production": 1},
@@ -13,7 +13,8 @@
 	{
 		"name": "Sheep",
 		"resourceType": "Bonus",
-		"terrainsCanBeFoundOn": ["Hill"],
+		"canBeFoundOnType": ["Hill"],
+		"canBeFoundOnBase": ["Grassland","Plain","Desert"],
 		"food": 1,
 		"improvement": "Pasture",
 		"improvementStats": {"food": 1},
@@ -23,7 +24,9 @@
 	{
 		"name": "Deer",
 		"resourceType": "Bonus",
-		"terrainsCanBeFoundOn": ["Forest","Tundra"], // Tundra only if lowland
+		"canBeFoundOnType": ["Hill"],
+		"canBeFoundOnBase": ["Tundra"],
+		"canBeFoundOnFeature": ["Forest"],
 		"food": 1,
 		"improvement": "Camp",
 		"improvementStats": {"production": 1},
@@ -37,7 +40,7 @@
 	{
 		"name": "Bananas",
 		"resourceType": "Bonus",
-		"terrainsCanBeFoundOn": ["Jungle"],
+		"canBeFoundOnFeature": ["Jungle"],
 		"food": 1,
 		"improvement": "Plantation",
 		"improvementStats": {"food": 2,"production": -1,"gold": -1},
@@ -47,7 +50,8 @@
 	{
 		"name": "Wheat",
 		"resourceType": "Bonus",
-		"terrainsCanBeFoundOn": ["Plain","Flood plains","Desert"], // Desert only if fresh water
+		"canBeFoundOnBase": ["Plain"],
+		"canBeFoundOnFeature": ["Floodplain"], 
 		"food": 1,
 		"improvement": "Farm",
 		"uniques": ["Generated on every [27] tiles <in [Featureless] [Plains] tiles>",
@@ -58,7 +62,8 @@
 	{
 		"name": "Stone",
 		"resourceType": "Bonus",
-		"terrainsCanBeFoundOn": ["Grassland","Desert","Tundra"],
+		"canBeFoundOnType": ["Hill"],
+		"canBeFoundOnBase": ["Grassland","Desert","Tundra","Plain","Snow"],
 		"production": 1,
 		"improvement": "Quarry",
 		"improvementStats": {"production": 1},
@@ -69,7 +74,7 @@
 	{
 		"name": "Fish",
 		"resourceType": "Bonus",
-		"terrainsCanBeFoundOn": ["Coast"],
+		"canBeFoundOnBase": ["Coast"],
 		"food": 1,
 		"improvement": "Fishing Boats",
 		"uniques": ["Generated on every [10] tiles <in [Featureless] [Coast] tiles>"]
@@ -78,7 +83,7 @@
 	{
 		"name": "Bison",
 		"resourceType": "Bonus",
-		"terrainsCanBeFoundOn": ["Plain","Grassland"],
+		"canBeFoundOnBase": ["Plain","Grassland"],
 		"food": 1,
 		"improvement": "Camp",
 		"improvementStats": {"production": 1}
@@ -90,7 +95,7 @@
 		"name": "Horses",
 		"resourceType": "Strategic",
 		"revealedBy": "Animal Husbandry",
-		"terrainsCanBeFoundOn": ["Plain","Grassland","Hill"], // Hill only if plains or grassland
+		"canBeFoundOnBase": ["Plain","Grassland","Tundra"],
 		"production": 1,
 		"improvement": "Pasture",
 		"improvementStats": {"production": 1},
@@ -109,7 +114,8 @@
 		"name": "Iron",
 		"resourceType": "Strategic",
 		"revealedBy": "Iron Working",
-		"terrainsCanBeFoundOn": ["Grassland","Plain","Desert","Tundra","Snow","Hill","Marsh"],
+		"canBeFoundOnType": ["Hill"],
+		"canBeFoundOnBase": ["Grassland","Plain","Desert","Tundra","Snow"],
 		"production": 1,
 		"improvement": "Mine",
 		"uniques": ["Guaranteed with Strategic Balance resource option",
@@ -133,7 +139,8 @@
 		"name": "Coal",
 		"resourceType": "Strategic",
 		"revealedBy": "Industrialization",
-		"terrainsCanBeFoundOn": ["Grassland","Plain","Hill","Jungle","Forest","Marsh"],
+		"canBeFoundOnType": ["Hill"],
+		"canBeFoundOnBase": ["Grassland","Plain"],
 		"production": 1,
 		"improvement": "Mine",
 		"improvementStats": {"production": 1},
@@ -155,7 +162,8 @@
 		"name": "Oil",
 		"resourceType": "Strategic",
 		"revealedBy": "Biology",
-		"terrainsCanBeFoundOn": ["Desert","Coast","Tundra","Snow","Marsh","Jungle"],
+		"canBeFoundOnBase": ["Desert","Coast","Tundra","Snow"],
+		"canBeFoundOnFeature": ["Marsh","Jungle"],
 		"production": 1,
 		"improvement": "Oil well",
 		"improvementStats": {"production": 3},
@@ -178,7 +186,8 @@
 		"name": "Aluminum",
 		"resourceType": "Strategic",
 		"revealedBy": "Electricity",
-		"terrainsCanBeFoundOn": ["Desert","Tundra","Hill","Snow","Jungle"],
+		"canBeFoundOnType": ["Hill"],
+		"canBeFoundOnBase": ["Desert","Tundra","Plain"],
 		"production": 1,
 		"improvement": "Mine",
 		"improvementStats": {"production": 1},
@@ -194,7 +203,9 @@
 		"name": "Uranium",
 		"resourceType": "Strategic",
 		"revealedBy": "Atomic Theory",
-		"terrainsCanBeFoundOn": ["Marsh","Jungle","Forest","Tundra","Snow"],
+		"canBeFoundOnType": ["Hill"],
+		"canBeFoundOnBase": ["Grassland","Desert","Tundra","Plain","Snow"],
+		"canBeFoundOnFeature": ["Marsh","Jungle","Forest"],
 		"production": 1,
 		"improvement": "Mine",
 		"improvementStats": {"production": 1},
@@ -212,7 +223,8 @@
 	{
 		"name": "Furs",
 		"resourceType": "Luxury",
-		"terrainsCanBeFoundOn": ["Forest","Tundra"],
+		"canBeFoundOnBase": ["Tundra"],
+		"canBeFoundOnFeature": ["Forest"],
 		"gold": 2,
 		"improvement": "Camp",
 		"improvementStats": {"gold": 1},
@@ -223,7 +235,7 @@
 	{
 		"name": "Cotton",
 		"resourceType": "Luxury",
-		"terrainsCanBeFoundOn": ["Grassland","Flood plains"],
+		"canBeFoundOnBase": ["Grassland","Plain","Desert"],
 		"gold": 2,
 		"improvement": "Plantation",
 		"uniques": ["Generated with weight [15] <in [Desert] Regions>",
@@ -235,7 +247,7 @@
 	{
 		"name": "Dyes",
 		"resourceType": "Luxury",
-		"terrainsCanBeFoundOn": ["Jungle","Forest","Marsh"],
+		"canBeFoundOnFeature": ["Jungle","Forest"],
 		"gold": 2,
 		"improvement": "Plantation",
 		"uniques": ["Generated with weight [5] <in [Tundra] Regions>",
@@ -247,7 +259,9 @@
 	{
 		"name": "Gems",
 		"resourceType": "Luxury",
-		"terrainsCanBeFoundOn": ["Jungle","Forest","Hill"],
+		"canBeFoundOnType": ["Hill"],
+		"canBeFoundOnBase": ["Grassland","Plain","Desert","Tundra"],
+		"canBeFoundOnFeature": ["Jungle"],
 		"gold": 3,
 		"improvement": "Mine",
 		"uniques": ["Generated with weight [5] <in [Tundra] Regions>",
@@ -261,7 +275,8 @@
 	{
 		"name": "Gold Ore", // Not called "Gold" in order to not conflict with siege type units for translations
 		"resourceType": "Luxury",
-		"terrainsCanBeFoundOn": ["Desert","Hill","Forest","Jungle"],
+		"canBeFoundOnType": ["Hill"],
+		"canBeFoundOnBase": ["Grassland","Plain","Desert"],
 		"gold": 2,
 		"improvement": "Mine",
 		"uniques": ["Generated with weight [25] <in [Desert] Regions>",
@@ -275,7 +290,8 @@
 	{
 		"name": "Silver",
 		"resourceType": "Luxury",
-		"terrainsCanBeFoundOn": ["Hill","Forest","Jungle","Tundra","Grassland"],
+		"canBeFoundOnType": ["Hill"],
+		"canBeFoundOnBase": ["Desert","Tundra"],
 		"gold": 2,
 		"improvement": "Mine",
 		"uniques": ["Generated with weight [25] <in [Tundra] Regions>",
@@ -293,7 +309,7 @@
 	{
 		"name": "Incense",
 		"resourceType": "Luxury",
-		"terrainsCanBeFoundOn": ["Plain","Desert","Flood plains"],
+		"canBeFoundOnBase": ["Plain","Desert"],
 		"gold": 2,
 		"improvement": "Plantation",
 		"uniques": ["Generated with weight [35] <in [Desert] Regions>",
@@ -304,7 +320,7 @@
 	{
 		"name": "Ivory",
 		"resourceType": "Luxury",
-		"terrainsCanBeFoundOn": ["Plain","Grassland"],
+		"canBeFoundOnBase": ["Plain"],
 		"gold": 2,
 		"improvement": "Camp",
 		"improvementStats": {"gold": 1},
@@ -316,7 +332,7 @@
 	{
 		"name": "Silk",
 		"resourceType": "Luxury",
-		"terrainsCanBeFoundOn": ["Forest","Jungle"],
+		"canBeFoundOnFeature": ["Forest"],
 		"gold": 2,
 		"improvement": "Plantation",
 		"uniques": ["Generated with weight [5] <in [Jungle] Regions>",
@@ -328,7 +344,7 @@
 	{
 		"name": "Spices",
 		"resourceType": "Luxury",
-		"terrainsCanBeFoundOn": ["Jungle","Forest","Marsh"],
+		"canBeFoundOnFeature": ["Jungle"],
 		"gold": 2,
 		"improvement": "Plantation",
 		"uniques": ["Generated with weight [30] <in [Jungle] Regions>",
@@ -343,7 +359,7 @@
 	{
 		"name": "Wine",
 		"resourceType": "Luxury",
-		"terrainsCanBeFoundOn": ["Grassland","Plain"],
+		"canBeFoundOnBase": ["Grassland","Plain"],
 		"gold": 2,
 		"improvement": "Plantation",
 		"uniques": ["Generated with weight [35] <in [Plains] Regions>",
@@ -353,7 +369,7 @@
 	{
 		"name": "Sugar",
 		"resourceType": "Luxury",
-		"terrainsCanBeFoundOn": ["Flood plains","Grassland","Marsh"],
+		"canBeFoundOnFeature": ["Floodplain","Marsh"],
 		// Technically sugar can also be placed on lowland jungles which then *turn* into marsh.
 		"gold": 2,
 		"improvement": "Plantation",
@@ -367,7 +383,8 @@
 	{
 		"name": "Marble",
 		"resourceType": "Luxury",
-		"terrainsCanBeFoundOn": ["Desert","Plain","Hill","Grassland"],
+		"canBeFoundOnType": ["Hill"],
+		"canBeFoundOnBase": ["Grassland","Plain","Desert","Tundra"],
 		"gold": 2,
 		"improvement": "Quarry",
 		"improvementStats": {"production": 1},
@@ -378,7 +395,7 @@
 	{
 		"name": "Whales",
 		"resourceType": "Luxury",
-		"terrainsCanBeFoundOn": ["Coast"],
+		"canBeFoundOnBase": ["Coast"],
 		"food": 1,
 		"gold": 1,
 		"improvement": "Fishing Boats",
@@ -393,7 +410,7 @@
 	{
 		"name": "Pearls",
 		"resourceType": "Luxury",
-		"terrainsCanBeFoundOn": ["Coast"],
+		"canBeFoundOnBase": ["Coast"],
 		"gold": 2,
 		"improvement": "Fishing Boats",
 		"uniques": ["Generated with weight [20] <in [Jungle] Regions>",
@@ -420,7 +437,7 @@
 	{
 		"name": "Citrus",
 		"resourceType": "Luxury",
-		"terrainsCanBeFoundOn": ["Jungle","Forest","Flood plains"],
+		"canBeFoundOnBase": ["Grassland","Plain"],
 		"food": 1,
 		"gold": 1,
 		"improvement": "Plantation",
@@ -434,7 +451,7 @@
 	{
 		"name": "Copper",
 		"resourceType": "Luxury",
-		"terrainsCanBeFoundOn": ["Hill","Forest","Jungle","Grassland","Tundra"],
+		"canBeFoundOnBase": ["Grassland","Tundra","Plain","Desert","Snow"],
 		"gold": 2,
 		"improvement": "Mine",
 		"uniques": ["Generated with weight [15] <in [Tundra] Regions>",
@@ -453,7 +470,7 @@
 	{
 		"name": "Cocoa",
 		"resourceType": "Luxury",
-		"terrainsCanBeFoundOn": ["Jungle","Forest"], // Forest only if flat, non-tundra
+		"canBeFoundOnFeature": ["Jungle"], // Forest only if flat, non-tundra
 		"food": 1,
 		"gold": 1,
 		"improvement": "Plantation"
@@ -462,7 +479,7 @@
 	{
 		"name": "Crab",
 		"resourceType": "Luxury",
-		"terrainsCanBeFoundOn": ["Coast"],
+		"canBeFoundOnBase": ["Coast"],
 		"food": 1,
 		"gold": 1,
 		"improvement": "Fishing Boats",
@@ -478,7 +495,7 @@
 	{
 		"name": "Salt",
 		"resourceType": "Luxury",
-		"terrainsCanBeFoundOn": ["Desert","Tundra","Plain","Forest"],
+		"canBeFoundOnBase": ["Desert","Tundra","Plain"],
 		"gold": 1,
 		"food": 1,
 		"improvement": "Mine",
@@ -495,7 +512,7 @@
 	{
 		"name": "Truffles",
 		"resourceType": "Luxury",
-		"terrainsCanBeFoundOn": ["Forest","Marsh","Jungle"],
+		"canBeFoundOnFeature": ["Forest","Marsh","Jungle"],
 		"gold": 2,
 		"improvement": "Camp",
 		"improvementStats": {"gold": 1},

@@ -2,7 +2,7 @@
 
 	{
 		"name": "Farm",
-		"terrainsCanBeBuiltOn": ["Plain","Grassland","Desert","Flood plains"],
+		"canBeBuiltOnBase": ["Plain","Grassland","Desert"],
 		"food": 1,
 		"turnsToBuild": 7,
 		"techRequired": "Agriculture",
@@ -13,7 +13,7 @@
 	},
 	{
 		"name": "Lumber mill",
-		"terrainsCanBeBuiltOn": ["Forest"],
+		"canBeBuiltOnFeature": ["Forest"],
 		"production": 1,
 		"turnsToBuild": 7,
 		"techRequired": "Construction",
@@ -22,7 +22,7 @@
 	},
 	{
 		"name": "Mine",
-		"terrainsCanBeBuiltOn": ["Hill"],
+		"canBeBuiltOnType": ["Hill"],
 		"production": 1,
 		"turnsToBuild": 7,
 		"techRequired": "Mining",
@@ -31,7 +31,7 @@
 	},
 	{
 		"name": "Trading post",
-		"terrainsCanBeBuiltOn": ["Plain","Grassland","Desert","Hill","Tundra","Forest","Jungle","Flood plains"],
+		"canBeBuiltOnBase": ["Plain","Grassland","Desert","Tundra"],
 		"gold": 1,
 		"turnsToBuild": 7,
 		"techRequired": "Trapping",
@@ -49,7 +49,7 @@
 	},
 	{
 		"name": "Oil well",
-		"terrainsCanBeBuiltOn": ["Coast"],
+		"canBeBuiltOnBase": ["Coast"],
 		"turnsToBuild": 9,
 		"techRequired": "Biology",
 		"uniques": ["Cannot be built on [Coast] tiles <before discovering [Refrigeration]>"],
@@ -79,7 +79,7 @@
 	},
 	{
 		"name": "Fishing Boats",
-		"terrainsCanBeBuiltOn": ["Coast"],
+		"canBeBuiltOnBase": ["Coast"],
 		"food": 1,
 		"techRequired": "Sailing",
 		"uniques": ["[+1 Gold] <after discovering [Compass]>"]
@@ -88,7 +88,7 @@
 	// Military improvement
 	{
 		"name": "Fort",
-		"terrainsCanBeBuiltOn": ["Plain","Grassland","Desert","Hill","Tundra","Snow","Forest","Jungle"],
+		"canBeBuiltOnBase": ["Plain","Grassland","Desert","Tundra","Snow"],
 		"turnsToBuild": 6,
 		"techRequired": "Engineering",
 		"uniques": ["Can be built outside your borders", "Gives a defensive bonus of [50]%"],
@@ -122,7 +122,7 @@
 	{
 		"name": "Remove Forest",
 		"turnsToBuild": 4,
-		"terrainsCanBeBuiltOn": ["Forest"],
+		"canBeBuiltOnFeature": ["Forest"],
 		"techRequired": "Mining",
 		"uniques": ["Can be built outside your borders"],
 		"shortcutKey": "X",
@@ -131,7 +131,7 @@
 	{
 		"name": "Remove Jungle",
 		"turnsToBuild": 7,
-		"terrainsCanBeBuiltOn": ["Jungle"],
+		"canBeBuiltOnFeature": ["Jungle"],
 		"techRequired": "Bronze Working",
 		"uniques": ["Can be built outside your borders"],
 		"shortcutKey": "X"
@@ -139,7 +139,7 @@
 	{
 		"name": "Remove Fallout",
 		"turnsToBuild": 2,
-		"terrainsCanBeBuiltOn": ["Fallout"],
+		"canBeBuiltOnFeature": ["Fallout"],
 		// Has no tile improvements as it can always be built
 		"uniques": ["Can be built outside your borders"],
 		"shortcutKey": "X"
@@ -147,7 +147,7 @@
 	{
 		"name": "Remove Marsh",
 		"turnsToBuild": 6,
-		"terrainsCanBeBuiltOn": ["Marsh"],
+		"canBeBuiltOnFeature": ["Marsh"],
 		"techRequired": "Masonry",
 		"uniques": ["Can be built outside your borders"],
 		"shortcutKey": "X"
@@ -215,13 +215,13 @@
 	{
 		"name": "Terrace farm",
 		"uniqueTo": "Inca",
-		"terrainsCanBeBuiltOn": ["Hill"],
+		"canBeBuiltOnType": ["Hill"],
 		"food": 1,
 		"turnsToBuild": 7,
 		"uniques": ["Cannot be built on [Bonus resource] tiles",
 			"[+1 Food] for each adjacent [Mountain]",
 			"[+1 Food] from [Fresh water] tiles <after discovering [Civil Service]>",
-			"[+1 Food] from [non-fresh water] tiles <after discovering [Fertilizer]>"]
+			"[+1 Food] from [non-fresh water] tiles <after discovering [Fertilizer]>"],
 		"techRequired": "Construction",
 		"shortcutKey": "F"
 	},

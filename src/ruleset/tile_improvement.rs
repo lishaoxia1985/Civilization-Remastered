@@ -2,7 +2,7 @@ use bevy::utils::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-use super::Name;
+use super::{terrain::feature::Feature, BaseTerrain, Name, TerrainType};
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -23,7 +23,11 @@ pub struct TileImprovement {
     #[serde(default)]
     happiness: i8,
     #[serde(default)]
-    terrains_can_be_built_on: Vec<String>,
+    can_be_built_on_type: Vec<TerrainType>,
+    #[serde(default)]
+    can_be_built_on_base: Vec<BaseTerrain>,
+    #[serde(default)]
+    can_be_built_on_feature: Vec<Feature>,
     #[serde(default)]
     turns_to_build: i8,
     #[serde(default)]

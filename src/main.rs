@@ -16,9 +16,9 @@ use crate::ruleset::Unique;
 
 fn main() {
     /* let ruleset = Ruleset::new();
-    dbg!(&ruleset.terrains);
+    dbg!(&ruleset.natural_wonders);
     let mut unique_list = Vec::new();
-    for terrains in ruleset.terrains.values() {
+    for terrains in ruleset.natural_wonders.values() {
         for unique in terrains.uniques.iter() {
             if !unique_list.contains(unique) {
                 unique_list.push(unique.to_owned())
@@ -230,10 +230,10 @@ fn start_up_system(
             })
             .with_children(|parent| {
                 if let Some(terrain_feature) = &tile.terrain_feature {
-                    let terrain_feature_name = match terrain_feature.name.as_str() {
+                    let terrain_feature_name = match terrain_feature.name().as_str() {
                         "Forest" => "ForestG",
                         "Jungle" => "JungleG",
-                        _ => &terrain_feature.name,
+                        _ => &terrain_feature.name(),
                     };
 
                     parent.spawn(SpriteBundle {

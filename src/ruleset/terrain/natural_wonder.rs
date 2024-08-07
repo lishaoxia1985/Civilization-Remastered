@@ -2,11 +2,11 @@ use bevy::utils::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-use super::Name;
+use super::{base_terrain::BaseTerrain, terrain_type::TerrainType, Name, TerrainFeature};
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Terrain {
+pub struct NaturalWonderInfo {
     pub name: String,
     pub r#type: String,
     #[serde(default)]
@@ -24,10 +24,6 @@ pub struct Terrain {
     #[serde(default)]
     pub happiness: i8,
     #[serde(default)]
-    pub defence_bonus: f32,
-    #[serde(default)]
-    pub movement_cost: i8,
-    #[serde(default)]
     pub turns_into_type: Option<TerrainType>,
     #[serde(default)]
     pub turns_into_base: Option<BaseTerrain>,
@@ -40,61 +36,51 @@ pub struct Terrain {
     #[serde(default)]
     pub override_stats: bool,
     #[serde(default)]
+    pub is_fresh_water: bool,
+    #[serde(default)]
     pub occurs_on_type: Vec<TerrainType>,
     #[serde(default)]
     pub occurs_on_base: Vec<BaseTerrain>,
     #[serde(default)]
     pub occurs_on_feature: Vec<String>,
-    #[serde(rename = "RGB")]
-    pub rgb: Option<[u8; 3]>,
     #[serde(default)]
     pub uniques: Vec<String>,
-    pub civilopedia_text: Option<Vec<HashMap<String, String>>>,
 }
 
-#[derive(PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Debug)]
-pub enum TerrainType {
-    Water,
-    Flatland,
-    Mountain,
-    Hill,
-}
+impl TerrainFeature for NaturalWonderInfo {
+    fn name(&self) -> String {
+        self.name.to_owned()
+    }
 
-#[derive(PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Debug)]
-pub enum BaseTerrain {
-    Ocean,
-    Lake,
-    Coast,
-    Grassland,
-    Desert,
-    Plain,
-    Tundra,
-    Snow,
-}
+    fn r#type(&self) -> String {
+        self.r#type.to_owned()
+    }
 
-impl BaseTerrain {
-    pub const fn name(&self) -> &str {
-        match self {
-            BaseTerrain::Ocean => "Ocean",
-            BaseTerrain::Lake => "Lake",
-            BaseTerrain::Coast => "Coast",
-            BaseTerrain::Grassland => "Grassland",
-            BaseTerrain::Desert => "Desert",
-            BaseTerrain::Plain => "Plain",
-            BaseTerrain::Tundra => "Tundra",
-            BaseTerrain::Snow => "Snow",
-        }
+    fn impassable(&self) -> bool {
+        self.impassable
     }
 }
 
-impl Name for Terrain {
+impl Name for NaturalWonderInfo {
     fn name(&self) -> String {
         self.name.to_owned()
     }
 }
 
-impl Terrain {
+impl NaturalWonderInfo {
     pub fn has_unique(&self, unique: &str) -> bool {
         self.uniques.iter().any(|x| x == unique)
+    }
+}
+
+enum NaturalWonder {
+    NaturalWonder(String),
+}
+
+impl NaturalWonder {
+    pub fn name(&self) -> &str {
+        match self {
+            NaturalWonder::NaturalWonder(name) => name,
+        }
     }
 }

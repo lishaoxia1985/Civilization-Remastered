@@ -80,6 +80,10 @@ impl TileMap {
         (x + y * map_size.width) as usize
     }
 
+    /// Calculates the latitude of the tile on the tile map.
+    ///
+    /// Define that the latitude of the equator is `0.0` and the latitudes of the poles are `1.0`.
+    /// The closer the latitude is to `0.0`, the closer the tile is to the equator; the closer the latitude is to `1.0`, the closer the tile is to the poles.
     fn tile_latitude(map_size: MapSize, index: usize) -> f64 {
         let [_x, y] = Self::index_to_offset_coordinate(map_size, index).to_array();
         ((map_size.height as f64 / 2. - y as f64) / (map_size.height as f64 / 2.)).abs()
@@ -655,7 +659,7 @@ impl TileMap {
                     .terrain_feature
                     .clone()
                     .map_or(false, |terrain_feature| {
-                        terrain_feature.r#type == "NaturalWonder"
+                        terrain_feature.r#type() == "NaturalWonder"
                     })
         });
         // impassable area (including ice and natural-wonder, excluding mountain)
@@ -663,7 +667,7 @@ impl TileMap {
             tile.terrain_feature
                 .clone()
                 .map_or(false, |terrain_feature| {
-                    terrain_feature.name == "Ice" || terrain_feature.r#type == "NaturalWonder"
+                    terrain_feature.name() == "Ice" || terrain_feature.r#type() == "NaturalWonder"
                 })
         });
     }
@@ -1417,7 +1421,7 @@ impl TileMap {
                     .tile_edge_direction()
                     .iter()
                     .any(|&direction| tile.has_river(direction, self))
-                    && ruleset.terrains["Ice"]
+                    && ruleset.features["Ice"]
                         .occurs_on_base
                         .contains(&tile.base_terrain)
                 {
@@ -1435,36 +1439,36 @@ impl TileMap {
                             .filter(|x| {
                                 x.terrain_feature
                                     .iter()
-                                    .any(|terrain| terrain.name == "Ice")
+                                    .any(|terrain| terrain.name() == "Ice")
                             })
                             .count();
                         score += 10. * a as f64;
                         if score > 130. {
                             let tile = &mut self.tile_list[tile_index];
-                            tile.terrain_feature = Some(ruleset.terrains["Ice"].clone());
+                            tile.terrain_feature = Some(ruleset.features["Ice"].clone());
                         }
                     }
                 }
             }
             /* **********the end of add ice********** */
             else {
-                /* **********start to add flood plains********** */
+                /* **********start to add Floodplain********** */
                 num_land_plots += 1;
                 if self
                     .tile_edge_direction()
                     .iter()
                     .any(|&direction| tile.has_river(direction, self))
-                    && ruleset.terrains["Flood plains"]
+                    && ruleset.features["Floodplain"]
                         .occurs_on_base
                         .contains(&tile.base_terrain)
                 {
                     let tile = &mut self.tile_list[tile_index];
-                    tile.terrain_feature = Some(ruleset.terrains["Flood plains"].clone());
+                    tile.terrain_feature = Some(ruleset.features["Floodplain"].clone());
                     continue;
                 }
-                /* **********the end of add flood plains********** */
+                /* **********the end of add Floodplain********** */
                 /* **********start to add oasis********** */
-                else if ruleset.terrains["Oasis"]
+                else if ruleset.features["Oasis"]
                     .occurs_on_base
                     .contains(&tile.base_terrain)
                     && (oasis_count as f64 * 100. / num_land_plots as f64).ceil() as i32
@@ -1472,13 +1476,13 @@ impl TileMap {
                     && self.random_number_generator.gen_range(0..4) == 1
                 {
                     let tile = &mut self.tile_list[tile_index];
-                    tile.terrain_feature = Some(ruleset.terrains["Oasis"].clone());
+                    tile.terrain_feature = Some(ruleset.features["Oasis"].clone());
                     oasis_count += 1;
                     continue;
                 }
                 /* **********the end of add oasis********** */
                 /* **********start to add march********** */
-                if ruleset.terrains["Marsh"]
+                if ruleset.features["Marsh"]
                     .occurs_on_base
                     .contains(&tile.base_terrain)
                     && (marsh_count as f64 * 100. / num_land_plots as f64).ceil() as i32
@@ -1493,7 +1497,7 @@ impl TileMap {
                         .filter(|x| {
                             x.terrain_feature
                                 .iter()
-                                .any(|terrain| terrain.name == "Marsh")
+                                .any(|terrain| terrain.name() == "Marsh")
                         })
                         .count();
                     match a {
@@ -1505,7 +1509,7 @@ impl TileMap {
                     };
                     if self.random_number_generator.gen_range(0..300) <= score {
                         let tile = &mut self.tile_list[tile_index];
-                        tile.terrain_feature = Some(ruleset.terrains["Marsh"].clone());
+                        tile.terrain_feature = Some(ruleset.features["Marsh"].clone());
                         marsh_count += 1;
                         continue;
                     }
@@ -1514,7 +1518,7 @@ impl TileMap {
                 /* **********start to add jungle********** */
                 let latitude = Self::tile_latitude(self.map_parameters.map_size, tile_index);
 
-                if ruleset.terrains["Jungle"]
+                if ruleset.features["Jungle"]
                     .occurs_on_base
                     .contains(&tile.base_terrain)
                     && (jungle_count as f64 * 100. / num_land_plots as f64).ceil() as i32
@@ -1531,7 +1535,7 @@ impl TileMap {
                         .filter(|x| {
                             x.terrain_feature
                                 .iter()
-                                .any(|terrain| terrain.name == "Jungle")
+                                .any(|terrain| terrain.name() == "Jungle")
                         })
                         .count();
                     match a {
@@ -1543,7 +1547,7 @@ impl TileMap {
                     };
                     if self.random_number_generator.gen_range(0..300) <= score {
                         let tile = &mut self.tile_list[tile_index];
-                        tile.terrain_feature = Some(ruleset.terrains["Jungle"].clone());
+                        tile.terrain_feature = Some(ruleset.features["Jungle"].clone());
 
                         if tile.terrain_type == TerrainType::Hill
                             && (tile.base_terrain == BaseTerrain::Grassland
@@ -1561,7 +1565,7 @@ impl TileMap {
                 }
                 /* **********the end of add jungle********** */
                 /* **********start to add forest********** */
-                if ruleset.terrains["Forest"]
+                if ruleset.features["Forest"]
                     .occurs_on_base
                     .contains(&tile.base_terrain)
                     && (forest_count as f64 * 100. / num_land_plots as f64).ceil() as i32
@@ -1576,7 +1580,7 @@ impl TileMap {
                         .filter(|x| {
                             x.terrain_feature
                                 .iter()
-                                .any(|terrain| terrain.name == "Forest")
+                                .any(|terrain| terrain.name() == "Forest")
                         })
                         .count();
                     match a {
@@ -1588,7 +1592,7 @@ impl TileMap {
                     };
                     if self.random_number_generator.gen_range(0..300) <= score {
                         let tile = &mut self.tile_list[tile_index];
-                        tile.terrain_feature = Some(ruleset.terrains["Forest"].clone());
+                        tile.terrain_feature = Some(ruleset.features["Forest"].clone());
                         forest_count += 1;
                         continue;
                     }
@@ -1603,7 +1607,7 @@ impl TileMap {
     /// Now we have not tackle with "Great Barrier Reef" and "Rock of Gibraltar" correctly, so when we generate these two natural wonders, it will not like the origin game.
     pub fn natural_wonder_generator(&mut self, ruleset: &Res<Ruleset>) {
         let mut natural_wonder_list: Vec<_> = ruleset
-            .terrains
+            .natural_wonders
             .iter()
             .filter_map(|(name, x)| { x.r#type == "NaturalWonder" }.then_some(name))
             .collect();
@@ -1645,7 +1649,7 @@ impl TileMap {
 
         for (index, tile) in self.tile_list.iter().enumerate() {
             for &natural_wonder_name in &natural_wonder_list {
-                let possible_natural_wonder = &ruleset.terrains[natural_wonder_name];
+                let possible_natural_wonder = &ruleset.natural_wonders[natural_wonder_name];
 
                 // check unique conditions, this code is the same as the below, need refactoring
                 let check_unique_conditions =
@@ -1693,6 +1697,10 @@ impl TileMap {
                         }
                     });
                 // end check unique conditions
+
+                if tile.is_freshwater(self) != possible_natural_wonder.is_fresh_water {
+                    continue;
+                };
 
                 if possible_natural_wonder
                     .occurs_on_type
@@ -1766,7 +1774,7 @@ impl TileMap {
                     .map(|&(index, _)| index)
                     .unwrap();
                 // place the natural wonder on the candidate position
-                let natural_wonder = &ruleset.terrains[natural_wonder_name];
+                let natural_wonder = &ruleset.natural_wonders[natural_wonder_name];
                 let tile = &mut self.tile_list[max_score_position_index];
                 tile.terrain_feature = Some(natural_wonder.clone());
                 // Edit the choice tile's terrain_type to match the natural wonder

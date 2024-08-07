@@ -2,7 +2,7 @@ use bevy::utils::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-use super::Name;
+use super::{terrain::feature::Feature, BaseTerrain, Name, TerrainType};
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -10,7 +10,11 @@ pub struct TileResource {
     name: String,
     resource_type: String,
     #[serde(default)]
-    terrains_can_be_found_on: Vec<String>,
+    can_be_found_on_type: Vec<TerrainType>,
+    #[serde(default)]
+    can_be_found_on_base: Vec<BaseTerrain>,
+    #[serde(default)]
+    can_be_found_on_feature: Vec<Feature>,
     #[serde(default)]
     food: i8,
     #[serde(default)]

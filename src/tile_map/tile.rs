@@ -2,11 +2,11 @@ use std::sync::Arc;
 
 use bevy::{math::DVec2, prelude::Res};
 
-use crate::ruleset::{BaseTerrain, Ruleset, Terrain, TerrainType};
+use crate::ruleset::{BaseTerrain, Ruleset, TerrainFeature};
 
 use super::{
     hex::{Direction, Hex, HexLayout},
-    HexOrientation, TileMap,
+    HexOrientation, TerrainType, TileMap,
 };
 
 pub struct Tile {
@@ -14,9 +14,9 @@ pub struct Tile {
     pub terrain_type: TerrainType,
     pub base_terrain: BaseTerrain,
     /// if it's not None, Terrain Feature's name may be one of the following:
-    /// - Forest, Jungle, Marsh, Flood plains, Oasis, Ice, Fallout.
+    /// - Forest, Jungle, Marsh, Floodplain, Oasis, Ice, Fallout.
     /// - Any natural wonder.
-    pub terrain_feature: Option<Arc<Terrain>>,
+    pub terrain_feature: Option<Arc<dyn TerrainFeature>>,
     pub area_id: i32,
 }
 
@@ -199,7 +199,7 @@ impl Tile {
     pub fn is_adjacent_to(&self, terrain: &str, tile_map: &TileMap) -> bool {
         self.tiles_neighbors(tile_map).iter().any(|tile| {
             tile.base_terrain.name() == terrain
-                || tile.terrain_feature.iter().any(|x| x.name == terrain)
+                || tile.terrain_feature.iter().any(|x| x.name() == terrain)
         })
     }
 
@@ -224,17 +224,16 @@ impl Tile {
         self.terrain_feature
             .as_ref()
             .map_or(false, |terrain_feature| {
-                terrain_feature.r#type == "NaturalWonder"
+                terrain_feature.r#type() == "NaturalWonder"
             })
     }
 
     pub fn is_impassable(&self, ruleset: &Res<Ruleset>) -> bool {
         self.is_mountain()
-            || ruleset.terrains[self.base_terrain.name()].impassable
             || self
                 .terrain_feature
                 .as_ref()
-                .map_or(false, |terrain_feature| terrain_feature.impassable)
+                .map_or(false, |terrain_feature| terrain_feature.impassable())
     }
 
     pub fn is_freshwater(&self, tile_map: &TileMap) -> bool {
