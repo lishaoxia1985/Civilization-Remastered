@@ -99,7 +99,7 @@ fn start_up_system(
     tile_map.generate_coasts(&ruleset);
     tile_map.generate_lakes(&ruleset);
     tile_map.recalculate_areas(&ruleset);
-    tile_map.add_rivers();
+    tile_map.add_rivers(&ruleset);
     tile_map.add_lakes(&ruleset);
     tile_map.add_features(&ruleset);
     tile_map.natural_wonder_generator(&ruleset);
@@ -229,11 +229,11 @@ fn start_up_system(
                 ..Default::default()
             })
             .with_children(|parent| {
-                if let Some(terrain_feature) = &tile.terrain_feature {
-                    let terrain_feature_name = match terrain_feature.name().as_str() {
+                if let Some(feature) = &tile.feature {
+                    let feature_name = match feature.name() {
                         "Forest" => "ForestG",
                         "Jungle" => "JungleG",
-                        _ => &terrain_feature.name(),
+                        _ => &feature.name(),
                     };
 
                     parent.spawn(SpriteBundle {
@@ -241,7 +241,21 @@ fn start_up_system(
                             custom_size: Some(tile_pixel_size.as_vec2()),
                             ..Default::default()
                         },
-                        texture: materials.texture_handle(terrain_feature_name),
+                        texture: materials.texture_handle(feature_name),
+                        transform: Transform::from_translation(Vec3::new(0., 0., 1.)),
+                        ..Default::default()
+                    });
+                }
+
+                if let Some(natural_wonder) = &tile.natural_wonder {
+                    let natural_wonder_name = natural_wonder.name();
+
+                    parent.spawn(SpriteBundle {
+                        sprite: Sprite {
+                            custom_size: Some(tile_pixel_size.as_vec2()),
+                            ..Default::default()
+                        },
+                        texture: materials.texture_handle(natural_wonder_name),
                         transform: Transform::from_translation(Vec3::new(0., 0., 1.)),
                         ..Default::default()
                     });

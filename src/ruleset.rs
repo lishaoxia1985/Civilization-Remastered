@@ -1,6 +1,6 @@
 use bevy::{prelude::Resource, utils::HashMap};
 use serde::de::DeserializeOwned;
-use std::{fs, sync::Arc};
+use std::fs;
 use terrain::base_terrain::BaseTerrainInfo;
 use terrain::feature::FeatureInfo;
 use terrain::natural_wonder::NaturalWonderInfo;
@@ -27,7 +27,8 @@ mod unit_promotion;
 mod unit_type;
 
 pub use terrain::BaseTerrain;
-pub use terrain::TerrainFeature;
+pub use terrain::Feature;
+pub use terrain::NaturalWonder;
 pub use unique::Unique;
 
 use crate::ruleset::{
@@ -42,41 +43,39 @@ pub trait Name {
     fn name(&self) -> String;
 }
 
-fn create_hashmap_from_json_file<T: DeserializeOwned + Name>(
-    path: &str,
-) -> HashMap<String, Arc<T>> {
+fn create_hashmap_from_json_file<T: DeserializeOwned + Name>(path: &str) -> HashMap<String, T> {
     let json_string_without_comment = load_json_file_and_strip_json_comments(path);
     let map: Vec<T> = serde_json::from_str(&json_string_without_comment)
         .unwrap_or_else(|_| panic!("{}'{}'", "Can't serde ", path));
-    map.into_iter().map(|x| (x.name(), Arc::new(x))).collect()
+    map.into_iter().map(|x| (x.name(), x)).collect()
 }
 
 #[derive(Debug, Resource)]
 pub struct Ruleset {
-    pub beliefs: HashMap<String, Arc<Belief>>,
-    pub buildings: HashMap<String, Arc<Building>>,
-    pub difficulties: HashMap<String, Arc<Difficulty>>,
-    pub eras: HashMap<String, Arc<Era>>,
+    pub beliefs: HashMap<String, Belief>,
+    pub buildings: HashMap<String, Building>,
+    pub difficulties: HashMap<String, Difficulty>,
+    pub eras: HashMap<String, Era>,
     pub global_uniques: GlobalUnique,
-    pub nations: HashMap<String, Arc<Nation>>,
+    pub nations: HashMap<String, Nation>,
     //pub policies: HashMap<String, Policy>,
-    pub policy_branches: HashMap<String, Arc<PolicyBranch>>,
+    pub policy_branches: HashMap<String, PolicyBranch>,
     pub religions: Vec<String>,
-    pub ruins: HashMap<String, Arc<Ruin>>,
-    pub quests: HashMap<String, Arc<Quest>>,
-    pub specialists: HashMap<String, Arc<Specialist>>,
-    pub technologies: HashMap<String, Arc<Technology>>,
+    pub ruins: HashMap<String, Ruin>,
+    pub quests: HashMap<String, Quest>,
+    pub specialists: HashMap<String, Specialist>,
+    pub technologies: HashMap<String, Technology>,
 
-    pub terrain_types: HashMap<String, Arc<TerrainTypeInfo>>,
-    pub base_terrains: HashMap<String, Arc<BaseTerrainInfo>>,
-    pub features: HashMap<String, Arc<FeatureInfo>>,
-    pub natural_wonders: HashMap<String, Arc<NaturalWonderInfo>>,
+    pub terrain_types: HashMap<String, TerrainTypeInfo>,
+    pub base_terrains: HashMap<String, BaseTerrainInfo>,
+    pub features: HashMap<String, FeatureInfo>,
+    pub natural_wonders: HashMap<String, NaturalWonderInfo>,
 
-    pub tile_improvements: HashMap<String, Arc<TileImprovement>>,
-    pub tile_resources: HashMap<String, Arc<TileResource>>,
-    pub units: HashMap<String, Arc<Unit>>,
-    pub unit_promotions: HashMap<String, Arc<UnitPromotion>>,
-    pub unit_types: HashMap<String, Arc<UnitType>>,
+    pub tile_improvements: HashMap<String, TileImprovement>,
+    pub tile_resources: HashMap<String, TileResource>,
+    pub units: HashMap<String, Unit>,
+    pub unit_promotions: HashMap<String, UnitPromotion>,
+    pub unit_types: HashMap<String, UnitType>,
 }
 
 impl Ruleset {
@@ -171,15 +170,15 @@ impl Ruleset {
             }
         });
 
-        let technologies: HashMap<String, Arc<Technology>> = tech_columnes
+        let technologies: HashMap<String, Technology> = tech_columnes
             .into_iter()
             .flat_map(|x| x.techs)
-            .map(|x| (x.name.to_owned(), Arc::new(x)))
+            .map(|x| (x.name.to_owned(), x))
             .collect();
 
         let buildings = buildings
             .into_iter()
-            .map(|building| (building.name.to_owned(), Arc::new(building)))
+            .map(|building| (building.name.to_owned(), building))
             .collect();
 
         // serde global_uniques

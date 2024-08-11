@@ -192,8 +192,8 @@ impl CvFractal {
     /// # Arguments
     ///
     /// * hint_array - In this function the fractal is divided into a grid of small squares,
-    /// the points where adjacent grid lines meet are called **the vertices of the grid**,
-    /// we assign an initial value to each vertex by `hint_array` for later use in the diamond-square algorithm.
+    ///   the points where adjacent grid lines meet are called **the vertices of the grid**,
+    ///   we assign an initial value to each vertex by `hint_array` for later use in the diamond-square algorithm.
     ///
     /// We can obtain the value of `hint_width` and `hint_height` through the following code:
     ///

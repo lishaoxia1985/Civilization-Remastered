@@ -4,11 +4,7 @@ pub mod natural_wonder;
 pub mod terrain_type;
 
 pub use base_terrain::BaseTerrain;
+pub use feature::Feature;
+pub use natural_wonder::NaturalWonder;
 
 use super::Name;
-
-pub trait TerrainFeature {
-    fn name(&self) -> String;
-    fn r#type(&self) -> String;
-    fn impassable(&self) -> bool;
-}

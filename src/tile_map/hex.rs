@@ -7,7 +7,7 @@ use std::ops::{Add, Sub};
 
 use bevy::math::{DMat2, DVec2, IVec2};
 
-pub const SQRT_3: f64 = 1.732050807568877293527446341505872367_f64;
+pub const SQRT_3: f64 = 1.732_050_807_568_877_2_f64;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Hex(IVec2);
@@ -239,9 +239,9 @@ impl DoubledCoordinate {
 /// Each enum member has a constant number, it means:\
 /// We should create 2 direction arrays, one for the hex edge and one for the hex corner (We call them A and B).
 /// - From left to right, the first digit of the number represents the index of the direction in the array A.\
-/// If the digit is 9, the direction does not exist in the array A.
+///   If the digit is 9, the direction does not exist in the array A.
 /// - From left to right, the second digit of the number represents the index of the direction in the array B.\
-/// If the digit is 9, the direction does not exist in the array B.
+///   If the digit is 9, the direction does not exist in the array B.
 pub enum Direction {
     North = 95,
     NorthEast = 50,

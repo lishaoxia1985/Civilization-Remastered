@@ -2,7 +2,9 @@ use bevy::utils::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-use super::{base_terrain::BaseTerrain, Name, TerrainFeature};
+use crate::ruleset::Ruleset;
+
+use super::{base_terrain::BaseTerrain, Name};
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -38,20 +40,6 @@ pub struct FeatureInfo {
     #[serde(default)]
     pub uniques: Vec<String>,
     pub civilopedia_text: Option<Vec<HashMap<String, String>>>,
-}
-
-impl TerrainFeature for FeatureInfo {
-    fn name(&self) -> String {
-        self.name.to_owned()
-    }
-
-    fn r#type(&self) -> String {
-        self.r#type.to_owned()
-    }
-
-    fn impassable(&self) -> bool {
-        self.impassable
-    }
 }
 
 impl Name for FeatureInfo {
@@ -90,5 +78,9 @@ impl Feature {
             Feature::Atoll => "Atoll",
             Feature::Fallout => "Fallout",
         }
+    }
+
+    pub fn impassable(&self, ruleset: &Ruleset) -> bool {
+        ruleset.features[self.name()].impassable
     }
 }

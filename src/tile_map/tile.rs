@@ -1,8 +1,6 @@
-use std::sync::Arc;
-
 use bevy::{math::DVec2, prelude::Res};
 
-use crate::ruleset::{BaseTerrain, Ruleset, TerrainFeature};
+use crate::ruleset::{BaseTerrain, Feature, NaturalWonder, Ruleset};
 
 use super::{
     hex::{Direction, Hex, HexLayout},
@@ -16,7 +14,8 @@ pub struct Tile {
     /// if it's not None, Terrain Feature's name may be one of the following:
     /// - Forest, Jungle, Marsh, Floodplain, Oasis, Ice, Fallout.
     /// - Any natural wonder.
-    pub terrain_feature: Option<Arc<dyn TerrainFeature>>,
+    pub feature: Option<Feature>,
+    pub natural_wonder: Option<NaturalWonder>,
     pub area_id: i32,
 }
 
@@ -26,7 +25,8 @@ impl Tile {
             hex_position,
             terrain_type: TerrainType::Water,
             base_terrain: BaseTerrain::Ocean,
-            terrain_feature: None,
+            feature: None,
+            natural_wonder: None,
             area_id: -1,
         }
     }
@@ -196,10 +196,16 @@ impl Tile {
             .corner(Hex::from(self.hex_position), direction)
     }
 
-    pub fn is_adjacent_to(&self, terrain: &str, tile_map: &TileMap) -> bool {
+    /// Check if the tile is adjacent to the terrain name
+    ///
+    /// `terrain_name` can be a BaseTerrain name or a Feature name, but not a TerrainType or Natural name.
+    pub fn is_adjacent_to(&self, terrain_name: &str, tile_map: &TileMap) -> bool {
         self.tiles_neighbors(tile_map).iter().any(|tile| {
-            tile.base_terrain.name() == terrain
-                || tile.terrain_feature.iter().any(|x| x.name() == terrain)
+            tile.base_terrain.name() == terrain_name
+                || tile
+                    .feature
+                    .as_ref()
+                    .map_or(false, |feature| feature.name() == terrain_name)
         })
     }
 
@@ -221,19 +227,19 @@ impl Tile {
     }
 
     pub fn is_natural_wonder(&self) -> bool {
-        self.terrain_feature
-            .as_ref()
-            .map_or(false, |terrain_feature| {
-                terrain_feature.r#type() == "NaturalWonder"
-            })
+        self.natural_wonder.is_some()
     }
 
     pub fn is_impassable(&self, ruleset: &Res<Ruleset>) -> bool {
         self.is_mountain()
             || self
-                .terrain_feature
+                .feature
                 .as_ref()
-                .map_or(false, |terrain_feature| terrain_feature.impassable())
+                .map_or(false, |feature| feature.impassable(ruleset))
+            || self
+                .natural_wonder
+                .as_ref()
+                .map_or(false, |natural_wonder| natural_wonder.impassable(ruleset))
     }
 
     pub fn is_freshwater(&self, tile_map: &TileMap) -> bool {

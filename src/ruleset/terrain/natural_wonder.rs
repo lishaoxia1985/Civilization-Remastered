@@ -1,8 +1,8 @@
-use bevy::utils::HashMap;
-
 use serde::{Deserialize, Serialize};
 
-use super::{base_terrain::BaseTerrain, terrain_type::TerrainType, Name, TerrainFeature};
+use crate::ruleset::Ruleset;
+
+use super::{base_terrain::BaseTerrain, terrain_type::TerrainType, Name};
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -47,20 +47,6 @@ pub struct NaturalWonderInfo {
     pub uniques: Vec<String>,
 }
 
-impl TerrainFeature for NaturalWonderInfo {
-    fn name(&self) -> String {
-        self.name.to_owned()
-    }
-
-    fn r#type(&self) -> String {
-        self.r#type.to_owned()
-    }
-
-    fn impassable(&self) -> bool {
-        self.impassable
-    }
-}
-
 impl Name for NaturalWonderInfo {
     fn name(&self) -> String {
         self.name.to_owned()
@@ -73,7 +59,7 @@ impl NaturalWonderInfo {
     }
 }
 
-enum NaturalWonder {
+pub enum NaturalWonder {
     NaturalWonder(String),
 }
 
@@ -82,5 +68,9 @@ impl NaturalWonder {
         match self {
             NaturalWonder::NaturalWonder(name) => name,
         }
+    }
+
+    pub fn impassable(&self, ruleset: &Ruleset) -> bool {
+        ruleset.natural_wonders[self.name()].impassable
     }
 }
