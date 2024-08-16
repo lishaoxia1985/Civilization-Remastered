@@ -40,7 +40,7 @@ impl Tile {
         TileMap::offset_coordinate_to_index(tile_map.map_parameters.map_size, offset_coordinate)
     }
 
-    pub fn tiles_neighbors<'a>(&'a self, tile_map: &'a TileMap) -> Vec<&Tile> {
+    pub fn tile_neighbors<'a>(&'a self, tile_map: &'a TileMap) -> Vec<&Tile> {
         self.tiles_at_distance(1, tile_map)
     }
 
@@ -200,7 +200,7 @@ impl Tile {
     ///
     /// `terrain_name` can be a BaseTerrain name or a Feature name, but not a TerrainType or Natural name.
     pub fn is_adjacent_to(&self, terrain_name: &str, tile_map: &TileMap) -> bool {
-        self.tiles_neighbors(tile_map).iter().any(|tile| {
+        self.tile_neighbors(tile_map).iter().any(|tile| {
             tile.base_terrain.name() == terrain_name
                 || tile
                     .feature
@@ -256,7 +256,7 @@ impl Tile {
     pub fn is_coastal_land(&self, tile_map: &TileMap) -> bool {
         !self.is_water()
             && self
-                .tiles_neighbors(tile_map)
+                .tile_neighbors(tile_map)
                 .iter()
                 .any(|tile| tile.is_water())
     }

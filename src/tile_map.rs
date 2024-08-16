@@ -470,7 +470,7 @@ impl TileMap {
             let tile = &self.tile_list[index];
             if tile.is_water()
                 && tile
-                    .tiles_neighbors(self)
+                    .tile_neighbors(self)
                     .iter()
                     .any(|neigbor_tile| !neigbor_tile.is_water())
             {
@@ -482,14 +482,14 @@ impl TileMap {
             let mut expansion_index = Vec::new();
             /* Don't update the base_terrain of the tile in the iteration.
             Because if we update the base_terrain of the tile in the iteration,
-            the tile will be used in the next iteration(e.g. tile.tiles_neighbors().iter().any()),
+            the tile will be used in the next iteration(e.g. tile.tile_neighbors().iter().any()),
             which will cause the result to be wrong. */
             for index in 0..self.tile_list.len() {
                 let tile = &self.tile_list[index];
                 if tile.is_water()
                     && tile.base_terrain != BaseTerrain::Coast
                     && tile
-                        .tiles_neighbors(self)
+                        .tile_neighbors(self)
                         .iter()
                         .any(|tile| tile.base_terrain == BaseTerrain::Coast)
                     && self.random_number_generator.gen_bool(*chance)
@@ -659,7 +659,7 @@ impl TileMap {
     }
 
     fn bfs(&mut self, filter_condition: impl Fn(&Tile) -> bool) {
-        let mut area_tiles_indexs: HashSet<_> = self
+        let mut area_tiles_indices: HashSet<_> = self
             .tile_list
             .iter()
             .enumerate()
@@ -672,30 +672,30 @@ impl TileMap {
             .max()
             .unwrap()
             + 1;
-        while let Some(&initial_area_tile_index) = area_tiles_indexs.iter().next() {
-            area_tiles_indexs.remove(&initial_area_tile_index);
-            let mut tiles_in_current_area_indexs = HashSet::new();
-            tiles_in_current_area_indexs.insert(initial_area_tile_index);
+        while let Some(&initial_area_tile_index) = area_tiles_indices.iter().next() {
+            area_tiles_indices.remove(&initial_area_tile_index);
+            let mut tiles_in_current_area_indices = HashSet::new();
+            tiles_in_current_area_indices.insert(initial_area_tile_index);
             self.tile_list[initial_area_tile_index].area_id = current_area_id;
-            let mut tiles_to_check_indexs = VecDeque::new();
-            tiles_to_check_indexs.push_back(initial_area_tile_index);
-            while let Some(tile_we_are_checking_position) = tiles_to_check_indexs.pop_front() {
-                let neighbors_tiles_indexs: Vec<_> = self.tile_list[tile_we_are_checking_position]
-                    .tiles_neighbors(self)
+            let mut tiles_to_check_indices = VecDeque::new();
+            tiles_to_check_indices.push_back(initial_area_tile_index);
+            while let Some(tile_we_are_checking_position) = tiles_to_check_indices.pop_front() {
+                let neighbors_tiles_indices: Vec<_> = self.tile_list[tile_we_are_checking_position]
+                    .tile_neighbors(self)
                     .iter()
                     .filter_map(|tile| {
                         {
-                            !tiles_in_current_area_indexs.contains(&tile.index(self))
+                            !tiles_in_current_area_indices.contains(&tile.index(self))
                                 && filter_condition(tile)
                         }
                         .then_some(tile.index(self))
                     })
                     .collect();
-                for &index in neighbors_tiles_indexs.iter() {
-                    tiles_in_current_area_indexs.insert(index);
+                for &index in neighbors_tiles_indices.iter() {
+                    tiles_in_current_area_indices.insert(index);
                     self.tile_list[index].area_id = current_area_id;
-                    tiles_to_check_indexs.push_back(index);
-                    area_tiles_indexs.remove(&index);
+                    tiles_to_check_indices.push_back(index);
+                    area_tiles_indices.remove(&index);
                 }
             }
             current_area_id += 1;
@@ -755,7 +755,7 @@ impl TileMap {
         // 3. It should be not a tile which is neighbor to a natural wonder
         // 4. Its edge directions in [0..3] should be not water because the river edge uses (tile_index, river_flow_direction) for storage.
         //    tile_index is current tile index and river_flow_direction should be one of the edge directions in [0..3].
-        let candidate_start_tile_indexs: Vec<_> = self
+        let candidate_start_tile_indices: Vec<_> = self
             .tile_list
             .iter()
             .enumerate()
@@ -764,7 +764,7 @@ impl TileMap {
                     !tile.is_water()
                         && !tile.is_natural_wonder()
                         && !tile
-                            .tiles_neighbors(self)
+                            .tile_neighbors(self)
                             .iter()
                             .any(|neighbor_tile| neighbor_tile.is_natural_wonder())
                         && self.tile_edge_direction()[0..3].iter().all(|&direction| {
@@ -772,7 +772,7 @@ impl TileMap {
                                 !neighbor_tile.is_water()
                                     && !neighbor_tile.is_natural_wonder()
                                     && !neighbor_tile
-                                        .tiles_neighbors(self)
+                                        .tile_neighbors(self)
                                         .iter()
                                         .any(|neighbor_tile| neighbor_tile.is_natural_wonder())
                             } else {
@@ -795,7 +795,7 @@ impl TileMap {
                 )
             };
 
-            for &tile_index in candidate_start_tile_indexs.iter() {
+            for &tile_index in candidate_start_tile_indices.iter() {
                 let tile = &self.tile_list[tile_index];
                 if pass_conditions(tile, self, &mut random_number_generator)[index]
                     && !tile
@@ -1226,7 +1226,7 @@ impl TileMap {
 
             if tile.is_natural_wonder()
                 || tile
-                    .tiles_neighbors(tile_map)
+                    .tile_neighbors(tile_map)
                     .iter()
                     .any(|neighbor_tile| neighbor_tile.is_natural_wonder())
             {
@@ -1308,7 +1308,7 @@ impl TileMap {
                     .iter()
                     .any(|&direction| tile.has_river(direction, self))
                 && !tile
-                    .tiles_neighbors(self)
+                    .tile_neighbors(self)
                     .iter()
                     .any(|neighbor_tile| neighbor_tile.is_natural_wonder())
                 && self.random_number_generator.gen_range(0..lake_plot_rand) == 0
@@ -1346,7 +1346,7 @@ impl TileMap {
                         .iter()
                         .any(|&direction| neighbor_tile.has_river(direction, self))
                     && !neighbor_tile
-                        .tiles_neighbors(self)
+                        .tile_neighbors(self)
                         .iter()
                         .any(|neighbor_tile| neighbor_tile.is_natural_wonder())
                 {
@@ -1426,7 +1426,7 @@ impl TileMap {
                     if latitude > 0.78 {
                         let mut score = self.random_number_generator.gen_range(0..100) as f64;
                         score += latitude * 100.;
-                        let tile_neighbors = tile.tiles_neighbors(self);
+                        let tile_neighbors = tile.tile_neighbors(self);
                         if tile_neighbors.iter().any(|tile| !tile.is_water()) {
                             score /= 2.0;
                         }
@@ -1482,7 +1482,7 @@ impl TileMap {
                 {
                     let mut score = 300;
 
-                    let tile_neighbors = tile.tiles_neighbors(self);
+                    let tile_neighbors = tile.tile_neighbors(self);
 
                     let a = tile_neighbors
                         .iter()
@@ -1516,7 +1516,7 @@ impl TileMap {
                 {
                     let mut score = 300;
 
-                    let tile_neighbors = tile.tiles_neighbors(self);
+                    let tile_neighbors = tile.tile_neighbors(self);
 
                     let a = tile_neighbors
                         .iter()
@@ -1557,7 +1557,7 @@ impl TileMap {
                 {
                     let mut score = 300;
 
-                    let tile_neighbors = tile.tiles_neighbors(self);
+                    let tile_neighbors = tile.tile_neighbors(self);
 
                     let a = tile_neighbors
                         .iter()
@@ -1583,22 +1583,8 @@ impl TileMap {
     }
 
     /// This function is used to generate natural wonders.
-    /// # Notice
-    /// Now we have not tackle with "Great Barrier Reef" and "Rock of Gibraltar" correctly, so when we generate these two natural wonders, it will not like the origin game.
     pub fn natural_wonder_generator(&mut self, ruleset: &Res<Ruleset>) {
-        let mut natural_wonder_list: Vec<_> = ruleset
-            .natural_wonders
-            .iter()
-            .filter_map(|(name, x)| { x.r#type == "NaturalWonder" }.then_some(name))
-            .collect();
-
-        /* The order of natural_wonder_list is random, so we should arrange this list in order
-        to ensure that the obtained Vec is the same every time. */
-        natural_wonder_list.sort_unstable();
-
-        natural_wonder_list.shuffle(&mut self.random_number_generator);
-
-        let mut random_number_generator = self.random_number_generator.clone();
+        let natural_wonder_list: Vec<_> = ruleset.natural_wonders.keys().collect();
 
         let mut natural_wonder_and_tile_index_and_score = HashMap::new();
 
@@ -1618,11 +1604,6 @@ impl TileMap {
         fn matches_wonder_filter(tile: &Tile, filter: &str) -> bool {
             match filter {
                 "Elevated" => tile.is_mountain() || tile.is_hill(),
-                //"Water" => tile.is_water(),
-                //"Land" => tile.is_flatland(), // that is never used in wonder place condition
-                //"Hill" => tile.is_hill(),
-                //naturalWonder -> true
-                //in allTerrainFeatures -> lastTerrain.name == filter
                 _ => {
                     tile.terrain_type.name() == filter
                         || tile.base_terrain.name() == filter
@@ -1635,78 +1616,157 @@ impl TileMap {
             for &natural_wonder_name in &natural_wonder_list {
                 let possible_natural_wonder = &ruleset.natural_wonders[natural_wonder_name];
 
-                let check_unique_conditions =
-                    possible_natural_wonder.uniques.iter().all(|unique| {
-                        let unique = Unique::new(unique);
-                        match unique.placeholder_text.as_str() {
-                            "Must be adjacent to [] [] tiles" => {
-                                let count = tile
-                                    .tiles_neighbors(self)
-                                    .iter()
-                                    .filter(|x| matches_wonder_filter(x, unique.params[1].as_str()))
-                                    .count();
-                                count == unique.params[0].parse::<usize>().unwrap()
-                            }
-                            "Must be adjacent to [] to [] [] tiles" => {
-                                let count = tile
-                                    .tiles_neighbors(self)
-                                    .iter()
-                                    .filter(|x| matches_wonder_filter(x, unique.params[2].as_str()))
-                                    .count();
-                                count >= unique.params[0].parse::<usize>().unwrap()
-                                    && count <= unique.params[1].parse::<usize>().unwrap()
-                            }
-                            "Must not be on [] largest landmasses" => {
-                                let index = unique.params[0].parse::<usize>().unwrap();
-                                !land_id_and_area_size
-                                    .iter()
-                                    .take(index)
-                                    .any(|(id, _)| tile.area_id == *id)
-                            }
-                            "Must be on [] largest landmasses" => {
-                                let index = unique.params[0].parse::<usize>().unwrap();
-                                land_id_and_area_size
-                                    .iter()
-                                    .take(index)
-                                    .any(|(id, _)| tile.area_id == *id)
-                            }
-                            /* "Occurs on latitudes from [] to [] percent of distance equator to pole"=>{
+                match natural_wonder_name.as_str() {
+                    "Great Barrier Reef" => {
+                        if let Some(adj_tile) =
+                            tile.tile_neighbor(self, self.tile_edge_direction()[1])
+                        {
+                            let mut all_neigbor_indices = HashSet::new();
 
-                            } */
-                            /* "Occurs in groups of [] to [] tiles"=>{
+                            all_neigbor_indices.extend(
+                                tile.tile_neighbors(self)
+                                    .iter()
+                                    .map(|tile| tile.index(self)),
+                            );
+                            all_neigbor_indices.extend(
+                                adj_tile
+                                    .tile_neighbors(self)
+                                    .iter()
+                                    .map(|tile| tile.index(self)),
+                            );
 
-                            } */
-                            _ => true,
+                            all_neigbor_indices.remove(&tile.index(self));
+                            all_neigbor_indices.remove(&adj_tile.index(self));
+
+                            if all_neigbor_indices.len() == 8
+                                && all_neigbor_indices.iter().all(|&index| {
+                                    let tile = &self.tile_list[index];
+                                    tile.terrain_type == TerrainType::Water
+                                        && tile.base_terrain != BaseTerrain::Lake
+                                        && tile.feature != Some(Feature::Ice)
+                                })
+                                && all_neigbor_indices
+                                    .iter()
+                                    .filter(|&index| {
+                                        let tile = &self.tile_list[*index];
+                                        tile.base_terrain == BaseTerrain::Coast
+                                    })
+                                    .count()
+                                    >= 4
+                            {
+                                natural_wonder_and_tile_index_and_score
+                                    .entry(natural_wonder_name)
+                                    .or_insert_with(Vec::new)
+                                    .push((index, 1));
+                            }
                         }
-                    });
-                // end check unique conditions
+                    }
+                    "Rock of Gibraltar" => {
+                        if ((tile.terrain_type == TerrainType::Water
+                            && tile.base_terrain != BaseTerrain::Lake)
+                            || (tile.tile_neighbors(self).iter().any(|tile| {
+                                tile.terrain_type == TerrainType::Water
+                                    && tile.base_terrain != BaseTerrain::Lake
+                            })))
+                            && tile
+                                .tile_neighbors(self)
+                                .iter()
+                                .filter(|tile| tile.terrain_type != TerrainType::Water)
+                                .count()
+                                == 1
+                            && tile
+                                .tile_neighbors(self)
+                                .iter()
+                                .filter(|tile| tile.base_terrain == BaseTerrain::Coast)
+                                .count()
+                                >= 3
+                        {
+                            natural_wonder_and_tile_index_and_score
+                                .entry(natural_wonder_name)
+                                .or_insert_with(Vec::new)
+                                .push((index, 1));
+                        }
+                    }
+                    _ => {
+                        if tile.is_freshwater(self) != possible_natural_wonder.is_fresh_water {
+                            continue;
+                        };
 
-                if tile.is_freshwater(self) != possible_natural_wonder.is_fresh_water {
-                    continue;
-                };
+                        if !possible_natural_wonder
+                            .occurs_on_type
+                            .contains(&tile.terrain_type)
+                            || !possible_natural_wonder
+                                .occurs_on_base
+                                .contains(&tile.base_terrain)
+                        {
+                            continue;
+                        }
 
-                if possible_natural_wonder
-                    .occurs_on_type
-                    .contains(&tile.terrain_type)
-                    && possible_natural_wonder
-                        .occurs_on_base
-                        .contains(&tile.base_terrain)
-                    && check_unique_conditions
-                {
-                    natural_wonder_and_tile_index_and_score
-                        .entry(natural_wonder_name)
-                        .or_insert_with(Vec::new)
-                        .push((index, 1));
+                        let check_unique_conditions =
+                            possible_natural_wonder.uniques.iter().all(|unique| {
+                                let unique = Unique::new(unique);
+                                match unique.placeholder_text.as_str() {
+                                    "Must be adjacent to [] [] tiles" => {
+                                        let count = tile
+                                            .tile_neighbors(self)
+                                            .iter()
+                                            .filter(|x| {
+                                                matches_wonder_filter(x, unique.params[1].as_str())
+                                            })
+                                            .count();
+                                        count == unique.params[0].parse::<usize>().unwrap()
+                                    }
+                                    "Must be adjacent to [] to [] [] tiles" => {
+                                        let count = tile
+                                            .tile_neighbors(self)
+                                            .iter()
+                                            .filter(|x| {
+                                                matches_wonder_filter(x, unique.params[2].as_str())
+                                            })
+                                            .count();
+                                        count >= unique.params[0].parse::<usize>().unwrap()
+                                            && count <= unique.params[1].parse::<usize>().unwrap()
+                                    }
+                                    "Must not be on [] largest landmasses" => {
+                                        let index = unique.params[0].parse::<usize>().unwrap();
+                                        !land_id_and_area_size
+                                            .iter()
+                                            .take(index)
+                                            .any(|(id, _)| tile.area_id == *id)
+                                    }
+                                    "Must be on [] largest landmasses" => {
+                                        let index = unique.params[0].parse::<usize>().unwrap();
+                                        land_id_and_area_size
+                                            .iter()
+                                            .take(index)
+                                            .any(|(id, _)| tile.area_id == *id)
+                                    }
+                                    _ => true,
+                                }
+                            });
+                        // end check unique conditions
+
+                        if check_unique_conditions {
+                            natural_wonder_and_tile_index_and_score
+                                .entry(natural_wonder_name)
+                                .or_insert_with(Vec::new)
+                                .push((index, 1));
+                        }
+                    }
                 }
             }
         }
 
-        let selected_natural_wonder_list: Vec<_> = natural_wonder_list
-            .iter()
-            .filter(|&natural_wonder| {
-                natural_wonder_and_tile_index_and_score.contains_key(natural_wonder)
-            })
+        // Get the natural wonders that can be placed
+        let mut selected_natural_wonder_list: Vec<_> = natural_wonder_and_tile_index_and_score
+            .keys()
+            .cloned()
             .collect();
+        /* The order of selected_natural_wonder_list is random, so we should arrange this list in order
+        to ensure that the obtained Vec is the same every time. */
+        selected_natural_wonder_list.sort_unstable();
+        // Shuffle the list that we can choose natural wonder randomly
+        selected_natural_wonder_list.shuffle(&mut self.random_number_generator);
 
         // Store current how many natural wonders have been placed
         let mut j = 0;
@@ -1714,7 +1774,7 @@ impl TileMap {
         let mut placed_natural_wonder_tile_index = Vec::new();
 
         // start to place wonder
-        for &natural_wonder_name in selected_natural_wonder_list {
+        for &natural_wonder_name in &selected_natural_wonder_list {
             if j <= self.map_parameters.natural_wonder_num {
                 // For every natural wonder, give a score to the position where the natural wonder can place.
                 // The score is related to the min value of the distance from the position to all the placed natural wonders
@@ -1725,28 +1785,20 @@ impl TileMap {
                     .get_mut(natural_wonder_name)
                     .unwrap();
                 for (position_x_index, score) in tile_index_and_score.iter_mut() {
-                    let closest_natural_wonder_dist = if placed_natural_wonder_tile_index.is_empty()
-                    {
-                        1000000
-                    } else {
-                        placed_natural_wonder_tile_index
-                            .iter()
-                            .map(|position_y_index: &usize| {
-                                let position_x_hex = self.tile_list[*position_x_index].hex_position;
-                                let position_y_hex = self.tile_list[*position_y_index].hex_position;
-                                Hex::hex_distance(
-                                    Hex::from(position_x_hex),
-                                    Hex::from(position_y_hex),
-                                )
-                            })
-                            .min()
-                            .unwrap()
-                    };
+                    let closest_natural_wonder_dist = placed_natural_wonder_tile_index
+                        .iter()
+                        .map(|position_y_index: &usize| {
+                            let position_x_hex = self.tile_list[*position_x_index].hex_position;
+                            let position_y_hex = self.tile_list[*position_y_index].hex_position;
+                            Hex::hex_distance(Hex::from(position_x_hex), Hex::from(position_y_hex))
+                        })
+                        .min()
+                        .unwrap_or(1000000);
                     *score = if closest_natural_wonder_dist <= 10 {
                         100 * closest_natural_wonder_dist
                     } else {
                         1000 + (closest_natural_wonder_dist - 10)
-                    } + random_number_generator.gen_range(0..100);
+                    } + self.random_number_generator.gen_range(0..100);
                 }
                 // the score method end
 
@@ -1756,25 +1808,100 @@ impl TileMap {
                     .max_by_key(|&(_, score)| score)
                     .map(|&(index, _)| index)
                     .unwrap();
-                // place the natural wonder on the candidate position
-                let natural_wonder = &ruleset.natural_wonders[natural_wonder_name];
-                let tile = &mut self.tile_list[max_score_position_index];
-                // At first, we should remove feature from the tile
-                tile.feature = None;
-                // And then we add the natural wonder to the tile
-                tile.natural_wonder =
-                    Some(NaturalWonder::NaturalWonder(natural_wonder_name.clone()));
-                // Edit the choice tile's terrain_type to match the natural wonder
-                if let Some(turn_into_terrain_type) = natural_wonder.turns_into_type {
-                    tile.terrain_type = turn_into_terrain_type;
-                };
-                // Edit the choice tile's base_terrain to match the natural wonder
-                if let Some(turn_into_base_terrain) = natural_wonder.turns_into_base {
-                    tile.base_terrain = turn_into_base_terrain;
+
+                if !placed_natural_wonder_tile_index.contains(&max_score_position_index) {
+                    let natural_wonder = &ruleset.natural_wonders[natural_wonder_name];
+
+                    let tile = &mut self.tile_list[max_score_position_index];
+                    // At first, we should remove feature from the tile
+                    tile.feature = None;
+
+                    match natural_wonder_name.as_str() {
+                        "Great Barrier Reef" => {
+                            let tile = &self.tile_list[max_score_position_index];
+                            let adj_tile = tile
+                                .tile_neighbor(self, self.tile_edge_direction()[1])
+                                .unwrap();
+
+                            let tile_neigbors: Vec<usize> = tile
+                                .tile_neighbors(self)
+                                .iter()
+                                .map(|tile| tile.index(self))
+                                .collect();
+                            let adj_tile_neigbors: Vec<usize> = adj_tile
+                                .tile_neighbors(self)
+                                .iter()
+                                .map(|tile| tile.index(self))
+                                .collect();
+                            let adj_tile_index = adj_tile.index(self);
+
+                            tile_neigbors.into_iter().for_each(|index| {
+                                let tile = &mut self.tile_list[index];
+                                tile.terrain_type = TerrainType::Water;
+                                tile.base_terrain = BaseTerrain::Coast;
+                            });
+                            adj_tile_neigbors.into_iter().for_each(|index| {
+                                let tile = &mut self.tile_list[index];
+                                tile.terrain_type = TerrainType::Water;
+                                tile.base_terrain = BaseTerrain::Coast;
+                            });
+                            // place the natural wonder on the candidate position and its adjacent tile
+                            let tile = &mut self.tile_list[max_score_position_index];
+                            tile.natural_wonder =
+                                Some(NaturalWonder::NaturalWonder(natural_wonder_name.clone()));
+                            let adj_tile = &mut self.tile_list[adj_tile_index];
+                            adj_tile.natural_wonder =
+                                Some(NaturalWonder::NaturalWonder(natural_wonder_name.clone()));
+                            // add the position of the placed natural wonder to the list of placed natural wonder positions
+                            placed_natural_wonder_tile_index.push(max_score_position_index);
+                            placed_natural_wonder_tile_index.push(adj_tile_index);
+                        }
+                        "Rock of Gibraltar" => {
+                            let tile = &self.tile_list[max_score_position_index];
+                            let tile_neigbors_indices: Vec<_> = tile
+                                .tile_neighbors(self)
+                                .iter()
+                                .map(|tile| tile.index(self))
+                                .collect();
+
+                            tile_neigbors_indices.into_iter().for_each(|index| {
+                                let tile = &mut self.tile_list[index];
+                                if tile.terrain_type == TerrainType::Water {
+                                    tile.base_terrain = BaseTerrain::Coast;
+                                } else {
+                                    tile.terrain_type = TerrainType::Mountain;
+                                }
+                            });
+
+                            let tile = &mut self.tile_list[max_score_position_index];
+                            // Edit the choice tile's terrain_type to match the natural wonder
+                            tile.terrain_type = TerrainType::Flatland;
+                            // Edit the choice tile's base_terrain to match the natural wonder
+                            tile.base_terrain = BaseTerrain::Grassland;
+                            // place the natural wonder on the candidate position
+                            tile.natural_wonder =
+                                Some(NaturalWonder::NaturalWonder(natural_wonder_name.clone()));
+                            // add the position of the placed natural wonder to the list of placed natural wonder positions
+                            placed_natural_wonder_tile_index.push(max_score_position_index);
+                        }
+                        _ => {
+                            // Edit the choice tile's terrain_type to match the natural wonder
+                            if let Some(turn_into_terrain_type) = natural_wonder.turns_into_type {
+                                tile.terrain_type = turn_into_terrain_type;
+                            };
+                            // Edit the choice tile's base_terrain to match the natural wonder
+                            if let Some(turn_into_base_terrain) = natural_wonder.turns_into_base {
+                                tile.base_terrain = turn_into_base_terrain;
+                            }
+                            // place the natural wonder on the candidate position
+                            tile.natural_wonder =
+                                Some(NaturalWonder::NaturalWonder(natural_wonder_name.clone()));
+                            // add the position of the placed natural wonder to the list of placed natural wonder positions
+                            placed_natural_wonder_tile_index.push(max_score_position_index);
+                        }
+                    }
+                    j += 1;
                 }
-                // add the position of the placed natural wonder to the list of placed natural wonder positions
-                placed_natural_wonder_tile_index.push(max_score_position_index);
-                j += 1;
             }
         }
 
@@ -1782,17 +1909,17 @@ impl TileMap {
         placed_natural_wonder_tile_index.iter().for_each(|&index| {
             let tile = &self.tile_list[index];
             if tile.terrain_type != TerrainType::Water {
-                let tiles_neighbors_index: Vec<_> = tile
-                    .tiles_neighbors(self)
+                let tile_neighbors_index: Vec<_> = tile
+                    .tile_neighbors(self)
                     .iter()
                     .map(|tile| tile.index(self))
                     .collect();
 
-                tiles_neighbors_index.iter().for_each(|&index| {
+                tile_neighbors_index.iter().for_each(|&index| {
                     let tile = &self.tile_list[index];
                     if tile.terrain_type == TerrainType::Water {
                         if tile
-                            .tiles_neighbors(self)
+                            .tile_neighbors(self)
                             .iter()
                             .any(|tile_neighbor_neighbor| {
                                 tile_neighbor_neighbor.base_terrain == BaseTerrain::Lake
@@ -1806,6 +1933,5 @@ impl TileMap {
                 });
             }
         });
-        self.random_number_generator = random_number_generator;
     }
 }
