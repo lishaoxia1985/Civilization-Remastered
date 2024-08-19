@@ -1,12 +1,19 @@
-use bevy::{math::DVec2, prelude::Res};
+use bevy::{
+    math::DVec2,
+    prelude::{Component, Entity, Query, Res, With},
+};
 
-use crate::ruleset::{BaseTerrain, Feature, NaturalWonder, Ruleset};
+use crate::{
+    ruleset::{BaseTerrain, Feature, NaturalWonder, Ruleset},
+    TileStorage,
+};
 
 use super::{
     hex::{Direction, Hex, HexLayout},
-    HexOrientation, TerrainType, TileMap,
+    HexOrientation, MapParameters, TerrainType, TileMap,
 };
 
+#[derive(Component)]
 pub struct Tile {
     pub hex_position: [i32; 2],
     pub terrain_type: TerrainType,
@@ -31,42 +38,163 @@ impl Tile {
         }
     }
 
-    pub fn index(&self, tile_map: &TileMap) -> usize {
+    pub fn index(&self, map_parameters: &MapParameters) -> usize {
         let hex_coordinate = Hex::from(self.hex_position);
-        let offset_coordinate = hex_coordinate.to_offset_coordinate(
-            tile_map.map_parameters.offset,
-            tile_map.map_parameters.hex_layout.orientation,
-        );
-        TileMap::offset_coordinate_to_index(tile_map.map_parameters.map_size, offset_coordinate)
+        let offset_coordinate = hex_coordinate
+            .to_offset_coordinate(map_parameters.offset, map_parameters.hex_layout.orientation);
+        TileMap::offset_coordinate_to_index(map_parameters.map_size, offset_coordinate)
     }
 
-    pub fn tile_neighbors<'a>(&'a self, tile_map: &'a TileMap) -> Vec<&Tile> {
-        self.tiles_at_distance(1, tile_map)
+    fn check_component<T: Component + std::cmp::PartialEq>(
+        &self,
+        check: &T,
+        query: &Query<(Entity, &T)>,
+        map_parameters: &MapParameters,
+        tile_storage: &TileStorage,
+    ) -> bool {
+        if let Ok((_, component)) = query.get(self.entity(map_parameters, tile_storage)) {
+            if component == check {
+                true
+            } else {
+                false
+            }
+        } else {
+            false
+        }
+    }
+
+    pub fn entity(&self, map_parameters: &MapParameters, tile_storage: &TileStorage) -> Entity {
+        let index = self.index(map_parameters);
+        tile_storage.tiles[index]
+    }
+
+    pub fn entites_at_distance(
+        &self,
+        distance: i32,
+        tile_storage: &TileStorage,
+        map_parameters: &MapParameters,
+    ) -> Vec<Entity> {
+        Hex::from(self.hex_position)
+            .hexes_at_distance(distance as u32)
+            .iter()
+            .filter_map(|hex_coordinate| {
+                let offset_coordinate = hex_coordinate.to_offset_coordinate(
+                    map_parameters.offset,
+                    map_parameters.hex_layout.orientation,
+                );
+
+                // Check if the offset coordinate is inside the map
+                let [x, y] = offset_coordinate.to_array();
+                if x >= 0
+                    && x < map_parameters.map_size.width as i32
+                    && y >= 0
+                    && y < map_parameters.map_size.height as i32
+                {
+                    let index = TileMap::offset_coordinate_to_index(
+                        map_parameters.map_size,
+                        offset_coordinate,
+                    );
+                    Some(tile_storage.tiles[index])
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
+    pub fn entity_neighbors(
+        &self,
+        tile_storage: &TileStorage,
+        map_parameters: &MapParameters,
+    ) -> Vec<Entity> {
+        self.entites_at_distance(1, tile_storage, map_parameters)
+    }
+
+    pub fn entity_is_water(
+        &self,
+        tile_storage: &TileStorage,
+        map_parameters: &MapParameters,
+        query: &Query<(Entity, &TerrainType)>,
+    ) -> bool {
+        /* query
+        .get(self.entity(map_parameters, tile_storage))
+        .unwrap()
+        .1
+        == &TerrainType::Water */
+        self.check_component(&TerrainType::Water, query, map_parameters, tile_storage)
+    }
+
+    pub fn entity_is_flatland(
+        &self,
+        tile_storage: &TileStorage,
+        map_parameters: &MapParameters,
+        query: &Query<(Entity, &TerrainType), With<Tile>>,
+    ) -> bool {
+        query
+            .get(self.entity(map_parameters, tile_storage))
+            .unwrap()
+            .1
+            == &TerrainType::Flatland
+    }
+
+    pub fn entity_is_hill(
+        &self,
+        tile_storage: &TileStorage,
+        map_parameters: &MapParameters,
+        query: &Query<(Entity, &TerrainType), With<Tile>>,
+    ) -> bool {
+        query
+            .get(self.entity(map_parameters, tile_storage))
+            .unwrap()
+            .1
+            == &TerrainType::Hill
+    }
+
+    pub fn entity_is_mountain(
+        &self,
+        tile_storage: &TileStorage,
+        map_parameters: &MapParameters,
+        query: &Query<(Entity, &TerrainType), With<Tile>>,
+    ) -> bool {
+        query
+            .get(self.entity(map_parameters, tile_storage))
+            .unwrap()
+            .1
+            == &TerrainType::Mountain
+    }
+
+    pub fn tile_neighbors<'a>(
+        &'a self,
+        tile_map: &'a TileMap,
+        map_parameters: &MapParameters,
+    ) -> Vec<&Tile> {
+        self.tiles_at_distance(1, tile_map, map_parameters)
     }
 
     pub fn tile_neighbor<'a>(
         &'a self,
         tile_map: &'a TileMap,
         direction: Direction,
+        map_parameters: &MapParameters,
     ) -> Option<&Tile> {
-        let orientation = tile_map.map_parameters.hex_layout.orientation;
+        let orientation = map_parameters.hex_layout.orientation;
         let neighbor_offset_coordinate = Hex::from(self.hex_position)
             .neighbor(orientation, direction)
-            .to_offset_coordinate(tile_map.map_parameters.offset, orientation);
+            .to_offset_coordinate(map_parameters.offset, orientation);
 
         // Check if the offset coordinate is inside the map
         let [x, y] = neighbor_offset_coordinate.to_array();
         if !(x >= 0
-            && x < tile_map.map_parameters.map_size.width as i32
+            && x < map_parameters.map_size.width as i32
             && y >= 0
-            && y < tile_map.map_parameters.map_size.height as i32)
+            && y < map_parameters.map_size.height as i32)
         {
             return None;
         }
 
         // Calculate the index of the neighbor tile
         let neighbor_index = TileMap::offset_coordinate_to_index(
-            tile_map.map_parameters.map_size,
+            map_parameters.map_size,
             neighbor_offset_coordinate,
         );
 
@@ -74,10 +202,14 @@ impl Tile {
         tile_map.tile_list.get(neighbor_index)
     }
 
-    pub fn has_river(&self, direction: Direction, tile_map: &TileMap) -> bool {
+    pub fn has_river(
+        &self,
+        direction: Direction,
+        tile_map: &TileMap,
+        map_parameters: &MapParameters,
+    ) -> bool {
         // This variable is related to river direction position and river flow direction
-        let river_position_and_flow_direction = match tile_map.map_parameters.hex_layout.orientation
-        {
+        let river_position_and_flow_direction = match map_parameters.hex_layout.orientation {
             HexOrientation::Pointy => [
                 (Direction::East, [Direction::North, Direction::South]),
                 (
@@ -102,16 +234,12 @@ impl Tile {
             ],
         };
 
-        let edge_index = tile_map
-            .map_parameters
-            .hex_layout
-            .orientation
-            .edge_index(direction);
+        let edge_index = map_parameters.hex_layout.orientation.edge_index(direction);
 
         if edge_index < 3 {
             tile_map.river_list.values().any(|river| {
                 river.iter().any(|&(tile_index, river_flow_direction)| {
-                    tile_index == self.index(tile_map) // 1. Check whether there is a river in the current tile
+                    tile_index == self.index(map_parameters) // 1. Check whether there is a river in the current tile
                         && river_position_and_flow_direction// 2. Check whether there is a river in the given direction of the tile according to the river flow direction
                             .iter()
                             .any(|&(river_position_direction, river_flow_directions)| {
@@ -119,33 +247,39 @@ impl Tile {
                             })
                 })
             })
-        } else if let Some(neighbor_tile) = self.tile_neighbor(tile_map, direction) {
+        } else if let Some(neighbor_tile) = self.tile_neighbor(tile_map, direction, map_parameters)
+        {
             let dir = direction.opposite_direction();
-            neighbor_tile.has_river(dir, tile_map)
+            neighbor_tile.has_river(dir, tile_map, map_parameters)
         } else {
             false
         }
     }
 
-    pub fn tiles_in_distance<'a>(&'a self, distance: i32, tile_map: &'a TileMap) -> Vec<&Tile> {
+    pub fn tiles_in_distance<'a>(
+        &'a self,
+        distance: i32,
+        tile_map: &'a TileMap,
+        map_parameters: &MapParameters,
+    ) -> Vec<&Tile> {
         Hex::from(self.hex_position)
             .hexes_in_distance(distance as u32)
             .iter()
             .filter_map(|hex_coordinate| {
                 let offset_coordinate = hex_coordinate.to_offset_coordinate(
-                    tile_map.map_parameters.offset,
-                    tile_map.map_parameters.hex_layout.orientation,
+                    map_parameters.offset,
+                    map_parameters.hex_layout.orientation,
                 );
 
                 // Check if the offset coordinate is inside the map
                 let [x, y] = offset_coordinate.to_array();
                 if x >= 0
-                    && x < tile_map.map_parameters.map_size.width as i32
+                    && x < map_parameters.map_size.width as i32
                     && y >= 0
-                    && y < tile_map.map_parameters.map_size.height as i32
+                    && y < map_parameters.map_size.height as i32
                 {
                     let index = TileMap::offset_coordinate_to_index(
-                        tile_map.map_parameters.map_size,
+                        map_parameters.map_size,
                         offset_coordinate,
                     );
                     tile_map.tile_list.get(index)
@@ -156,25 +290,30 @@ impl Tile {
             .collect()
     }
 
-    pub fn tiles_at_distance<'a>(&'a self, distance: i32, tile_map: &'a TileMap) -> Vec<&Tile> {
+    pub fn tiles_at_distance<'a>(
+        &'a self,
+        distance: i32,
+        tile_map: &'a TileMap,
+        map_parameters: &MapParameters,
+    ) -> Vec<&Tile> {
         Hex::from(self.hex_position)
             .hexes_at_distance(distance as u32)
             .iter()
             .filter_map(|hex_coordinate| {
                 let offset_coordinate = hex_coordinate.to_offset_coordinate(
-                    tile_map.map_parameters.offset,
-                    tile_map.map_parameters.hex_layout.orientation,
+                    map_parameters.offset,
+                    map_parameters.hex_layout.orientation,
                 );
 
                 // Check if the offset coordinate is inside the map
                 let [x, y] = offset_coordinate.to_array();
                 if x >= 0
-                    && x < tile_map.map_parameters.map_size.width as i32
+                    && x < map_parameters.map_size.width as i32
                     && y >= 0
-                    && y < tile_map.map_parameters.map_size.height as i32
+                    && y < map_parameters.map_size.height as i32
                 {
                     let index = TileMap::offset_coordinate_to_index(
-                        tile_map.map_parameters.map_size,
+                        map_parameters.map_size,
                         offset_coordinate,
                     );
                     tile_map.tile_list.get(index)
@@ -189,9 +328,12 @@ impl Tile {
         layout.hex_to_pixel(Hex::from(self.hex_position))
     }
 
-    pub fn tile_corner_position(&self, direction: Direction, tile_map: &TileMap) -> DVec2 {
-        tile_map
-            .map_parameters
+    pub fn tile_corner_position(
+        &self,
+        direction: Direction,
+        map_parameters: &MapParameters,
+    ) -> DVec2 {
+        map_parameters
             .hex_layout
             .corner(Hex::from(self.hex_position), direction)
     }
@@ -199,14 +341,21 @@ impl Tile {
     /// Check if the tile is adjacent to the terrain name
     ///
     /// `terrain_name` can be a BaseTerrain name or a Feature name, but not a TerrainType or Natural name.
-    pub fn is_adjacent_to(&self, terrain_name: &str, tile_map: &TileMap) -> bool {
-        self.tile_neighbors(tile_map).iter().any(|tile| {
-            tile.base_terrain.name() == terrain_name
-                || tile
-                    .feature
-                    .as_ref()
-                    .map_or(false, |feature| feature.name() == terrain_name)
-        })
+    pub fn is_adjacent_to(
+        &self,
+        terrain_name: &str,
+        tile_map: &TileMap,
+        map_parameters: &MapParameters,
+    ) -> bool {
+        self.tile_neighbors(tile_map, map_parameters)
+            .iter()
+            .any(|tile| {
+                tile.base_terrain.name() == terrain_name
+                    || tile
+                        .feature
+                        .as_ref()
+                        .map_or(false, |feature| feature.name() == terrain_name)
+            })
     }
 
     pub fn is_mountain(&self) -> bool {
@@ -242,21 +391,21 @@ impl Tile {
                 .map_or(false, |natural_wonder| natural_wonder.impassable(ruleset))
     }
 
-    pub fn is_freshwater(&self, tile_map: &TileMap) -> bool {
-        let direction_array = tile_map.tile_edge_direction();
+    pub fn is_freshwater(&self, tile_map: &TileMap, map_parameters: &MapParameters) -> bool {
+        let direction_array = tile_map.tile_edge_direction(map_parameters);
         let has_river = direction_array
             .iter()
-            .any(|&direction| self.has_river(direction, tile_map));
+            .any(|&direction| self.has_river(direction, tile_map, map_parameters));
         (!self.is_water())
-            && (self.is_adjacent_to("Lake", tile_map)
-                || self.is_adjacent_to("Oasis", tile_map)
+            && (self.is_adjacent_to("Lake", tile_map, map_parameters)
+                || self.is_adjacent_to("Oasis", tile_map, map_parameters)
                 || has_river)
     }
 
-    pub fn is_coastal_land(&self, tile_map: &TileMap) -> bool {
+    pub fn is_coastal_land(&self, tile_map: &TileMap, map_parameters: &MapParameters) -> bool {
         !self.is_water()
             && self
-                .tile_neighbors(tile_map)
+                .tile_neighbors(tile_map, map_parameters)
                 .iter()
                 .any(|tile| tile.is_water())
     }

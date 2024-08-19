@@ -1,4 +1,4 @@
-use bevy::utils::HashMap;
+use bevy::{prelude::Component, utils::HashMap};
 
 use serde::{Deserialize, Serialize};
 
@@ -54,7 +54,7 @@ impl FeatureInfo {
     }
 }
 
-#[derive(PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Debug)]
+#[derive(PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Debug, Component)]
 pub enum Feature {
     Forest,
     Jungle,

@@ -1,3 +1,4 @@
+use bevy::prelude::Component;
 use serde::{Deserialize, Serialize};
 
 use crate::ruleset::Ruleset;
@@ -59,6 +60,7 @@ impl NaturalWonderInfo {
     }
 }
 
+#[derive(Component)]
 pub enum NaturalWonder {
     NaturalWonder(String),
 }

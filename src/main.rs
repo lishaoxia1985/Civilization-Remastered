@@ -1,16 +1,27 @@
 mod assets;
+
+mod map;
 mod ruleset;
 mod tile_map;
 
+use std::time::{SystemTime, UNIX_EPOCH};
+
 use assets::{check_textures, load_textures, setup, AppState, MaterialResource};
 use bevy_prototype_lyon::prelude::*;
+use map::{
+    add_features, add_lakes, add_rivers, expand_coast, generate_coast_and_ocean,
+    generate_empty_map, generate_lake, generate_natural_wonder, generate_terrain,
+    generate_terrain_type_for_fractal, reassign_area_id, recalculate_areas, regenerate_coast,
+    RandomNumberGenerator, River, TileQuery,
+};
+use rand::{rngs::StdRng, SeedableRng};
 use ruleset::Ruleset;
 use tile_map::{
     hex::{Direction, HexOrientation, Offset},
-    HexLayout, MapParameters, MapSize, TerrainType, TileMap,
+    HexLayout, MapParameters, MapSize, TerrainType,
 };
 
-use bevy::{math::DVec2, prelude::*};
+use bevy::{math::DVec2, prelude::*, utils::HashMap};
 
 use crate::ruleset::Unique;
 
@@ -43,13 +54,58 @@ fn main() {
         .init_state::<AppState>()
         .init_resource::<MaterialResource>()
         .insert_resource(Ruleset::new())
+        .insert_resource(TileStorage { tiles: Vec::new() })
+        .insert_resource(River(HashMap::new()))
+        .insert_resource(RandomNumberGenerator {
+            rng: StdRng::seed_from_u64(
+                SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap()
+                    .as_millis()
+                    .try_into()
+                    .unwrap(),
+            ),
+        })
+        .insert_resource({
+            let mut map_parameters = MapParameters {
+                map_size: MapSize {
+                    width: 80,
+                    height: 40,
+                },
+                hex_layout: HexLayout {
+                    orientation: HexOrientation::Pointy,
+                    size: DVec2::new(8., 8.),
+                    origin: DVec2::new(0., 0.),
+                },
+                offset: Offset::Odd,
+                ..Default::default()
+            };
+            map_parameters.update_origin();
+            map_parameters
+        })
         .add_plugins(ShapePlugin)
         .add_systems(OnEnter(AppState::Setup), (load_textures, camera_setup))
         .add_systems(Update, check_textures.run_if(in_state(AppState::Setup)))
         .add_systems(OnEnter(AppState::Finished), setup)
         .add_systems(
             OnEnter(AppState::GameStart),
-            (close_on_esc, start_up_system),
+            (
+                close_on_esc,
+                generate_empty_map,
+                generate_terrain_type_for_fractal,
+                ((generate_coast_and_ocean, expand_coast).chain()),
+                (recalculate_areas, reassign_area_id).chain(),
+                (generate_lake, generate_terrain),
+                add_rivers,
+                add_lakes,
+                (recalculate_areas, reassign_area_id).chain(),
+                add_features,
+                generate_natural_wonder,
+                regenerate_coast,
+                (recalculate_areas, reassign_area_id).chain(),
+                show_tiles_system,
+            )
+                .chain(),
         )
         .run();
 }
@@ -74,108 +130,61 @@ fn camera_setup(mut commands: Commands) {
     commands.spawn(Camera2dBundle::default());
 }
 
-fn start_up_system(
+#[derive(Resource)]
+pub struct TileStorage {
+    tiles: Vec<Entity>,
+}
+
+fn show_tiles_system(
     mut commands: Commands,
     materials: Res<MaterialResource>,
-    ruleset: Res<Ruleset>,
+    map_parameters: Res<MapParameters>,
+    river: Res<River>,
+    query_tile: Query<TileQuery>,
 ) {
-    let mut tile_map = TileMap::new(MapParameters {
-        map_size: MapSize {
-            width: 80,
-            height: 40,
-        },
-        hex_layout: HexLayout {
-            orientation: HexOrientation::Pointy,
-            size: DVec2::new(8., 8.),
-            origin: DVec2::new(0., 0.),
-        },
-        offset: Offset::Odd,
-        ..Default::default()
-    });
-    let tile_pixel_size = tile_map.map_parameters.hex_layout.size * DVec2::new(2.0, 3_f64.sqrt());
-    tile_map.spawn_tile_type_for_pangaea();
-    //tile_map.spawn_tile_type_for_fractal();
-    tile_map.generate_terrain(&ruleset);
-    tile_map.generate_coasts(&ruleset);
-    tile_map.generate_lakes(&ruleset);
-    tile_map.recalculate_areas(&ruleset);
-    tile_map.add_rivers(&ruleset);
-    tile_map.add_lakes(&ruleset);
-    tile_map.add_features(&ruleset);
-    tile_map.natural_wonder_generator(&ruleset);
-    tile_map.recalculate_areas(&ruleset);
-
-    let width = tile_map.map_parameters.map_size.width;
-    let height = tile_map.map_parameters.map_size.height;
-
-    let (min_offset_x, min_offset_y) = [0, 1, width].into_iter().fold(
-        (0.0_f64, 0.0_f64),
-        |(min_offset_x, min_offset_y), index| {
-            let tile = &tile_map.tile_list[index as usize];
-            let [offset_x, offset_y] = tile
-                .pixel_position(tile_map.map_parameters.hex_layout)
-                .to_array();
-            (min_offset_x.min(offset_x), min_offset_y.min(offset_y))
-        },
-    );
-
-    let (max_offset_x, max_offset_y) = [
-        width * (height - 1) - 1,
-        width * height - 2,
-        width * height - 1,
-    ]
-    .into_iter()
-    .fold((0.0_f64, 0.0_f64), |(max_offset_x, max_offset_y), index| {
-        let tile = &tile_map.tile_list[index as usize];
-        let [offset_x, offset_y] = tile
-            .pixel_position(tile_map.map_parameters.hex_layout)
-            .to_array();
-        (max_offset_x.max(offset_x), max_offset_y.max(offset_y))
-    });
-
-    tile_map.map_parameters.hex_layout.origin =
-        -(DVec2::new(min_offset_x, min_offset_y) + DVec2::new(max_offset_x, max_offset_y)) / 2.;
-
-    tile_map.river_list.values().for_each(|river| {
+    river.0.values().for_each(|river| {
         let mut path_builder = PathBuilder::new();
         river
             .iter()
             .enumerate()
             .for_each(|(index, (tile_index, flow_direction))| {
-                let tile = &tile_map.tile_list[*tile_index];
-                let (first_point, second_point) =
-                    match tile_map.map_parameters.hex_layout.orientation {
-                        HexOrientation::Pointy => match *flow_direction {
-                            Direction::North => (Direction::SouthEast, Direction::NorthEast),
-                            Direction::NorthEast => (Direction::South, Direction::SouthEast),
-                            Direction::East => panic!(),
-                            Direction::SouthEast => (Direction::SouthWest, Direction::South),
-                            Direction::South => (Direction::NorthEast, Direction::SouthEast),
-                            Direction::SouthWest => (Direction::SouthEast, Direction::South),
-                            Direction::West => panic!(),
-                            Direction::NorthWest => (Direction::South, Direction::SouthWest),
-                            Direction::None => panic!(),
-                        },
-                        HexOrientation::Flat => match *flow_direction {
-                            Direction::North => panic!(),
-                            Direction::NorthEast => (Direction::SouthEast, Direction::East),
-                            Direction::East => (Direction::SouthWest, Direction::SouthEast),
-                            Direction::SouthEast => (Direction::NorthEast, Direction::East),
-                            Direction::South => panic!(),
-                            Direction::SouthWest => (Direction::East, Direction::SouthEast),
-                            Direction::West => (Direction::SouthEast, Direction::SouthWest),
-                            Direction::NorthWest => (Direction::East, Direction::NorthEast),
-                            Direction::None => panic!(),
-                        },
-                    };
+                let hex_position = query_tile.get(*tile_index).unwrap().hex_position;
+
+                let (first_point, second_point) = match map_parameters.hex_layout.orientation {
+                    HexOrientation::Pointy => match *flow_direction {
+                        Direction::North => (Direction::SouthEast, Direction::NorthEast),
+                        Direction::NorthEast => (Direction::South, Direction::SouthEast),
+                        Direction::East => panic!(),
+                        Direction::SouthEast => (Direction::SouthWest, Direction::South),
+                        Direction::South => (Direction::NorthEast, Direction::SouthEast),
+                        Direction::SouthWest => (Direction::SouthEast, Direction::South),
+                        Direction::West => panic!(),
+                        Direction::NorthWest => (Direction::South, Direction::SouthWest),
+                        Direction::None => panic!(),
+                    },
+                    HexOrientation::Flat => match *flow_direction {
+                        Direction::North => panic!(),
+                        Direction::NorthEast => (Direction::SouthEast, Direction::East),
+                        Direction::East => (Direction::SouthWest, Direction::SouthEast),
+                        Direction::SouthEast => (Direction::NorthEast, Direction::East),
+                        Direction::South => panic!(),
+                        Direction::SouthWest => (Direction::East, Direction::SouthEast),
+                        Direction::West => (Direction::SouthEast, Direction::SouthWest),
+                        Direction::NorthWest => (Direction::East, Direction::NorthEast),
+                        Direction::None => panic!(),
+                    },
+                };
 
                 if index == 0 {
-                    let first_point_position = tile.tile_corner_position(first_point, &tile_map);
-                    let second_point_position = tile.tile_corner_position(second_point, &tile_map);
+                    let first_point_position =
+                        hex_position.corner_position(first_point, &map_parameters);
+                    let second_point_position =
+                        hex_position.corner_position(second_point, &map_parameters);
                     path_builder.move_to(first_point_position.as_vec2());
                     path_builder.line_to(second_point_position.as_vec2());
                 } else {
-                    let second_point_position = tile.tile_corner_position(second_point, &tile_map);
+                    let second_point_position =
+                        hex_position.corner_position(second_point, &map_parameters);
                     path_builder.line_to(second_point_position.as_vec2());
                 }
             });
@@ -195,7 +204,9 @@ fn start_up_system(
         ));
     });
 
-    let (sprite_rotation, text_rotation) = match tile_map.map_parameters.hex_layout.orientation {
+    let tile_pixel_size = map_parameters.hex_layout.size * DVec2::new(2.0, 3_f64.sqrt());
+
+    let (sprite_rotation, text_rotation) = match map_parameters.hex_layout.orientation {
         HexOrientation::Pointy => (
             Quat::from_rotation_z(std::f32::consts::FRAC_PI_2 * 3.),
             Quat::from_rotation_z(-std::f32::consts::FRAC_PI_2 * 3.),
@@ -203,17 +214,23 @@ fn start_up_system(
         HexOrientation::Flat => (Quat::default(), Quat::default()),
     };
 
-    for tile in tile_map.tile_list.iter() {
-        let pixel_position = tile.pixel_position(tile_map.map_parameters.hex_layout);
+    for tile in query_tile.iter() {
+        let mut terrain = match tile.terrain_type {
+            TerrainType::Water => "Ocean".to_owned(),
+            TerrainType::Flatland => "Grassland".to_owned(),
+            TerrainType::Mountain => "Mountain".to_owned(),
+            TerrainType::Hill => "Hill".to_owned(),
+        };
 
-        let terrain = if tile.terrain_type == TerrainType::Mountain {
+        let terrain = if tile.terrain_type == &TerrainType::Mountain {
             "Mountain".to_owned()
-        } else if tile.terrain_type == TerrainType::Hill {
+        } else if tile.terrain_type == &TerrainType::Hill {
             format!("{}+Hill", &tile.base_terrain.name())
         } else {
             tile.base_terrain.name().to_owned()
         };
 
+        let pixel_position = tile.hex_position.pixel_position(&map_parameters);
         commands
             .spawn(SpriteBundle {
                 sprite: Sprite {
@@ -229,7 +246,8 @@ fn start_up_system(
                 ..Default::default()
             })
             .with_children(|parent| {
-                if let Some(feature) = &tile.feature {
+                // Draw the feature
+                if let Some(feature) = tile.feature {
                     let feature_name = match feature.name() {
                         "Forest" => "ForestG",
                         "Jungle" => "JungleG",
@@ -247,7 +265,8 @@ fn start_up_system(
                     });
                 }
 
-                if let Some(natural_wonder) = &tile.natural_wonder {
+                // Draw the natural wonder
+                if let Some(natural_wonder) = tile.natural_wonder {
                     let natural_wonder_name = natural_wonder.name();
 
                     parent.spawn(SpriteBundle {

@@ -1,5 +1,5 @@
 pub use crate::ruleset::BaseTerrain;
-use bevy::utils::HashMap;
+use bevy::{prelude::Component, utils::HashMap};
 
 use serde::{Deserialize, Serialize};
 
@@ -51,7 +51,7 @@ impl TerrainTypeInfo {
     }
 }
 
-#[derive(PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Debug)]
+#[derive(PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Debug, Component)]
 pub enum TerrainType {
     Water,
     Flatland,

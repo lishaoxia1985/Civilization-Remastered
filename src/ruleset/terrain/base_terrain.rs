@@ -1,4 +1,4 @@
-use bevy::utils::HashMap;
+use bevy::{prelude::Component, utils::HashMap};
 
 use serde::{Deserialize, Serialize};
 
@@ -44,7 +44,7 @@ impl BaseTerrainInfo {
     }
 }
 
-#[derive(PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Debug)]
+#[derive(PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Debug, Component)]
 pub enum BaseTerrain {
     Ocean,
     Lake,

@@ -199,15 +199,17 @@
         "occursOnType": [
             "Flatland",
             "Mountain",
-            "Hill"
+            "Hill",
+            "Water"
         ],
         "occursOnBase": [
             "Grassland"
         ],
         "uniques": [
-            "Must be adjacent to [1] to [5] [Coast] tiles",
-            "Must be adjacent to [1] [Mountain] tiles",
-            "Neighboring tiles except [Mountain] will convert to [Coast]"
+            "Must be adjacent to [3] to [5] [Coast] tiles",
+            "Must be adjacent to [1] [Land] tiles",
+            "Neighboring [Land] tiles will convert to [Mountain]",
+            "Neighboring [Ocean] tiles will convert to [Coast]"
         ],
         "turnsIntoType": "Mountain",
         "impassable": true,
