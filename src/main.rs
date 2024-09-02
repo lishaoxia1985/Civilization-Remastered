@@ -7,7 +7,10 @@ mod tile_map;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use assets::{check_textures, load_textures, setup, AppState, MaterialResource};
-use bevy_prototype_lyon::prelude::*;
+use bevy_prototype_lyon::{
+    draw::Stroke, entity::ShapeBundle, path::PathBuilder, plugin::ShapePlugin,
+    prelude::GeometryBuilder,
+};
 use map::{
     add_features, add_lakes, add_rivers, expand_coast, generate_coast_and_ocean,
     generate_empty_map, generate_lake, generate_natural_wonder, generate_terrain,
@@ -21,7 +24,12 @@ use tile_map::{
     HexLayout, MapParameters, MapSize, TerrainType,
 };
 
-use bevy::{math::DVec2, prelude::*, utils::HashMap};
+use bevy::{
+    math::DVec2,
+    prelude::*,
+    sprite::{MaterialMesh2dBundle, Mesh2dHandle},
+    utils::HashMap,
+};
 
 use crate::ruleset::Unique;
 
@@ -138,10 +146,55 @@ pub struct TileStorage {
 fn show_tiles_system(
     mut commands: Commands,
     materials: Res<MaterialResource>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut color_materials: ResMut<Assets<ColorMaterial>>,
     map_parameters: Res<MapParameters>,
     river: Res<River>,
     query_tile: Query<TileQuery>,
 ) {
+    let mut base_terrain_and_material = HashMap::new();
+
+    base_terrain_and_material.insert(
+        "Ocean",
+        color_materials.add(materials.texture_handle("sv_terrainhexocean")),
+    );
+
+    // Lake use the same texture as Coast
+    base_terrain_and_material.insert(
+        "Lake",
+        color_materials.add(materials.texture_handle("sv_terrainhexcoast")),
+    );
+
+    base_terrain_and_material.insert(
+        "Coast",
+        color_materials.add(materials.texture_handle("sv_terrainhexcoast")),
+    );
+
+    base_terrain_and_material.insert(
+        "Grassland",
+        color_materials.add(materials.texture_handle("sv_terrainhexgrasslands")),
+    );
+
+    base_terrain_and_material.insert(
+        "Desert",
+        color_materials.add(materials.texture_handle("sv_terrainhexdesert")),
+    );
+
+    base_terrain_and_material.insert(
+        "Plain",
+        color_materials.add(materials.texture_handle("sv_terrainhexplains")),
+    );
+
+    base_terrain_and_material.insert(
+        "Tundra",
+        color_materials.add(materials.texture_handle("sv_terrainhextundra")),
+    );
+
+    base_terrain_and_material.insert(
+        "Snow",
+        color_materials.add(materials.texture_handle("sv_terrainhexsnow")),
+    );
+
     river.0.values().for_each(|river| {
         let mut path_builder = PathBuilder::new();
         river
@@ -200,58 +253,84 @@ fn show_tiles_system(
                 },
                 ..default()
             },
-            Stroke::new(Color::BLACK, 2.0),
+            Stroke::new(Color::srgb_u8(140, 215, 215), 2.0),
         ));
     });
 
-    let tile_pixel_size = map_parameters.hex_layout.size * DVec2::new(2.0, 3_f64.sqrt());
+    /* let tile_pixel_size = match map_parameters.hex_layout.orientation {
+        HexOrientation::Pointy => map_parameters.hex_layout.size * DVec2::new(3_f64.sqrt(), 2.0),
+        HexOrientation::Flat => map_parameters.hex_layout.size * DVec2::new(2.0, 3_f64.sqrt()),
+    }; */
+
+    let tile_pixel_size = map_parameters.hex_layout.size * DVec2::new(2.0, 2.0);
 
     let (sprite_rotation, text_rotation) = match map_parameters.hex_layout.orientation {
-        HexOrientation::Pointy => (
+        HexOrientation::Pointy => (Quat::default(), Quat::default()),
+        HexOrientation::Flat => (
             Quat::from_rotation_z(std::f32::consts::FRAC_PI_2 * 3.),
             Quat::from_rotation_z(-std::f32::consts::FRAC_PI_2 * 3.),
         ),
-        HexOrientation::Flat => (Quat::default(), Quat::default()),
     };
 
     for tile in query_tile.iter() {
-        let mut terrain = match tile.terrain_type {
-            TerrainType::Water => "Ocean".to_owned(),
-            TerrainType::Flatland => "Grassland".to_owned(),
-            TerrainType::Mountain => "Mountain".to_owned(),
-            TerrainType::Hill => "Hill".to_owned(),
-        };
-
-        let terrain = if tile.terrain_type == &TerrainType::Mountain {
-            "Mountain".to_owned()
-        } else if tile.terrain_type == &TerrainType::Hill {
-            format!("{}+Hill", &tile.base_terrain.name())
-        } else {
-            tile.base_terrain.name().to_owned()
-        };
-
         let pixel_position = tile.hex_position.pixel_position(&map_parameters);
         commands
-            .spawn(SpriteBundle {
-                sprite: Sprite {
-                    custom_size: Some(tile_pixel_size.as_vec2()),
-                    ..Default::default()
-                },
-                texture: materials.texture_handle(&terrain),
+            .spawn(MaterialMesh2dBundle {
+                mesh: Mesh2dHandle(meshes.add(RegularPolygon::new(8.0, 6))),
                 transform: Transform {
-                    translation: Vec3::from((pixel_position.as_vec2(), 1.)),
+                    translation: Vec3::from((pixel_position.as_vec2(), 0.)),
                     rotation: sprite_rotation,
                     ..Default::default()
                 },
-                ..Default::default()
+                material: base_terrain_and_material
+                    .get(&tile.base_terrain.name())
+                    .unwrap()
+                    .clone(),
+                ..default()
             })
             .with_children(|parent| {
+                if tile.terrain_type == &TerrainType::Mountain && tile.natural_wonder.is_none() {
+                    parent.spawn(SpriteBundle {
+                        sprite: Sprite {
+                            custom_size: Some(tile_pixel_size.as_vec2()),
+                            ..Default::default()
+                        },
+                        texture: materials.texture_handle("sv_mountains"),
+                        transform: Transform {
+                            translation: Vec3::new(0., 0., 3.),
+                            rotation: text_rotation,
+                            ..Default::default()
+                        },
+                        ..Default::default()
+                    });
+                } else if tile.terrain_type == &TerrainType::Hill {
+                    parent.spawn(SpriteBundle {
+                        sprite: Sprite {
+                            custom_size: Some(tile_pixel_size.as_vec2()),
+                            ..Default::default()
+                        },
+                        texture: materials.texture_handle("sv_hills"),
+                        transform: Transform {
+                            translation: Vec3::new(0., 0., 3.),
+                            rotation: text_rotation,
+                            ..Default::default()
+                        },
+                        ..Default::default()
+                    });
+                }
+
                 // Draw the feature
                 if let Some(feature) = tile.feature {
                     let feature_name = match feature.name() {
-                        "Forest" => "ForestG",
-                        "Jungle" => "JungleG",
-                        _ => &feature.name(),
+                        "Forest" => "sv_forest",
+                        "Jungle" => "sv_jungle",
+                        "Marsh" => "sv_marsh",
+                        "Floodplain" => "sv_floodplains",
+                        "Ice" => "sv_ice",
+                        "Oasis" => "sv_oasis",
+                        "Atoll" => "sv_atoll",
+                        "Fallout" => "sv_fallout",
+                        _ => unreachable!(),
                     };
 
                     parent.spawn(SpriteBundle {
@@ -260,14 +339,37 @@ fn show_tiles_system(
                             ..Default::default()
                         },
                         texture: materials.texture_handle(feature_name),
-                        transform: Transform::from_translation(Vec3::new(0., 0., 1.)),
+                        transform: Transform {
+                            translation: Vec3::new(0., 0., 2.),
+                            rotation: text_rotation,
+                            ..Default::default()
+                        },
                         ..Default::default()
                     });
                 }
 
                 // Draw the natural wonder
                 if let Some(natural_wonder) = tile.natural_wonder {
-                    let natural_wonder_name = natural_wonder.name();
+                    let natural_wonder_name = match natural_wonder.name() {
+                        "Great Barrier Reef" => "sv_coralreef",
+                        "Old Faithful" => "sv_geyser",
+                        "El Dorado" => "sv_el_dorado",
+                        "Fountain of Youth" => "sv_fountain_of_youth",
+                        "Grand Mesa" => "sv_mesa",
+                        "Mount Fuji" => "sv_fuji",
+                        "Krakatoa" => "sv_krakatoa",
+                        "Rock of Gibraltar" => "sv_gibraltar",
+                        "Cerro de Potosi" => "sv_cerro_de_patosi",
+                        "Barringer Crater" => "sv_crater",
+                        "Mount Kailash" => "sv_mount_kailash",
+                        "Mount Sinai" => "sv_mount_sinai",
+                        "Sri Pada" => "sv_sri_pada",
+                        "Uluru" => "sv_uluru",
+                        "King Solomon's Mines" => "sv_kingsolomonsmine",
+                        "Lake Victoria" => "sv_lakevictoria",
+                        "Mount Kilimanjaro" => "sv_mountkilimanjaro",
+                        _ => unreachable!(),
+                    };
 
                     parent.spawn(SpriteBundle {
                         sprite: Sprite {
@@ -275,7 +377,11 @@ fn show_tiles_system(
                             ..Default::default()
                         },
                         texture: materials.texture_handle(natural_wonder_name),
-                        transform: Transform::from_translation(Vec3::new(0., 0., 1.)),
+                        transform: Transform {
+                            translation: Vec3::new(0., 0., 2.),
+                            rotation: text_rotation,
+                            ..Default::default()
+                        },
                         ..Default::default()
                     });
                 }
