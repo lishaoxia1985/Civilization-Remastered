@@ -111,7 +111,7 @@ impl Default for Flags {
             wrap_x: false,
             wrap_y: false,
             percent: false,
-            polar: false,
+            polar: true,
             center_rift: false,
             invert_heights: false,
         }

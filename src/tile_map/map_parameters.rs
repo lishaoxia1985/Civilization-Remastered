@@ -14,6 +14,8 @@ pub struct MapParameters {
     //it.mapResources = mapResources
     pub map_size: MapSize,
     pub hex_layout: HexLayout,
+    pub wrap_x: bool,
+    pub wrap_y: bool,
     /// the map use which type of offset coordinate
     pub offset: Offset,
     pub no_ruins: bool,
@@ -90,6 +92,8 @@ impl Default for MapParameters {
                 size: DVec2::new(8., 8.),
                 origin: DVec2::new(0., 0.),
             },
+            wrap_x: true,
+            wrap_y: false,
             offset: Offset::Odd,
             no_ruins: false,
             seed: SystemTime::now()
@@ -156,8 +160,20 @@ impl MapParameters {
 
     pub const fn offset_coordinate_to_index(&self, offset_coordinate: OffsetCoordinate) -> usize {
         let map_size = self.map_size;
-        let [x, y] = offset_coordinate.to_array();
+        let width = self.map_size.width as i32;
+        let height = self.map_size.height as i32;
+        // Check if the offset coordinate is inside the map
+        let [mut x, mut y] = offset_coordinate.to_array();
+
+        if self.wrap_x {
+            x = (x % width + width) % width
+        };
+        if self.wrap_y {
+            y = (y % height + height) % height
+        };
+
         assert!((x >= 0) && (x < map_size.width) && (y >= 0) && (y < map_size.height));
+
         (x + y * map_size.width) as usize
     }
 

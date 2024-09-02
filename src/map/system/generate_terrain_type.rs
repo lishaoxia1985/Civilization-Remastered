@@ -63,7 +63,11 @@ pub fn generate_terrain_type_for_fractal(
         map_parameters.map_size.width,
         map_parameters.map_size.height,
         2,
-        Flags::default(),
+        Flags {
+            wrap_x: map_parameters.wrap_x,
+            wrap_y: map_parameters.wrap_y,
+            ..Default::default()
+        },
         7,
         6,
     );
@@ -71,7 +75,11 @@ pub fn generate_terrain_type_for_fractal(
     continents_fractal.ridge_builder(
         &mut random_number_generator.rng,
         15,
-        &Flags::default(),
+        &Flags {
+            wrap_x: map_parameters.wrap_x,
+            wrap_y: map_parameters.wrap_y,
+            ..Default::default()
+        },
         1,
         2,
         orientation,
@@ -83,7 +91,11 @@ pub fn generate_terrain_type_for_fractal(
         map_parameters.map_size.width,
         map_parameters.map_size.height,
         2,
-        Flags::default(),
+        Flags {
+            wrap_x: map_parameters.wrap_x,
+            wrap_y: map_parameters.wrap_y,
+            ..Default::default()
+        },
         7,
         6,
     );
@@ -91,7 +103,11 @@ pub fn generate_terrain_type_for_fractal(
     mountains_fractal.ridge_builder(
         &mut random_number_generator.rng,
         10,
-        &Flags::default(),
+        &Flags {
+            wrap_x: map_parameters.wrap_x,
+            wrap_y: map_parameters.wrap_y,
+            ..Default::default()
+        },
         6,
         1,
         orientation,
@@ -103,7 +119,11 @@ pub fn generate_terrain_type_for_fractal(
         map_parameters.map_size.width,
         map_parameters.map_size.height,
         2,
-        Flags::default(),
+        Flags {
+            wrap_x: map_parameters.wrap_x,
+            wrap_y: map_parameters.wrap_y,
+            ..Default::default()
+        },
         7,
         6,
     );
@@ -111,7 +131,11 @@ pub fn generate_terrain_type_for_fractal(
     hills_fractal.ridge_builder(
         &mut random_number_generator.rng,
         15,
-        &Flags::default(),
+        &Flags {
+            wrap_x: map_parameters.wrap_x,
+            wrap_y: map_parameters.wrap_y,
+            ..Default::default()
+        },
         1,
         2,
         orientation,
@@ -241,7 +265,11 @@ pub fn generate_terrain_type_for_pangaea(
         map_parameters.map_size.width,
         map_parameters.map_size.height,
         2,
-        Flags::default(),
+        Flags {
+            wrap_x: map_parameters.wrap_x,
+            wrap_y: map_parameters.wrap_y,
+            ..Default::default()
+        },
         7,
         6,
     );
@@ -249,7 +277,11 @@ pub fn generate_terrain_type_for_pangaea(
     continents_fractal.ridge_builder(
         &mut random_number_generator.rng,
         15,
-        &Flags::default(),
+        &Flags {
+            wrap_x: map_parameters.wrap_x,
+            wrap_y: map_parameters.wrap_y,
+            ..Default::default()
+        },
         1,
         2,
         orientation,
@@ -261,7 +293,11 @@ pub fn generate_terrain_type_for_pangaea(
         map_parameters.map_size.width,
         map_parameters.map_size.height,
         2,
-        Flags::default(),
+        Flags {
+            wrap_x: map_parameters.wrap_x,
+            wrap_y: map_parameters.wrap_y,
+            ..Default::default()
+        },
         7,
         6,
     );
@@ -269,7 +305,11 @@ pub fn generate_terrain_type_for_pangaea(
     mountains_fractal.ridge_builder(
         &mut random_number_generator.rng,
         10,
-        &Flags::default(),
+        &Flags {
+            wrap_x: map_parameters.wrap_x,
+            wrap_y: map_parameters.wrap_y,
+            ..Default::default()
+        },
         6,
         1,
         orientation,
@@ -281,7 +321,11 @@ pub fn generate_terrain_type_for_pangaea(
         map_parameters.map_size.width,
         map_parameters.map_size.height,
         2,
-        Flags::default(),
+        Flags {
+            wrap_x: map_parameters.wrap_x,
+            wrap_y: map_parameters.wrap_y,
+            ..Default::default()
+        },
         7,
         6,
     );
@@ -289,7 +333,11 @@ pub fn generate_terrain_type_for_pangaea(
     hills_fractal.ridge_builder(
         &mut random_number_generator.rng,
         15,
-        &Flags::default(),
+        &Flags {
+            wrap_x: map_parameters.wrap_x,
+            wrap_y: map_parameters.wrap_y,
+            ..Default::default()
+        },
         1,
         2,
         orientation,

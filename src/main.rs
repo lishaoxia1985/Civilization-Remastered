@@ -25,6 +25,7 @@ use tile_map::{
 };
 
 use bevy::{
+    input::mouse::MouseWheel,
     math::DVec2,
     prelude::*,
     sprite::{MaterialMesh2dBundle, Mesh2dHandle},
@@ -82,7 +83,7 @@ fn main() {
                 },
                 hex_layout: HexLayout {
                     orientation: HexOrientation::Pointy,
-                    size: DVec2::new(8., 8.),
+                    size: DVec2::new(16., 16.),
                     origin: DVec2::new(0., 0.),
                 },
                 offset: Offset::Odd,
@@ -93,6 +94,10 @@ fn main() {
         })
         .add_plugins(ShapePlugin)
         .add_systems(OnEnter(AppState::Setup), (load_textures, camera_setup))
+        .add_systems(
+            Update,
+            (camera_movement, cursor_drag_system, zoom_camera_system),
+        )
         .add_systems(Update, check_textures.run_if(in_state(AppState::Setup)))
         .add_systems(OnEnter(AppState::Finished), setup)
         .add_systems(
@@ -228,7 +233,7 @@ fn show_tiles_system(
                     },
                 };
 
-                if index == 0 {
+                /* if index == 0 {
                     let first_point_position =
                         hex_position.corner_position(first_point, &map_parameters);
                     let second_point_position =
@@ -239,7 +244,13 @@ fn show_tiles_system(
                     let second_point_position =
                         hex_position.corner_position(second_point, &map_parameters);
                     path_builder.line_to(second_point_position.as_vec2());
-                }
+                } */
+                let first_point_position =
+                    hex_position.corner_position(first_point, &map_parameters);
+                let second_point_position =
+                    hex_position.corner_position(second_point, &map_parameters);
+                path_builder.move_to(first_point_position.as_vec2());
+                path_builder.line_to(second_point_position.as_vec2());
             });
 
         let path = path_builder.build();
@@ -276,7 +287,7 @@ fn show_tiles_system(
         let pixel_position = tile.hex_position.pixel_position(&map_parameters);
         commands
             .spawn(MaterialMesh2dBundle {
-                mesh: Mesh2dHandle(meshes.add(RegularPolygon::new(8.0, 6))),
+                mesh: Mesh2dHandle(meshes.add(RegularPolygon::new(16.0, 6))),
                 transform: Transform {
                     translation: Vec3::from((pixel_position.as_vec2(), 0.)),
                     rotation: sprite_rotation,
@@ -386,5 +397,84 @@ fn show_tiles_system(
                     });
                 }
             });
+    }
+}
+
+fn camera_movement(
+    time: Res<Time>,
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+    mut query: Query<&mut Transform, With<Camera>>,
+) {
+    for mut transform in query.iter_mut() {
+        let mut movement = Vec3::ZERO;
+
+        // 相机移动
+        if keyboard_input.pressed(KeyCode::KeyW) {
+            movement.y += 1.0;
+        }
+        if keyboard_input.pressed(KeyCode::KeyS) {
+            movement.y -= 1.0;
+        }
+        if keyboard_input.pressed(KeyCode::KeyA) {
+            movement.x -= 1.0;
+        }
+        if keyboard_input.pressed(KeyCode::KeyD) {
+            movement.x += 1.0;
+        }
+
+        // 处理相机移动
+        transform.translation += movement * time.delta_seconds() * 300.0;
+    }
+}
+
+fn cursor_drag_system(
+    windows: Query<&Window>,
+    mut cameras: Query<(&mut Transform, &Camera, &GlobalTransform)>,
+    mut last_cursor_pos: Local<Option<Vec2>>,
+    input: Res<ButtonInput<MouseButton>>,
+) {
+    let window = windows.single();
+    let (mut transform, camera, global_transform) = cameras.single_mut();
+    if input.pressed(MouseButton::Left) {
+        if let Some(world_position) = window
+            .cursor_position()
+            .and_then(|cursor| camera.viewport_to_world_2d(global_transform, cursor))
+        {
+            if let Some(last_pos) = *last_cursor_pos {
+                let delta = world_position - last_pos;
+                transform.translation -= delta.extend(0.);
+            } else {
+                *last_cursor_pos = Some(world_position);
+            }
+        };
+    } else {
+        *last_cursor_pos = None;
+    };
+}
+
+fn zoom_camera_system(
+    mut scroll_evr: EventReader<MouseWheel>,
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+    mut query: Query<&mut Transform, With<Camera>>,
+) {
+    let mut transform = query.single_mut();
+    for event in scroll_evr.read() {
+        let zoom_factor = 1.0 + event.y * 0.1; // 调整缩放因子，这里0.1为缩放增量因子
+        transform.scale *= zoom_factor;
+    }
+
+    // 处理缩放
+    if keyboard_input.pressed(KeyCode::KeyQ) {
+        transform.scale *= 1.01;
+    }
+    if keyboard_input.pressed(KeyCode::KeyE) {
+        transform.scale *= 0.99;
+    }
+
+    // 限制缩放范围
+    if transform.scale.max_element() > 2.0 {
+        transform.scale = Vec3::splat(2.0);
+    } else if transform.scale.min_element() < 0.1 {
+        transform.scale = Vec3::splat(0.1);
     }
 }

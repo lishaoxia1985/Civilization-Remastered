@@ -54,7 +54,11 @@ pub fn generate_terrain(
         map_parameters.map_size.width,
         map_parameters.map_size.height,
         3,
-        Flags::default(),
+        Flags {
+            wrap_x: map_parameters.wrap_x,
+            wrap_y: map_parameters.wrap_y,
+            ..Default::default()
+        },
         -1,
         -1,
     );
@@ -63,7 +67,11 @@ pub fn generate_terrain(
         map_parameters.map_size.width,
         map_parameters.map_size.height,
         3,
-        Flags::default(),
+        Flags {
+            wrap_x: map_parameters.wrap_x,
+            wrap_y: map_parameters.wrap_y,
+            ..Default::default()
+        },
         -1,
         -1,
     );
@@ -72,7 +80,11 @@ pub fn generate_terrain(
         map_parameters.map_size.width,
         map_parameters.map_size.height,
         3,
-        Flags::default(),
+        Flags {
+            wrap_x: map_parameters.wrap_x,
+            wrap_y: map_parameters.wrap_y,
+            ..Default::default()
+        },
         -1,
         -1,
     );

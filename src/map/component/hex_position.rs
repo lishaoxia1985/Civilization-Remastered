@@ -42,6 +42,8 @@ impl HexPosition {
         tile_storage: &TileStorage,
         map_parameters: &MapParameters,
     ) -> Vec<Entity> {
+        let width = map_parameters.map_size.width as i32;
+        let height = map_parameters.map_size.height as i32;
         Hex::from(self.0)
             .hexes_at_distance(distance as u32)
             .iter()
@@ -52,7 +54,15 @@ impl HexPosition {
                 );
 
                 // Check if the offset coordinate is inside the map
-                let [x, y] = offset_coordinate.to_array();
+                let [mut x, mut y] = offset_coordinate.to_array();
+
+                if map_parameters.wrap_x {
+                    x = (x % width + width) % width
+                };
+                if map_parameters.wrap_y {
+                    y = (y % height + height) % height
+                };
+
                 if x >= 0
                     && x < map_parameters.map_size.width as i32
                     && y >= 0
@@ -81,13 +91,23 @@ impl HexPosition {
         map_parameters: &MapParameters,
         direction: Direction,
     ) -> Option<Entity> {
+        let width = map_parameters.map_size.width as i32;
+        let height = map_parameters.map_size.height as i32;
         let orientation = map_parameters.hex_layout.orientation;
         let neighbor_offset_coordinate = Hex::from(self.0)
             .neighbor(orientation, direction)
             .to_offset_coordinate(map_parameters.offset, orientation);
 
         // Check if the offset coordinate is inside the map
-        let [x, y] = neighbor_offset_coordinate.to_array();
+        let [mut x, mut y] = neighbor_offset_coordinate.to_array();
+
+        if map_parameters.wrap_x {
+            x = (x % width + width) % width
+        };
+        if map_parameters.wrap_y {
+            y = (y % height + height) % height
+        };
+
         if !(x >= 0
             && x < map_parameters.map_size.width as i32
             && y >= 0
@@ -107,6 +127,8 @@ impl HexPosition {
         tile_storage: &TileStorage,
         map_parameters: &MapParameters,
     ) -> Vec<Entity> {
+        let width = map_parameters.map_size.width as i32;
+        let height = map_parameters.map_size.height as i32;
         Hex::from(self.0)
             .hexes_in_distance(distance as u32)
             .iter()
@@ -117,7 +139,15 @@ impl HexPosition {
                 );
 
                 // Check if the offset coordinate is inside the map
-                let [x, y] = offset_coordinate.to_array();
+                let [mut x, mut y] = offset_coordinate.to_array();
+
+                if map_parameters.wrap_x {
+                    x = (x % width + width) % width
+                };
+                if map_parameters.wrap_y {
+                    y = (y % height + height) % height
+                };
+
                 if x >= 0
                     && x < map_parameters.map_size.width as i32
                     && y >= 0
