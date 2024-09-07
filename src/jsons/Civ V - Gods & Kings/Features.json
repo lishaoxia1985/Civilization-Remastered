@@ -1,5 +1,5 @@
 [
-    // Terrain features
+	// Terrain features
 	{
 		"name": "Forest",
 		"type": "TerrainFeature",
@@ -9,20 +9,36 @@
 		"overrideStats": true,
 		"unbuildable": true,
 		"defenceBonus": 0.25,
-		"occursOnBase": ["Tundra","Plain","Grassland"],
-		"uniques": ["Rough terrain", "Vegetation",
-					"Provides a one-time Production bonus to the closest city when cut down",
-					"Blocks line-of-sight from tiles at same elevation",
-					"[25]% Chance to be destroyed by nukes",
-					"A Region is formed with at least [30]% [Forest] tiles, with priority [3]",
-					"A Region is formed with at least [35]% [Forest] tiles and [Jungle] tiles, with priority [3]",
-					"A Region can not contain more [Jungle] tiles than [Forest] tiles",
-					"Considered [Desirable] when determining start locations",
-					"Considered [Production] when determining start locations",
-					"Considered [Food] when determining start locations <in [Forest] Regions>",
-					"Considered [Food] when determining start locations <in [Tundra] Regions>",
-					"Every [39] tiles with this terrain will receive a major deposit of a strategic resource."],
-		"civilopediaText": [{"text":"A Camp can be built here without cutting it down", "link":"Improvement/Camp"}]
+		"occursOnType": [
+			"Flatland",
+			"Hill"
+		],
+		"occursOnBase": [
+			"Tundra",
+			"Plain",
+			"Grassland"
+		],
+		"uniques": [
+			"Rough terrain",
+			"Vegetation",
+			"Provides a one-time Production bonus to the closest city when cut down",
+			"Blocks line-of-sight from tiles at same elevation",
+			"[25]% Chance to be destroyed by nukes",
+			"A Region is formed with at least [30]% [Forest] tiles, with priority [3]",
+			"A Region is formed with at least [35]% [Forest] tiles and [Jungle] tiles, with priority [3]",
+			"A Region can not contain more [Jungle] tiles than [Forest] tiles",
+			"Considered [Desirable] when determining start locations",
+			"Considered [Production] when determining start locations",
+			"Considered [Food] when determining start locations <in [Forest] Regions>",
+			"Considered [Food] when determining start locations <in [Tundra] Regions>",
+			"Every [39] tiles with this terrain will receive a major deposit of a strategic resource."
+		],
+		"civilopediaText": [
+			{
+				"text": "A Camp can be built here without cutting it down",
+				"link": "Improvement/Camp"
+			}
+		]
 	},
 	{
 		"name": "Jungle",
@@ -32,9 +48,16 @@
 		"overrideStats": true,
 		"unbuildable": true,
 		"defenceBonus": 0.25,
-		"occursOnBase": ["Grassland"],
+		"occursOnType": [
+			"Flatland",
+			"Hill"
+		],
+		"occursOnBase": [
+			"Grassland"
+		],
 		"uniques": [
-			"Rough terrain", "Vegetation",
+			"Rough terrain",
+			"Vegetation",
 			"Blocks line-of-sight from tiles at same elevation",
 			"[25]% Chance to be destroyed by nukes",
 			"[-1] to Fertility for Map Generation",
@@ -53,21 +76,42 @@
 		"movementCost": 3,
 		"unbuildable": true,
 		"defenceBonus": -0.15,
-		"occursOnBase": ["Grassland"],
-		"uniques": ["Rare feature",
-					"[-2] to Fertility for Map Generation",
-					"Every [9] tiles with this terrain will receive a major deposit of a strategic resource."],
-		"civilopediaText": [{"text":"Only Polders can be built here", "link":"Improvement/Polder"}]
+		"occursOnType": [
+			"Flatland"
+		],
+		"occursOnBase": [
+			"Grassland"
+		],
+		"uniques": [
+			"Rare feature",
+			"[-2] to Fertility for Map Generation",
+			"Every [9] tiles with this terrain will receive a major deposit of a strategic resource."
+		],
+		"civilopediaText": [
+			{
+				"text": "Only Polders can be built here",
+				"link": "Improvement/Polder"
+			}
+		]
 	},
 	{
 		"name": "Fallout",
 		"type": "TerrainFeature",
 		"movementCost": 2,
 		"unbuildable": true,
-		"uniques": ["Nullifies all other stats this tile provides", "Doesn't generate naturally"],
+		"uniques": [
+			"Nullifies all other stats this tile provides",
+			"Doesn't generate naturally"
+		],
 		// For map editor only - the generator won't place it without code or enabling uniques
 		// If the map generator is ever updated to always take these into account, it should also take the "Doesn't generate naturally" unique into account
-		"occursOnBase": ["Grassland","Plain","Desert","Tundra","Snow"],
+		"occursOnBase": [
+			"Grassland",
+			"Plain",
+			"Desert",
+			"Tundra",
+			"Snow"
+		],
 		"defenceBonus": -0.15
 	},
 	{
@@ -78,12 +122,20 @@
 		"movementCost": 1,
 		"unbuildable": true,
 		"defenceBonus": -0.1,
-		"occursOnBase": ["Desert"],
-		"uniques": ["Fresh water", "Rare feature",
-					"Only [All Road] improvements may be built on this tile",
-					"Always Fertility [4] for Map Generation",
-					"Considered [Food] when determining start locations",
-					"Considered [Desirable] when determining start locations"]
+		"occursOnType": [
+			"Flatland"
+		],
+		"occursOnBase": [
+			"Desert"
+		],
+		"uniques": [
+			"Fresh water",
+			"Rare feature",
+			"Only [All Road] improvements may be built on this tile",
+			"Always Fertility [4] for Map Generation",
+			"Considered [Food] when determining start locations",
+			"Considered [Desirable] when determining start locations"
+		]
 	},
 	{
 		"name": "Floodplain",
@@ -91,20 +143,35 @@
 		"food": 2,
 		"movementCost": 1,
 		"defenceBonus": -0.1,
-		"occursOnBase": ["Desert"],
-		"uniques": ["Always Fertility [5] for Map Generation",
-					"Considered [Food] when determining start locations",
-					"Considered [Desirable] when determining start locations"]
+		"occursOnType": [
+			"Flatland"
+		],
+		"occursOnBase": [
+			"Desert"
+		],
+		"uniques": [
+			"Always Fertility [5] for Map Generation",
+			"Considered [Food] when determining start locations",
+			"Considered [Desirable] when determining start locations"
+		]
 	},
 	{
 		"name": "Ice",
 		"type": "TerrainFeature",
 		"impassable": true,
 		"overrideStats": true,
-		"occursOnBase": ["Ocean", "Coast"],
-		"uniques": ["Occurs at temperature between [-1] and [-0.8] and humidity between [0] and [1]",
-					"[-1] to Fertility for Map Generation",
-					"Considered [Undesirable] when determining start locations"]
+		"occursOnType": [
+			"Water"
+		],
+		"occursOnBase": [
+			"Ocean",
+			"Coast"
+		],
+		"uniques": [
+			"Occurs at temperature between [-1] and [-0.8] and humidity between [0] and [1]",
+			"[-1] to Fertility for Map Generation",
+			"Considered [Undesirable] when determining start locations"
+		]
 	},
 	{
 		"name": "Atoll",
@@ -112,7 +179,15 @@
 		"movementCost": 1,
 		"food": 1,
 		"production": 1,
-		"occursOnBase": ["Ocean", "Coast"],
-		"uniques": ["Rare feature"]
+		"occursOnType": [
+			"Water"
+		],
+		"occursOnBase": [
+			"Ocean",
+			"Coast"
+		],
+		"uniques": [
+			"Rare feature"
+		]
 	}
 ]

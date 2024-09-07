@@ -2,7 +2,7 @@ use bevy::{prelude::Component, utils::HashMap};
 
 use serde::{Deserialize, Serialize};
 
-use crate::ruleset::Ruleset;
+use crate::ruleset::{Ruleset, TerrainType};
 
 use super::{base_terrain::BaseTerrain, Name};
 
@@ -35,6 +35,8 @@ pub struct FeatureInfo {
     pub unbuildable: bool,
     #[serde(default)]
     pub override_stats: bool,
+    #[serde(default)]
+    pub occurs_on_type: Vec<TerrainType>,
     #[serde(default)]
     pub occurs_on_base: Vec<BaseTerrain>,
     #[serde(default)]

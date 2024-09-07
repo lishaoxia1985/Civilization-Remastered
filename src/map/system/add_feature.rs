@@ -90,6 +90,9 @@ pub fn add_features(
                     )
                 })
                 && ruleset.features["Ice"]
+                    .occurs_on_type
+                    .contains(&tile.terrain_type)
+                && ruleset.features["Ice"]
                     .occurs_on_base
                     .contains(&tile.base_terrain)
             {
@@ -131,6 +134,9 @@ pub fn add_features(
                     )
                 })
                 && ruleset.features["Floodplain"]
+                    .occurs_on_type
+                    .contains(&tile.terrain_type)
+                && ruleset.features["Floodplain"]
                     .occurs_on_base
                     .contains(&tile.base_terrain)
             {
@@ -140,8 +146,11 @@ pub fn add_features(
             /* **********the end of add Floodplain********** */
             /* **********start to add oasis********** */
             else if ruleset.features["Oasis"]
-                .occurs_on_base
-                .contains(&tile.base_terrain)
+                .occurs_on_type
+                .contains(&tile.terrain_type)
+                && ruleset.features["Oasis"]
+                    .occurs_on_base
+                    .contains(&tile.base_terrain)
                 && (oasis_count as f64 * 100. / num_land_plots as f64).ceil() as i32
                     <= oasis_max_percent
                 && random_number_generator.rng.gen_range(0..4) == 1
@@ -153,8 +162,11 @@ pub fn add_features(
             /* **********the end of add oasis********** */
             /* **********start to add march********** */
             if ruleset.features["Marsh"]
-                .occurs_on_base
-                .contains(&tile.base_terrain)
+                .occurs_on_type
+                .contains(&tile.terrain_type)
+                && ruleset.features["Marsh"]
+                    .occurs_on_base
+                    .contains(&tile.base_terrain)
                 && (marsh_count as f64 * 100. / num_land_plots as f64).ceil() as i32
                     <= marsh_max_percent
             {
@@ -181,8 +193,11 @@ pub fn add_features(
             /* **********the end of add march********** */
             /* **********start to add jungle********** */
             if ruleset.features["Jungle"]
-                .occurs_on_base
-                .contains(&tile.base_terrain)
+                .occurs_on_type
+                .contains(&tile.terrain_type)
+                && ruleset.features["Jungle"]
+                    .occurs_on_base
+                    .contains(&tile.base_terrain)
                 && (jungle_count as f64 * 100. / num_land_plots as f64).ceil() as i32
                     <= jungle_max_percent
                 && (latitude >= jungle_bottom as f64 / 100. && latitude <= jungle_top as f64 / 100.)
@@ -221,8 +236,11 @@ pub fn add_features(
             /* **********the end of add jungle********** */
             /* **********start to add forest********** */
             if ruleset.features["Forest"]
-                .occurs_on_base
-                .contains(&tile.base_terrain)
+                .occurs_on_type
+                .contains(&tile.terrain_type)
+                && ruleset.features["Forest"]
+                    .occurs_on_base
+                    .contains(&tile.base_terrain)
                 && (forest_count as f64 * 100. / num_land_plots as f64).ceil() as i32
                     <= forest_max_percent
             {
