@@ -5,10 +5,9 @@ use bevy::{
 use rand::Rng;
 
 use crate::{
-    map::TileQuery,
-    ruleset::{BaseTerrain, TerrainType},
+    map::{base_terrain::BaseTerrain, terrain_type::TerrainType, TileQuery, TileStorage},
     tile_map::MapParameters,
-    RandomNumberGenerator, TileStorage,
+    RandomNumberGenerator,
 };
 
 pub fn generate_coast_and_ocean(

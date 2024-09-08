@@ -1,5 +1,6 @@
 mod assets;
 
+mod grid;
 mod map;
 mod ruleset;
 mod tile_map;
@@ -11,18 +12,16 @@ use bevy_prototype_lyon::{
     draw::Stroke, entity::ShapeBundle, path::PathBuilder, plugin::ShapePlugin,
     prelude::GeometryBuilder,
 };
+use grid::hex::{Direction, HexLayout, HexOrientation, Offset};
 use map::{
     add_features, add_lakes, add_rivers, expand_coast, generate_coast_and_ocean,
     generate_empty_map, generate_lake, generate_natural_wonder, generate_terrain,
     generate_terrain_type_for_fractal, reassign_area_id, recalculate_areas, regenerate_coast,
-    RandomNumberGenerator, River, TileQuery,
+    terrain_type::TerrainType, RandomNumberGenerator, River, TileQuery, TileStorage,
 };
 use rand::{rngs::StdRng, SeedableRng};
 use ruleset::Ruleset;
-use tile_map::{
-    hex::{Direction, HexOrientation, Offset},
-    HexLayout, MapParameters, MapSize, TerrainType,
-};
+use tile_map::{MapParameters, MapSize};
 
 use bevy::{
     input::mouse::MouseWheel,
@@ -141,11 +140,6 @@ pub fn close_on_esc(
 
 fn camera_setup(mut commands: Commands) {
     commands.spawn(Camera2dBundle::default());
-}
-
-#[derive(Resource)]
-pub struct TileStorage {
-    tiles: Vec<Entity>,
 }
 
 fn show_tiles_system(

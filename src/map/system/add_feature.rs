@@ -1,16 +1,18 @@
 use bevy::{
-    prelude::{Commands, Query, Res, ResMut},
-    utils::HashSet,
+    prelude::{Commands, Entity, Query, Res, ResMut},
+    utils::HashMap,
 };
 use rand::Rng;
 
 use crate::{
-    ruleset::{BaseTerrain, Feature, Ruleset, TerrainType},
+    map::{
+        base_terrain::BaseTerrain, feature::Feature, terrain_type::TerrainType,
+        tile_query::TileQuery, TileStorage,
+    },
+    ruleset::Ruleset,
     tile_map::{MapParameters, Rainfall},
-    RandomNumberGenerator, River, TileStorage,
+    RandomNumberGenerator, River,
 };
-
-use crate::map::tile_query::TileQuery;
 
 pub fn add_features(
     mut commands: Commands,
@@ -46,10 +48,7 @@ pub fn add_features(
     let marsh_max_percent = marsh_percent;
     let oasis_max_percent = oasis_percent;
 
-    let mut added_ice_entities = HashSet::new();
-    let mut added_marsh_entities = HashSet::new();
-    let mut added_jungle_entities = HashSet::new();
-    let mut added_forest_entities = HashSet::new();
+    let mut placed_entities_and_features: HashMap<Entity, Feature> = HashMap::new();
 
     let mut forest_count = 0;
     let mut jungle_count = 0;
@@ -71,17 +70,14 @@ pub fn add_features(
             .entity_neighbors(&tile_storage, &map_parameters);
 
         /* **********start to add ice********** */
-        if tile
-            .hex_position
-            .is_impassable(&ruleset, &map_parameters, &tile_storage, &query_tile)
-        {
+        if tile.is_impassable(&ruleset) {
             continue;
         } else if tile.terrain_type == &TerrainType::Water {
             if !map_parameters
                 .edge_direction_array()
                 .iter()
                 .any(|&direction| {
-                    tile.hex_position.has_river(
+                    tile.has_river(
                         direction,
                         &tile_storage,
                         &map_parameters,
@@ -107,12 +103,14 @@ pub fn add_features(
                     }
                     let a = neighbor_entities
                         .iter()
-                        .filter(|entity| added_ice_entities.contains(*entity))
+                        .filter(|&entity| {
+                            placed_entities_and_features.get(entity) == Some(&Feature::Ice)
+                        })
                         .count();
                     score += 10. * a as f64;
                     if score > 130. {
                         entity_commands.insert(Feature::Ice);
-                        added_ice_entities.insert(entity);
+                        placed_entities_and_features.insert(entity, Feature::Ice);
                     }
                 }
             }
@@ -125,7 +123,7 @@ pub fn add_features(
                 .edge_direction_array()
                 .iter()
                 .any(|&direction| {
-                    tile.hex_position.has_river(
+                    tile.has_river(
                         direction,
                         &tile_storage,
                         &map_parameters,
@@ -174,7 +172,9 @@ pub fn add_features(
 
                 let a = neighbor_entities
                     .iter()
-                    .filter(|entity| added_marsh_entities.contains(*entity))
+                    .filter(|&entity| {
+                        placed_entities_and_features.get(entity) == Some(&Feature::Marsh)
+                    })
                     .count();
                 match a {
                     0 => (),
@@ -185,7 +185,7 @@ pub fn add_features(
                 };
                 if random_number_generator.rng.gen_range(0..300) <= score {
                     entity_commands.insert(Feature::Marsh);
-                    added_marsh_entities.insert(entity);
+                    placed_entities_and_features.insert(entity, Feature::Marsh);
                     marsh_count += 1;
                     continue;
                 }
@@ -206,7 +206,9 @@ pub fn add_features(
 
                 let a = neighbor_entities
                     .iter()
-                    .filter(|entity| added_jungle_entities.contains(*entity))
+                    .filter(|&entity| {
+                        placed_entities_and_features.get(entity) == Some(&Feature::Jungle)
+                    })
                     .count();
                 match a {
                     0 => (),
@@ -217,7 +219,7 @@ pub fn add_features(
                 };
                 if random_number_generator.rng.gen_range(0..300) <= score {
                     entity_commands.insert(Feature::Jungle);
-                    added_jungle_entities.insert(entity);
+                    placed_entities_and_features.insert(entity, Feature::Jungle);
 
                     if tile.terrain_type == &TerrainType::Hill
                         && (tile.base_terrain == &BaseTerrain::Grassland
@@ -248,7 +250,9 @@ pub fn add_features(
 
                 let a = neighbor_entities
                     .iter()
-                    .filter(|entity| added_forest_entities.contains(*entity))
+                    .filter(|&entity| {
+                        placed_entities_and_features.get(entity) == Some(&Feature::Forest)
+                    })
                     .count();
                 match a {
                     0 => (),
@@ -259,7 +263,7 @@ pub fn add_features(
                 };
                 if random_number_generator.rng.gen_range(0..300) <= score {
                     entity_commands.insert(Feature::Forest);
-                    added_forest_entities.insert(entity);
+                    placed_entities_and_features.insert(entity, Feature::Forest);
                     forest_count += 1;
                     continue;
                 }

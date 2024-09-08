@@ -1,10 +1,9 @@
 use bevy::prelude::{Commands, Res, ResMut};
 
 use crate::{
-    map::{AreaId, HexPosition},
-    ruleset::{BaseTerrain, TerrainType},
-    tile_map::{MapParameters, OffsetCoordinate},
-    TileStorage,
+    grid::hex::OffsetCoordinate,
+    map::{base_terrain::BaseTerrain, terrain_type::TerrainType, AreaId, HexPosition, TileStorage},
+    tile_map::MapParameters,
 };
 
 pub fn generate_empty_map(

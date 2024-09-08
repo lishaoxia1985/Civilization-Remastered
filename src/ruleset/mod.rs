@@ -1,11 +1,10 @@
 use bevy::{prelude::Resource, utils::HashMap};
 use serde::de::DeserializeOwned;
 use std::fs;
-use terrain::base_terrain::BaseTerrainInfo;
-use terrain::feature::FeatureInfo;
-use terrain::natural_wonder::NaturalWonderInfo;
-pub use terrain::terrain_type::TerrainType;
-use terrain::terrain_type::TerrainTypeInfo;
+use terrain::base_terrain_info::BaseTerrainInfo;
+use terrain::feature_info::FeatureInfo;
+use terrain::natural_wonder_info::NaturalWonderInfo;
+use terrain::terrain_type_info::TerrainTypeInfo;
 
 mod belief;
 mod building;
@@ -26,9 +25,6 @@ mod unit;
 mod unit_promotion;
 mod unit_type;
 
-pub use terrain::BaseTerrain;
-pub use terrain::Feature;
-pub use terrain::NaturalWonder;
 pub use unique::Unique;
 
 use crate::ruleset::{

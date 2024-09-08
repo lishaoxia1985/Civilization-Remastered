@@ -8,11 +8,11 @@ use bevy::{
 use crate::{
     map::{
         component::AreaId,
+        terrain_type::TerrainType,
         tile_query::{TileQuery, TileQueryItem},
+        TileStorage,
     },
-    ruleset::TerrainType,
     tile_map::MapParameters,
-    TileStorage,
 };
 
 pub fn bfs(

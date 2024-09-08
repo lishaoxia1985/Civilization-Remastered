@@ -6,10 +6,14 @@ use rand::prelude::SliceRandom;
 use rand::Rng;
 
 use crate::{
-    map::tile_query::TileQuery,
-    ruleset::{BaseTerrain, Feature, NaturalWonder, Ruleset, TerrainType, Unique},
-    tile_map::{Hex, MapParameters},
-    RandomNumberGenerator, River, TileStorage,
+    grid::hex::Hex,
+    map::{
+        base_terrain::BaseTerrain, feature::Feature, natural_wonder::NaturalWonder,
+        terrain_type::TerrainType, tile_query::TileQuery, TileStorage,
+    },
+    ruleset::{Ruleset, Unique},
+    tile_map::MapParameters,
+    RandomNumberGenerator, River,
 };
 
 pub fn generate_natural_wonder(
@@ -115,12 +119,8 @@ pub fn generate_natural_wonder(
                     }
                 }
                 _ => {
-                    if tile.hex_position.is_freshwater(
-                        &tile_storage,
-                        &map_parameters,
-                        &river,
-                        &query_tile,
-                    ) != possible_natural_wonder.is_fresh_water
+                    if tile.is_freshwater(&tile_storage, &map_parameters, &river, &query_tile)
+                        != possible_natural_wonder.is_fresh_water
                     {
                         continue;
                     };

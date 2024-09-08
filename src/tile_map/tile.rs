@@ -4,14 +4,16 @@ use bevy::{
 };
 
 use crate::{
-    ruleset::{BaseTerrain, Feature, NaturalWonder, Ruleset},
+    grid::hex::{Direction, Hex, HexLayout, HexOrientation},
+    map::{
+        base_terrain::BaseTerrain, feature::Feature, natural_wonder::NaturalWonder,
+        terrain_type::TerrainType,
+    },
+    ruleset::Ruleset,
     TileStorage,
 };
 
-use super::{
-    hex::{Direction, Hex, HexLayout},
-    HexOrientation, MapParameters, TerrainType, TileMap,
-};
+use super::{MapParameters, TileMap};
 
 #[derive(Component)]
 pub struct Tile {

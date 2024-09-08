@@ -5,10 +5,15 @@ use bevy::{
 use rand::Rng;
 
 use crate::{
-    map::tile_query::{TileQuery, TileQueryItem},
-    ruleset::{BaseTerrain, Feature, TerrainType},
+    map::{
+        base_terrain::BaseTerrain,
+        feature::Feature,
+        terrain_type::TerrainType,
+        tile_query::{TileQuery, TileQueryItem},
+        TileStorage,
+    },
     tile_map::MapParameters,
-    RandomNumberGenerator, River, TileStorage,
+    RandomNumberGenerator, River,
 };
 
 /// This function generates lakes on the map.
@@ -164,8 +169,7 @@ fn can_add_lake(
     if tile.terrain_type == &TerrainType::Water
         || tile.natural_wonder.is_some()
         || edge_direction_array.iter().any(|&direction| {
-            tile.hex_position
-                .has_river(direction, tile_storage, map_parameters, river, query_tile)
+            tile.has_river(direction, tile_storage, map_parameters, river, query_tile)
         })
     {
         return false;

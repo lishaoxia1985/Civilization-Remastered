@@ -3,10 +3,11 @@ use std::cmp::max;
 use bevy::prelude::{Commands, Query, Res, ResMut};
 
 use crate::{
-    map::tile_query::TileQuery,
-    ruleset::{BaseTerrain, TerrainType},
+    map::{
+        base_terrain::BaseTerrain, terrain_type::TerrainType, tile_query::TileQuery, TileStorage,
+    },
     tile_map::{CvFractal, Flags, MapParameters, Temperature},
-    RandomNumberGenerator, TileStorage,
+    RandomNumberGenerator,
 };
 
 pub fn generate_terrain(

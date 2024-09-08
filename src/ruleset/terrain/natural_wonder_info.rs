@@ -1,9 +1,8 @@
-use bevy::prelude::Component;
 use serde::{Deserialize, Serialize};
 
-use crate::ruleset::Ruleset;
+use crate::map::{base_terrain::BaseTerrain, terrain_type::TerrainType};
 
-use super::{base_terrain::BaseTerrain, terrain_type::TerrainType, Name};
+use super::Name;
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -57,22 +56,5 @@ impl Name for NaturalWonderInfo {
 impl NaturalWonderInfo {
     pub fn has_unique(&self, unique: &str) -> bool {
         self.uniques.iter().any(|x| x == unique)
-    }
-}
-
-#[derive(Component)]
-pub enum NaturalWonder {
-    NaturalWonder(String),
-}
-
-impl NaturalWonder {
-    pub fn name(&self) -> &str {
-        match self {
-            NaturalWonder::NaturalWonder(name) => name,
-        }
-    }
-
-    pub fn impassable(&self, ruleset: &Ruleset) -> bool {
-        ruleset.natural_wonders[self.name()].impassable
     }
 }

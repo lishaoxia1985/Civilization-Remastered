@@ -1,4 +1,4 @@
-use bevy::{prelude::Component, utils::HashMap};
+use bevy::utils::HashMap;
 
 use serde::{Deserialize, Serialize};
 
@@ -41,32 +41,5 @@ impl Name for BaseTerrainInfo {
 impl BaseTerrainInfo {
     pub fn has_unique(&self, unique: &str) -> bool {
         self.uniques.iter().any(|x| x == unique)
-    }
-}
-
-#[derive(PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Debug, Component)]
-pub enum BaseTerrain {
-    Ocean,
-    Lake,
-    Coast,
-    Grassland,
-    Desert,
-    Plain,
-    Tundra,
-    Snow,
-}
-
-impl BaseTerrain {
-    pub fn name(&self) -> &str {
-        match self {
-            BaseTerrain::Ocean => "Ocean",
-            BaseTerrain::Lake => "Lake",
-            BaseTerrain::Coast => "Coast",
-            BaseTerrain::Grassland => "Grassland",
-            BaseTerrain::Desert => "Desert",
-            BaseTerrain::Plain => "Plain",
-            BaseTerrain::Tundra => "Tundra",
-            BaseTerrain::Snow => "Snow",
-        }
     }
 }

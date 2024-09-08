@@ -2,7 +2,9 @@ use bevy::utils::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-use super::{terrain::feature::Feature, BaseTerrain, Name, TerrainType};
+use crate::map::{base_terrain::BaseTerrain, feature::Feature, terrain_type::TerrainType};
+
+use super::Name;
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

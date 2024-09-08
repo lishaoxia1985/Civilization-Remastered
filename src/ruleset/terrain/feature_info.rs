@@ -1,10 +1,10 @@
-use bevy::{prelude::Component, utils::HashMap};
+use bevy::utils::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::ruleset::{Ruleset, TerrainType};
+use crate::map::{base_terrain::BaseTerrain, terrain_type::TerrainType};
 
-use super::{base_terrain::BaseTerrain, Name};
+use super::Name;
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -53,36 +53,5 @@ impl Name for FeatureInfo {
 impl FeatureInfo {
     pub fn has_unique(&self, unique: &str) -> bool {
         self.uniques.iter().any(|x| x == unique)
-    }
-}
-
-#[derive(PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Debug, Component)]
-pub enum Feature {
-    Forest,
-    Jungle,
-    Marsh,
-    Floodplain,
-    Oasis,
-    Ice,
-    Atoll,
-    Fallout,
-}
-
-impl Feature {
-    pub fn name(&self) -> &str {
-        match self {
-            Feature::Forest => "Forest",
-            Feature::Jungle => "Jungle",
-            Feature::Marsh => "Marsh",
-            Feature::Floodplain => "Floodplain",
-            Feature::Oasis => "Oasis",
-            Feature::Ice => "Ice",
-            Feature::Atoll => "Atoll",
-            Feature::Fallout => "Fallout",
-        }
-    }
-
-    pub fn impassable(&self, ruleset: &Ruleset) -> bool {
-        ruleset.features[self.name()].impassable
     }
 }

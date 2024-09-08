@@ -5,9 +5,9 @@ use bevy::{
 use rand::Rng;
 
 use crate::{
-    ruleset::TerrainType,
+    map::{terrain_type::TerrainType, TileStorage},
     tile_map::{CvFractal, Flags, MapParameters, SeaLevel, WorldAge},
-    RandomNumberGenerator, TileStorage,
+    RandomNumberGenerator,
 };
 
 pub fn generate_terrain_type_for_fractal(

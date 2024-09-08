@@ -2,10 +2,13 @@ use bevy::prelude::{Entity, Query, Res, ResMut};
 use rand::{rngs::StdRng, Rng};
 
 use crate::{
-    map::{AreaId, TileQuery},
-    ruleset::{BaseTerrain, TerrainType},
-    tile_map::{Direction, HexOrientation, MapParameters},
-    RandomNumberGenerator, River, TileStorage,
+    grid::hex::{Direction, HexOrientation},
+    map::{
+        base_terrain::BaseTerrain, terrain_type::TerrainType, AreaId, TileQuery, TileQueryItem,
+        TileStorage,
+    },
+    tile_map::MapParameters,
+    RandomNumberGenerator, River,
 };
 
 pub fn add_rivers(
@@ -20,32 +23,26 @@ pub fn add_rivers(
     const plots_per_river_edge: i32 = 12;
 
     fn pass_conditions(
-        entity: Entity,
+        tile: &TileQueryItem,
         tile_storage: &TileStorage,
         random_number_generator: &mut StdRng,
         map_parameters: &MapParameters,
         river: &River,
         query_tile: &Query<TileQuery>,
     ) -> [bool; 4] {
-        let current_tile = query_tile.get(entity).unwrap();
-
         let num_tiles = query_tile
             .iter()
-            .filter(|tile_in_area| tile_in_area.area_id.0 == current_tile.area_id.0)
+            .filter(|tile_in_area| tile_in_area.area_id.0 == tile.area_id.0)
             .count() as i32;
 
-        let is_coastal_land =
-            current_tile
-                .hex_position
-                .is_coastal_land(tile_storage, map_parameters, query_tile);
+        let is_coastal_land = tile.is_coastal_land(tile_storage, map_parameters, query_tile);
 
-        let num_river_edges = num_river_edges(current_tile.area_id, &river, query_tile);
+        let num_river_edges = num_river_edges(tile.area_id, &river, query_tile);
         [
-            current_tile.terrain_type == &TerrainType::Hill
-                || current_tile.terrain_type == &TerrainType::Mountain,
+            tile.terrain_type == &TerrainType::Hill || tile.terrain_type == &TerrainType::Mountain,
             is_coastal_land && random_number_generator.gen_range(0..8) == 0,
-            (current_tile.terrain_type == &TerrainType::Hill
-                || current_tile.terrain_type == &TerrainType::Mountain)
+            (tile.terrain_type == &TerrainType::Hill
+                || tile.terrain_type == &TerrainType::Mountain)
                 && (num_river_edges < num_tiles / plots_per_river_edge + 1),
             num_river_edges < num_tiles / plots_per_river_edge + 1,
         ]
@@ -77,15 +74,13 @@ pub fn add_rivers(
     // 1. It should be not a water tile
     // 2. It should be not a natural wonder
     // 3. It should be not a tile which is neighbor to a natural wonder
-    // 4. Its edge directions in [0..3] should be not water because the river edge uses (tile_index, river_flow_direction) for storage.
-    //    tile_index is current tile index and river_flow_direction should be one of the edge directions in [0..3].
-    let candidate_start_hex_position_indices: Vec<_> = tile_storage
-        .tiles
+    // 4. Its edge directions in [0..3] should be not water because the river edge uses (tile_entity, river_flow_direction) for storage.
+    //    tile_entity is current tile index and river_flow_direction should be one of the edge directions in [0..3].
+    let candidate_start_hex_position_indices: Vec<_> = query_tile
         .iter()
-        .filter_map(|&entity| {
+        .sort_unstable::<Entity>()
+        .filter_map(|tile| {
             {
-                let tile = query_tile.get(entity).unwrap();
-
                 if tile.natural_wonder.is_none() && tile.terrain_type != &TerrainType::Water {
                     let entity_neighbors = tile
                         .hex_position
@@ -140,7 +135,7 @@ pub fn add_rivers(
                         }
                     }) */
             }
-            .then_some(entity)
+            .then_some(tile)
         })
         .collect();
     let mut river_id = 0;
@@ -155,11 +150,9 @@ pub fn add_rivers(
             )
         };
 
-        for &entity in candidate_start_hex_position_indices.iter() {
-            let tile = query_tile.get(entity).unwrap();
-
+        for tile in candidate_start_hex_position_indices.iter() {
             if pass_conditions(
-                entity,
+                tile,
                 &tile_storage,
                 &mut random_number_generator.rng,
                 &map_parameters,
@@ -173,12 +166,7 @@ pub fn add_rivers(
                     .any(|&entity| {
                         let tile = query_tile.get(entity).unwrap();
 
-                        tile.hex_position.is_freshwater(
-                            &tile_storage,
-                            &map_parameters,
-                            &river,
-                            &query_tile,
-                        )
+                        tile.is_freshwater(&tile_storage, &map_parameters, &river, &query_tile)
                     })
                 && !tile
                     .hex_position
@@ -191,7 +179,7 @@ pub fn add_rivers(
                 do_river(
                     &mut river,
                     &mut random_number_generator,
-                    entity,
+                    tile.entity,
                     Direction::None,
                     Direction::None,
                     river_id,
@@ -208,7 +196,7 @@ pub fn add_rivers(
 fn do_river(
     river: &mut River,
     random_number_generator: &mut RandomNumberGenerator,
-    start_plot_index: Entity,
+    start_plot_entity: Entity,
     this_flow_direction: Direction,
     original_flow_direction: Direction,
     river_id: i32,
@@ -220,7 +208,7 @@ fn do_river(
     if river.0.values().any(|river| {
         river
             .iter()
-            .any(|(tile_index, _)| *tile_index == start_plot_index)
+            .any(|(tile_entity, _)| *tile_entity == start_plot_entity)
     }) && original_flow_direction == Direction::None
     {
         return;
@@ -228,18 +216,18 @@ fn do_river(
 
     let mut original_flow_direction = original_flow_direction;
 
-    let mut river_plot_index;
+    let mut river_plot_entity;
     let mut best_flow_direction = Direction::None;
     match map_parameters.hex_layout.orientation {
         HexOrientation::Pointy => match this_flow_direction {
             Direction::North => {
-                river_plot_index = start_plot_index;
+                river_plot_entity = start_plot_entity;
                 river
                     .0
                     .entry(river_id)
                     .or_default()
-                    .push((river_plot_index, this_flow_direction));
-                let river_plot = query_tile.get(river_plot_index).unwrap();
+                    .push((river_plot_entity, this_flow_direction));
+                let river_plot = query_tile.get(river_plot_entity).unwrap();
                 if let Some(neighbor_entity) = river_plot.hex_position.entity_neighbor(
                     &tile_storage,
                     map_parameters,
@@ -247,14 +235,14 @@ fn do_river(
                 ) {
                     let neighbor_tile = query_tile.get(neighbor_entity).unwrap();
                     if neighbor_tile.terrain_type == &TerrainType::Water
-                        || neighbor_tile.hex_position.has_river(
+                        || neighbor_tile.has_river(
                             Direction::SouthEast,
                             tile_storage,
                             map_parameters,
                             &river,
                             query_tile,
                         )
-                        || neighbor_tile.hex_position.has_river(
+                        || neighbor_tile.has_river(
                             Direction::SouthWest,
                             tile_storage,
                             map_parameters,
@@ -264,20 +252,20 @@ fn do_river(
                     {
                         return;
                     } else {
-                        river_plot_index = neighbor_entity;
+                        river_plot_entity = neighbor_entity;
                     }
                 } else {
                     return;
                 }
             }
             Direction::NorthEast => {
-                river_plot_index = start_plot_index;
+                river_plot_entity = start_plot_entity;
                 river
                     .0
                     .entry(river_id)
                     .or_default()
-                    .push((river_plot_index, this_flow_direction));
-                let river_plot = query_tile.get(river_plot_index).unwrap();
+                    .push((river_plot_entity, this_flow_direction));
+                let river_plot = query_tile.get(river_plot_entity).unwrap();
                 if let Some(neighbor_entity) = river_plot.hex_position.entity_neighbor(
                     &tile_storage,
                     map_parameters,
@@ -285,14 +273,14 @@ fn do_river(
                 ) {
                     let neighbor_tile = query_tile.get(neighbor_entity).unwrap();
                     if neighbor_tile.terrain_type == &TerrainType::Water
-                        || river_plot.hex_position.has_river(
+                        || river_plot.has_river(
                             Direction::East,
                             tile_storage,
                             map_parameters,
                             &river,
                             query_tile,
                         )
-                        || neighbor_tile.hex_position.has_river(
+                        || neighbor_tile.has_river(
                             Direction::SouthWest,
                             tile_storage,
                             map_parameters,
@@ -308,13 +296,13 @@ fn do_river(
             }
             Direction::East => unreachable!(),
             Direction::SouthEast => {
-                let start_tile = query_tile.get(start_plot_index).unwrap();
+                let start_tile = query_tile.get(start_plot_entity).unwrap();
                 if let Some(neighbor_entity) = start_tile.hex_position.entity_neighbor(
                     &tile_storage,
                     map_parameters,
                     Direction::East,
                 ) {
-                    river_plot_index = neighbor_entity
+                    river_plot_entity = neighbor_entity
                 } else {
                     return;
                 };
@@ -322,8 +310,8 @@ fn do_river(
                     .0
                     .entry(river_id)
                     .or_default()
-                    .push((river_plot_index, this_flow_direction));
-                let river_plot = query_tile.get(river_plot_index).unwrap();
+                    .push((river_plot_entity, this_flow_direction));
+                let river_plot = query_tile.get(river_plot_entity).unwrap();
                 if let Some(neighbor_entity) = river_plot.hex_position.entity_neighbor(
                     &tile_storage,
                     map_parameters,
@@ -331,7 +319,7 @@ fn do_river(
                 ) {
                     let neighbor_tile = query_tile.get(neighbor_entity).unwrap();
                     if neighbor_tile.terrain_type == &TerrainType::Water
-                        || river_plot.hex_position.has_river(
+                        || river_plot.has_river(
                             Direction::SouthEast,
                             tile_storage,
                             map_parameters,
@@ -351,7 +339,7 @@ fn do_river(
                 ) {
                     let neighbor_tile2 = query_tile.get(neighbor_entity2).unwrap();
                     if neighbor_tile2.terrain_type == &TerrainType::Water
-                        || neighbor_tile2.hex_position.has_river(
+                        || neighbor_tile2.has_river(
                             Direction::East,
                             tile_storage,
                             map_parameters,
@@ -366,13 +354,13 @@ fn do_river(
                 }
             }
             Direction::South => {
-                let start_tile = query_tile.get(start_plot_index).unwrap();
+                let start_tile = query_tile.get(start_plot_entity).unwrap();
                 if let Some(neighbor_entity) = start_tile.hex_position.entity_neighbor(
                     &tile_storage,
                     map_parameters,
                     Direction::SouthWest,
                 ) {
-                    river_plot_index = neighbor_entity
+                    river_plot_entity = neighbor_entity
                 } else {
                     return;
                 };
@@ -380,8 +368,8 @@ fn do_river(
                     .0
                     .entry(river_id)
                     .or_default()
-                    .push((river_plot_index, this_flow_direction));
-                let river_plot = query_tile.get(river_plot_index).unwrap();
+                    .push((river_plot_entity, this_flow_direction));
+                let river_plot = query_tile.get(river_plot_entity).unwrap();
                 if let Some(neighbor_entity) = river_plot.hex_position.entity_neighbor(
                     &tile_storage,
                     map_parameters,
@@ -389,7 +377,7 @@ fn do_river(
                 ) {
                     let neighbor_tile = query_tile.get(neighbor_entity).unwrap();
                     if neighbor_tile.terrain_type == &TerrainType::Water
-                        || river_plot.hex_position.has_river(
+                        || river_plot.has_river(
                             Direction::SouthEast,
                             tile_storage,
                             map_parameters,
@@ -408,7 +396,7 @@ fn do_river(
                     Direction::East,
                 ) {
                     let neighbor_tile2 = query_tile.get(neighbor_entity2).unwrap();
-                    if neighbor_tile2.hex_position.has_river(
+                    if neighbor_tile2.has_river(
                         Direction::SouthWest,
                         tile_storage,
                         map_parameters,
@@ -422,13 +410,13 @@ fn do_river(
                 }
             }
             Direction::SouthWest => {
-                river_plot_index = start_plot_index;
+                river_plot_entity = start_plot_entity;
                 river
                     .0
                     .entry(river_id)
                     .or_default()
-                    .push((river_plot_index, this_flow_direction));
-                let river_plot = query_tile.get(river_plot_index).unwrap();
+                    .push((river_plot_entity, this_flow_direction));
+                let river_plot = query_tile.get(river_plot_entity).unwrap();
                 if let Some(neighbor_entity) = river_plot.hex_position.entity_neighbor(
                     &tile_storage,
                     map_parameters,
@@ -436,14 +424,14 @@ fn do_river(
                 ) {
                     let neighbor_tile = query_tile.get(neighbor_entity).unwrap();
                     if neighbor_tile.terrain_type == &TerrainType::Water
-                        || neighbor_tile.hex_position.has_river(
+                        || neighbor_tile.has_river(
                             Direction::East,
                             tile_storage,
                             map_parameters,
                             &river,
                             query_tile,
                         )
-                        || river_plot.hex_position.has_river(
+                        || river_plot.has_river(
                             Direction::SouthWest,
                             tile_storage,
                             map_parameters,
@@ -459,13 +447,13 @@ fn do_river(
             }
             Direction::West => unreachable!(),
             Direction::NorthWest => {
-                river_plot_index = start_plot_index;
+                river_plot_entity = start_plot_entity;
                 river
                     .0
                     .entry(river_id)
                     .or_default()
-                    .push((river_plot_index, this_flow_direction));
-                let river_plot = query_tile.get(river_plot_index).unwrap();
+                    .push((river_plot_entity, this_flow_direction));
+                let river_plot = query_tile.get(river_plot_entity).unwrap();
                 if let Some(neighbor_entity) = river_plot.hex_position.entity_neighbor(
                     &tile_storage,
                     map_parameters,
@@ -473,14 +461,14 @@ fn do_river(
                 ) {
                     let neighbor_tile = query_tile.get(neighbor_entity).unwrap();
                     if neighbor_tile.terrain_type == &TerrainType::Water
-                        || neighbor_tile.hex_position.has_river(
+                        || neighbor_tile.has_river(
                             Direction::East,
                             tile_storage,
                             map_parameters,
                             &river,
                             query_tile,
                         )
-                        || neighbor_tile.hex_position.has_river(
+                        || neighbor_tile.has_river(
                             Direction::SouthEast,
                             tile_storage,
                             map_parameters,
@@ -490,26 +478,26 @@ fn do_river(
                     {
                         return;
                     } else {
-                        river_plot_index = neighbor_entity;
+                        river_plot_entity = neighbor_entity;
                     }
                 } else {
                     return;
                 }
             }
             Direction::None => {
-                river_plot_index = start_plot_index;
+                river_plot_entity = start_plot_entity;
             }
         },
         HexOrientation::Flat => match this_flow_direction {
             Direction::North => unreachable!(),
             Direction::NorthEast => {
-                river_plot_index = start_plot_index;
+                river_plot_entity = start_plot_entity;
                 river
                     .0
                     .entry(river_id)
                     .or_default()
-                    .push((river_plot_index, this_flow_direction));
-                let river_plot = query_tile.get(river_plot_index).unwrap();
+                    .push((river_plot_entity, this_flow_direction));
+                let river_plot = query_tile.get(river_plot_entity).unwrap();
                 if let Some(neighbor_entity) = river_plot.hex_position.entity_neighbor(
                     &tile_storage,
                     map_parameters,
@@ -517,14 +505,14 @@ fn do_river(
                 ) {
                     let neighbor_tile = query_tile.get(neighbor_entity).unwrap();
                     if neighbor_tile.terrain_type == &TerrainType::Water
-                        || river_plot.hex_position.has_river(
+                        || river_plot.has_river(
                             Direction::NorthEast,
                             tile_storage,
                             map_parameters,
                             &river,
                             query_tile,
                         )
-                        || neighbor_tile.hex_position.has_river(
+                        || neighbor_tile.has_river(
                             Direction::South,
                             tile_storage,
                             map_parameters,
@@ -539,13 +527,13 @@ fn do_river(
                 }
             }
             Direction::East => {
-                let start_tile = query_tile.get(start_plot_index).unwrap();
+                let start_tile = query_tile.get(start_plot_entity).unwrap();
                 if let Some(neighbor_entity) = start_tile.hex_position.entity_neighbor(
                     &tile_storage,
                     map_parameters,
                     Direction::NorthEast,
                 ) {
-                    river_plot_index = neighbor_entity
+                    river_plot_entity = neighbor_entity
                 } else {
                     return;
                 };
@@ -553,8 +541,8 @@ fn do_river(
                     .0
                     .entry(river_id)
                     .or_default()
-                    .push((river_plot_index, this_flow_direction));
-                let river_plot = query_tile.get(river_plot_index).unwrap();
+                    .push((river_plot_entity, this_flow_direction));
+                let river_plot = query_tile.get(river_plot_entity).unwrap();
                 if let Some(neighbor_entity) = river_plot.hex_position.entity_neighbor(
                     &tile_storage,
                     map_parameters,
@@ -562,7 +550,7 @@ fn do_river(
                 ) {
                     let neighbor_tile = query_tile.get(neighbor_entity).unwrap();
                     if neighbor_tile.terrain_type == &TerrainType::Water
-                        || river_plot.hex_position.has_river(
+                        || river_plot.has_river(
                             Direction::SouthEast,
                             tile_storage,
                             map_parameters,
@@ -582,7 +570,7 @@ fn do_river(
                 ) {
                     let neighbor_tile2 = query_tile.get(neighbor_entity2).unwrap();
                     if neighbor_tile2.terrain_type == &TerrainType::Water
-                        || neighbor_tile2.hex_position.has_river(
+                        || neighbor_tile2.has_river(
                             Direction::NorthEast,
                             tile_storage,
                             map_parameters,
@@ -597,13 +585,13 @@ fn do_river(
                 }
             }
             Direction::SouthEast => {
-                let start_tile = query_tile.get(start_plot_index).unwrap();
+                let start_tile = query_tile.get(start_plot_entity).unwrap();
                 if let Some(neighbor_entity) = start_tile.hex_position.entity_neighbor(
                     &tile_storage,
                     map_parameters,
                     Direction::South,
                 ) {
-                    river_plot_index = neighbor_entity
+                    river_plot_entity = neighbor_entity
                 } else {
                     return;
                 };
@@ -611,8 +599,8 @@ fn do_river(
                     .0
                     .entry(river_id)
                     .or_default()
-                    .push((river_plot_index, this_flow_direction));
-                let river_plot = query_tile.get(river_plot_index).unwrap();
+                    .push((river_plot_entity, this_flow_direction));
+                let river_plot = query_tile.get(river_plot_entity).unwrap();
                 if let Some(neighbor_entity) = river_plot.hex_position.entity_neighbor(
                     &tile_storage,
                     map_parameters,
@@ -620,7 +608,7 @@ fn do_river(
                 ) {
                     let neighbor_tile = query_tile.get(neighbor_entity).unwrap();
                     if neighbor_tile.terrain_type == &TerrainType::Water
-                        || river_plot.hex_position.has_river(
+                        || river_plot.has_river(
                             Direction::SouthEast,
                             tile_storage,
                             map_parameters,
@@ -640,7 +628,7 @@ fn do_river(
                 ) {
                     let neighbor_tile2 = query_tile.get(neighbor_entity2).unwrap();
                     if neighbor_tile2.terrain_type == &TerrainType::Water
-                        || neighbor_tile2.hex_position.has_river(
+                        || neighbor_tile2.has_river(
                             Direction::South,
                             tile_storage,
                             map_parameters,
@@ -656,13 +644,13 @@ fn do_river(
             }
             Direction::South => unreachable!(),
             Direction::SouthWest => {
-                river_plot_index = start_plot_index;
+                river_plot_entity = start_plot_entity;
                 river
                     .0
                     .entry(river_id)
                     .or_default()
-                    .push((river_plot_index, this_flow_direction));
-                let river_plot = query_tile.get(river_plot_index).unwrap();
+                    .push((river_plot_entity, this_flow_direction));
+                let river_plot = query_tile.get(river_plot_entity).unwrap();
                 if let Some(neighbor_entity) = river_plot.hex_position.entity_neighbor(
                     &tile_storage,
                     map_parameters,
@@ -670,14 +658,14 @@ fn do_river(
                 ) {
                     let neigbor_tile = query_tile.get(neighbor_entity).unwrap();
                     if neigbor_tile.terrain_type == &TerrainType::Water
-                        || river_plot.hex_position.has_river(
+                        || river_plot.has_river(
                             Direction::South,
                             tile_storage,
                             map_parameters,
                             &river,
                             query_tile,
                         )
-                        || neigbor_tile.hex_position.has_river(
+                        || neigbor_tile.has_river(
                             Direction::NorthEast,
                             tile_storage,
                             map_parameters,
@@ -692,13 +680,13 @@ fn do_river(
                 }
             }
             Direction::West => {
-                river_plot_index = start_plot_index;
+                river_plot_entity = start_plot_entity;
                 river
                     .0
                     .entry(river_id)
                     .or_default()
-                    .push((river_plot_index, this_flow_direction));
-                let river_plot = query_tile.get(river_plot_index).unwrap();
+                    .push((river_plot_entity, this_flow_direction));
+                let river_plot = query_tile.get(river_plot_entity).unwrap();
                 if let Some(neighbor_entity) = river_plot.hex_position.entity_neighbor(
                     &tile_storage,
                     map_parameters,
@@ -706,14 +694,14 @@ fn do_river(
                 ) {
                     let neighbor_tile = query_tile.get(neighbor_entity).unwrap();
                     if neighbor_tile.terrain_type == &TerrainType::Water
-                        || neighbor_tile.hex_position.has_river(
+                        || neighbor_tile.has_river(
                             Direction::NorthEast,
                             tile_storage,
                             map_parameters,
                             &river,
                             query_tile,
                         )
-                        || neighbor_tile.hex_position.has_river(
+                        || neighbor_tile.has_river(
                             Direction::SouthEast,
                             tile_storage,
                             map_parameters,
@@ -723,20 +711,20 @@ fn do_river(
                     {
                         return;
                     } else {
-                        river_plot_index = neighbor_entity;
+                        river_plot_entity = neighbor_entity;
                     }
                 } else {
                     return;
                 }
             }
             Direction::NorthWest => {
-                river_plot_index = start_plot_index;
+                river_plot_entity = start_plot_entity;
                 river
                     .0
                     .entry(river_id)
                     .or_default()
-                    .push((river_plot_index, this_flow_direction));
-                let river_plot = query_tile.get(river_plot_index).unwrap();
+                    .push((river_plot_entity, this_flow_direction));
+                let river_plot = query_tile.get(river_plot_entity).unwrap();
                 if let Some(neighbor_entity) = river_plot.hex_position.entity_neighbor(
                     &tile_storage,
                     map_parameters,
@@ -744,14 +732,14 @@ fn do_river(
                 ) {
                     let neighbor_tile = query_tile.get(neighbor_entity).unwrap();
                     if neighbor_tile.terrain_type == &TerrainType::Water
-                        || neighbor_tile.hex_position.has_river(
+                        || neighbor_tile.has_river(
                             Direction::South,
                             tile_storage,
                             map_parameters,
                             &river,
                             query_tile,
                         )
-                        || neighbor_tile.hex_position.has_river(
+                        || neighbor_tile.has_river(
                             Direction::SouthEast,
                             tile_storage,
                             map_parameters,
@@ -761,19 +749,19 @@ fn do_river(
                     {
                         return;
                     } else {
-                        river_plot_index = neighbor_entity;
+                        river_plot_entity = neighbor_entity;
                     }
                 } else {
                     return;
                 }
             }
             Direction::None => {
-                river_plot_index = start_plot_index;
+                river_plot_entity = start_plot_entity;
             }
         },
     }
 
-    let river_plot = query_tile.get(river_plot_index).unwrap();
+    let river_plot = query_tile.get(river_plot_entity).unwrap();
 
     if river_plot.terrain_type == &TerrainType::Water {
         return;
@@ -805,24 +793,24 @@ fn do_river(
         map_parameters: &MapParameters,
     ) -> [Direction; 2] {
         let direction_array = map_parameters.corner_direction_array();
-        let flow_direction_index = map_parameters
+        let flow_direction_entity = map_parameters
             .hex_layout
             .orientation
             .corner_index(flow_direction);
         [
-            direction_array[(flow_direction_index + 1) % 6], // turn_right_flow_direction
-            direction_array[(flow_direction_index + 5) % 6], // turn_left_flow_direction
+            direction_array[(flow_direction_entity + 1) % 6], // turn_right_flow_direction
+            direction_array[(flow_direction_entity + 5) % 6], // turn_left_flow_direction
         ]
     }
 
     fn river_value_at_plot(
-        plot_index: Entity,
+        plot_entity: Entity,
         random_number_generator: &mut RandomNumberGenerator,
         tile_storage: &TileStorage,
         map_parameters: &MapParameters,
         query_tile: &Query<TileQuery>,
     ) -> i32 {
-        let tile = query_tile.get(plot_index).unwrap();
+        let tile = query_tile.get(plot_entity).unwrap();
 
         fn plot_elevation(entity: Entity, query_tile: &Query<TileQuery>) -> i32 {
             let tile = query_tile.get(entity).unwrap();
@@ -847,16 +835,7 @@ fn do_river(
             return -1;
         }
 
-        /* if tile.is_natural_wonder()
-            || tile
-                .tile_neighbors(tile_map, map_parameters)
-                .iter()
-                .any(|neighbor_tile| neighbor_tile.is_natural_wonder())
-        {
-            return -1;
-        } */
-
-        let mut sum = plot_elevation(plot_index, query_tile) * 20;
+        let mut sum = plot_elevation(plot_entity, query_tile) * 20;
         let direction_array = map_parameters.edge_direction_array();
         direction_array.iter().for_each(|&direction| {
             if let Some(adjacent_entity) =
@@ -921,7 +900,7 @@ fn do_river(
         do_river(
             river,
             random_number_generator,
-            river_plot_index,
+            river_plot_entity,
             best_flow_direction,
             original_flow_direction,
             river_id,

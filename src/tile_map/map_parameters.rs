@@ -2,10 +2,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use bevy::{math::DVec2, prelude::Resource};
 
-use super::{
-    hex::{HexOrientation, Offset, OffsetCoordinate},
-    Direction, HexLayout,
-};
+use crate::grid::hex::{Direction, HexLayout, HexOrientation, Offset, OffsetCoordinate};
 
 #[derive(Resource)]
 pub struct MapParameters {

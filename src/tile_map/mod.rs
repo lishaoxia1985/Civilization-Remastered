@@ -6,20 +6,20 @@ use bevy::utils::HashSet;
 use bevy::{math::DVec2, prelude::Res, utils::HashMap};
 use rand::seq::SliceRandom;
 use rand::{rngs::StdRng, Rng, SeedableRng};
-pub use ruleset::TerrainType;
 
-use crate::ruleset::{self, BaseTerrain, Feature, NaturalWonder, Ruleset, Unique};
-pub use crate::tile_map::hex::Direction;
+use crate::grid::hex::{Direction, Hex, HexLayout, HexOrientation, Offset, OffsetCoordinate};
+use crate::map::base_terrain::BaseTerrain;
+use crate::map::feature::Feature;
+use crate::map::natural_wonder::NaturalWonder;
+use crate::map::terrain_type::TerrainType;
+use crate::ruleset::{self, Ruleset, Unique};
 mod fractal;
 mod map_parameters;
 mod tile;
 
 pub use self::fractal::{CvFractal, Flags};
-pub use self::hex::{Hex, Offset, OffsetCoordinate};
 pub use self::tile::Tile;
-pub use hex::{HexLayout, HexOrientation};
 pub use map_parameters::*;
-pub mod hex;
 
 pub struct TileMap {
     //pub map_parameters: MapParameters,
