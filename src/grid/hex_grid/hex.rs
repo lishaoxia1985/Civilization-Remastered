@@ -7,6 +7,8 @@ use std::ops::{Add, Sub};
 
 use bevy::math::{DMat2, DVec2, IVec2};
 
+use crate::grid::direction::Direction;
+
 pub const SQRT_3: f64 = 1.732_050_807_568_877_2_f64;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -229,43 +231,6 @@ impl DoubledCoordinate {
                 let r: i32 = (self.0.y - self.0.x) / 2;
                 Hex::new(q, r)
             }
-        }
-    }
-}
-
-#[derive(PartialEq, Clone, Copy, Debug)]
-/// This enum represents all the directions of hex coordinates
-///
-/// Each enum member has a constant number, it means:\
-/// We should create 2 direction arrays, one for the hex edge and one for the hex corner (We call them A and B).
-/// - From left to right, the first digit of the number represents the index of the direction in the array A.\
-///   If the digit is 9, the direction does not exist in the array A.
-/// - From left to right, the second digit of the number represents the index of the direction in the array B.\
-///   If the digit is 9, the direction does not exist in the array B.
-pub enum Direction {
-    North = 95,
-    NorthEast = 50,
-    East = 09,
-    SouthEast = 11,
-    South = 92,
-    SouthWest = 23,
-    West = 39,
-    NorthWest = 44,
-    None = 99,
-}
-
-impl Direction {
-    pub const fn opposite_direction(self) -> Self {
-        match self {
-            Direction::North => Direction::South,
-            Direction::NorthEast => Direction::SouthWest,
-            Direction::East => Direction::West,
-            Direction::SouthEast => Direction::NorthWest,
-            Direction::South => Direction::North,
-            Direction::SouthWest => Direction::NorthEast,
-            Direction::West => Direction::East,
-            Direction::NorthWest => Direction::SouthEast,
-            Direction::None => panic!("This direction has no opposite direction."),
         }
     }
 }

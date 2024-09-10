@@ -10,7 +10,7 @@ use crate::{
         feature::Feature,
         terrain_type::TerrainType,
         tile_query::{TileQuery, TileQueryItem},
-        TileStorage,
+        AreaIdAndSize, TileStorage,
     },
     tile_map::MapParameters,
     RandomNumberGenerator, River,
@@ -23,30 +23,16 @@ use crate::{
 pub fn generate_lake(
     mut commands: Commands,
     map_parameters: Res<MapParameters>,
+    area_id_and_size: Res<AreaIdAndSize>,
     query_tile: Query<TileQuery>,
 ) {
-    // HashMap to store all water area ids and their sizes
-    let mut water_area_id_and_size = HashMap::new();
-    let mut entities_to_update = Vec::new();
-
-    query_tile
-        .iter()
-        .filter(|tile| tile.terrain_type == &TerrainType::Water)
-        .for_each(|tile| {
-            let entry = water_area_id_and_size.entry(tile.area_id.0).or_insert(0u32);
-            *entry += 1;
-            entities_to_update.push((tile.entity, tile.area_id.0));
-        });
-
-    entities_to_update
-        .into_iter()
-        .for_each(|(entity, area_id)| {
-            if let Some(&water_area_size) = water_area_id_and_size.get(&area_id) {
-                if water_area_size <= map_parameters.lake_max_area_size {
-                    commands.entity(entity).insert(BaseTerrain::Lake);
-                }
-            }
-        });
+    query_tile.iter().for_each(|tile| {
+        if tile.terrain_type == &TerrainType::Water
+            && area_id_and_size.0[&tile.area_id.0] <= map_parameters.lake_max_area_size
+        {
+            commands.entity(tile.entity).insert(BaseTerrain::Lake);
+        }
+    });
 }
 
 pub fn add_lakes(

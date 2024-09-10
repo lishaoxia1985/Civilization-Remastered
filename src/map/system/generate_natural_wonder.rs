@@ -9,7 +9,7 @@ use crate::{
     grid::hex::Hex,
     map::{
         base_terrain::BaseTerrain, feature::Feature, natural_wonder::NaturalWonder,
-        terrain_type::TerrainType, tile_query::TileQuery, TileStorage,
+        terrain_type::TerrainType, tile_query::TileQuery, AreaIdAndSize, TileStorage,
     },
     ruleset::{Ruleset, Unique},
     tile_map::MapParameters,
@@ -22,6 +22,7 @@ pub fn generate_natural_wonder(
     mut random_number_generator: ResMut<RandomNumberGenerator>,
     tile_storage: Res<TileStorage>,
     map_parameters: Res<MapParameters>,
+    area_id_and_size: Res<AreaIdAndSize>,
     river: Res<River>,
     query_tile: Query<TileQuery>,
 ) {
@@ -29,21 +30,18 @@ pub fn generate_natural_wonder(
 
     let mut natural_wonder_and_entity_and_score = HashMap::new();
 
-    let mut land_id_and_area_size: Vec<_> = query_tile
+    // Find all land areas and size
+    let land_area_id_and_size: HashSet<_> = query_tile
         .iter()
-        .filter(|tile| {
-            tile.terrain_type == &TerrainType::Hill || tile.terrain_type == &TerrainType::Flatland
-        })
-        .fold(HashMap::new(), |mut map, tile| {
-            *map.entry(tile.area_id.0).or_insert(0) += 1;
-            map
-        })
-        .into_iter()
+        .filter(|tile| tile.terrain_type != &TerrainType::Water)
+        .map(|tile| (tile.area_id.0, area_id_and_size.0[&tile.area_id.0]))
         .collect();
+
+    let mut land_area_id_and_size: Vec<_> = land_area_id_and_size.into_iter().collect();
 
     // First, sort by area_size in descending order using std::cmp::Reverse
     // If area_size is the same, sort by land_id in ascending order
-    land_id_and_area_size
+    land_area_id_and_size
         .sort_unstable_by_key(|&(land_id, area_size)| (std::cmp::Reverse(area_size), land_id));
 
     fn matches_wonder_filter(entity: Entity, filter: &str, query_tile: &Query<TileQuery>) -> bool {
@@ -171,18 +169,20 @@ pub fn generate_natural_wonder(
                                         && count <= unique.params[1].parse::<usize>().unwrap()
                                 }
                                 "Must not be on [] largest landmasses" => {
+                                    // index is the ranking of the current landmass among all landmasses sorted by size from highest to lowest.
                                     let index = unique.params[0].parse::<usize>().unwrap();
-                                    !land_id_and_area_size
-                                        .iter()
-                                        .take(index)
-                                        .any(|(id, _)| tile.area_id.0 == *id)
+                                    // Check if the tile isn't on the landmass with the given index
+                                    !land_area_id_and_size
+                                        .get(index)
+                                        .map_or(false, |&(id, _)| id == tile.area_id.0)
                                 }
                                 "Must be on [] largest landmasses" => {
+                                    // index is the ranking of the current landmass among all landmasses sorted by size from highest to lowest.
                                     let index = unique.params[0].parse::<usize>().unwrap();
-                                    land_id_and_area_size
-                                        .iter()
-                                        .take(index)
-                                        .any(|(id, _)| tile.area_id.0 == *id)
+                                    // Check if the tile is on the landmass with the given index
+                                    land_area_id_and_size
+                                        .get(index)
+                                        .map_or(false, |&(id, _)| id == tile.area_id.0)
                                 }
                                 _ => true,
                             }

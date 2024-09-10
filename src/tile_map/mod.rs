@@ -7,7 +7,8 @@ use bevy::{math::DVec2, prelude::Res, utils::HashMap};
 use rand::seq::SliceRandom;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 
-use crate::grid::hex::{Direction, Hex, HexLayout, HexOrientation, Offset, OffsetCoordinate};
+use crate::grid::hex::{Hex, HexLayout, HexOrientation, Offset, OffsetCoordinate};
+use crate::grid::Direction;
 use crate::map::base_terrain::BaseTerrain;
 use crate::map::feature::Feature;
 use crate::map::natural_wonder::NaturalWonder;

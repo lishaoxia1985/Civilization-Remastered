@@ -2,10 +2,10 @@ use bevy::prelude::{Entity, Query, Res, ResMut};
 use rand::{rngs::StdRng, Rng};
 
 use crate::{
-    grid::hex::{Direction, HexOrientation},
+    grid::{hex::HexOrientation, Direction},
     map::{
-        base_terrain::BaseTerrain, terrain_type::TerrainType, AreaId, TileQuery, TileQueryItem,
-        TileStorage,
+        base_terrain::BaseTerrain, terrain_type::TerrainType, AreaId, AreaIdAndSize, TileQuery,
+        TileQueryItem, TileStorage,
     },
     tile_map::MapParameters,
     RandomNumberGenerator, River,
@@ -15,25 +15,24 @@ pub fn add_rivers(
     map_parameters: Res<MapParameters>,
     mut random_number_generator: ResMut<RandomNumberGenerator>,
     tile_storage: Res<TileStorage>,
+    area_id_and_size: Res<AreaIdAndSize>,
     mut river: ResMut<River>,
     query_tile: Query<TileQuery>,
 ) {
     let river_source_range_default = 4;
     let sea_water_range_default = 3;
-    const plots_per_river_edge: i32 = 12;
+    const plots_per_river_edge: u32 = 12;
 
     fn pass_conditions(
         tile: &TileQueryItem,
         tile_storage: &TileStorage,
         random_number_generator: &mut StdRng,
         map_parameters: &MapParameters,
+        area_id_and_size: &AreaIdAndSize,
         river: &River,
         query_tile: &Query<TileQuery>,
     ) -> [bool; 4] {
-        let num_tiles = query_tile
-            .iter()
-            .filter(|tile_in_area| tile_in_area.area_id.0 == tile.area_id.0)
-            .count() as i32;
+        let num_tiles = area_id_and_size.0[&tile.area_id.0];
 
         let is_coastal_land = tile.is_coastal_land(tile_storage, map_parameters, query_tile);
 
@@ -51,7 +50,7 @@ pub fn add_rivers(
     // Returns the number of river edges in the area where the tile is
     // 1. Get the area where the tile is
     // 2. Get the number of rivers edge which the area (where the tile is) own
-    fn num_river_edges(area_id: &AreaId, river: &River, query_tile: &Query<TileQuery>) -> i32 {
+    fn num_river_edges(area_id: &AreaId, river: &River, query_tile: &Query<TileQuery>) -> u32 {
         let entities_in_area = query_tile
             .iter()
             .filter(|tile| tile.area_id.0 == area_id.0)
@@ -67,7 +66,7 @@ pub fn add_rivers(
                     .count();
             });
         });
-        num_river_edges as i32
+        num_river_edges as u32
     }
 
     // The tile where the river will start shoult meet these conditions:
@@ -76,7 +75,7 @@ pub fn add_rivers(
     // 3. It should be not a tile which is neighbor to a natural wonder
     // 4. Its edge directions in [0..3] should be not water because the river edge uses (tile_entity, river_flow_direction) for storage.
     //    tile_entity is current tile index and river_flow_direction should be one of the edge directions in [0..3].
-    let candidate_start_hex_position_indices: Vec<_> = query_tile
+    let candidate_start_tiles: Vec<_> = query_tile
         .iter()
         .sort_unstable::<Entity>()
         .filter_map(|tile| {
@@ -111,29 +110,6 @@ pub fn add_rivers(
                 } else {
                     false
                 }
-
-                /* !tile.is_water()
-                && !tile.is_natural_wonder()
-                && !tile
-                    .tile_neighbors(self, map_parameters)
-                    .iter()
-                    .any(|neighbor_tile| neighbor_tile.is_natural_wonder())
-                && self.tile_edge_direction(map_parameters)[0..3]
-                    .iter()
-                    .all(|&direction| {
-                        if let Some(neighbor_tile) =
-                            tile.tile_neighbor(self, direction, map_parameters)
-                        {
-                            !neighbor_tile.is_water()
-                                && !neighbor_tile.is_natural_wonder()
-                                && !neighbor_tile
-                                    .tile_neighbors(self, map_parameters)
-                                    .iter()
-                                    .any(|neighbor_tile| neighbor_tile.is_natural_wonder())
-                        } else {
-                            false
-                        }
-                    }) */
             }
             .then_some(tile)
         })
@@ -150,12 +126,13 @@ pub fn add_rivers(
             )
         };
 
-        for tile in candidate_start_hex_position_indices.iter() {
+        for tile in candidate_start_tiles.iter() {
             if pass_conditions(
                 tile,
                 &tile_storage,
                 &mut random_number_generator.rng,
                 &map_parameters,
+                &area_id_and_size,
                 &river,
                 &query_tile,
             )[index]

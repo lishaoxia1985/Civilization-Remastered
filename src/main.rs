@@ -5,6 +5,7 @@ mod map;
 mod ruleset;
 mod tile_map;
 
+use std::collections::BTreeMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use assets::{check_textures, load_textures, setup, AppState, MaterialResource};
@@ -12,7 +13,9 @@ use bevy_prototype_lyon::{
     draw::Stroke, entity::ShapeBundle, path::PathBuilder, plugin::ShapePlugin,
     prelude::GeometryBuilder,
 };
-use grid::hex::{Direction, HexLayout, HexOrientation, Offset};
+use grid::hex::{HexLayout, HexOrientation, Offset};
+use grid::Direction;
+use map::AreaIdAndSize;
 use map::{
     add_features, add_lakes, add_rivers, expand_coast, generate_coast_and_ocean,
     generate_empty_map, generate_lake, generate_natural_wonder, generate_terrain,
@@ -64,6 +67,7 @@ fn main() {
         .insert_resource(Ruleset::new())
         .insert_resource(TileStorage { tiles: Vec::new() })
         .insert_resource(River(HashMap::new()))
+        .insert_resource(AreaIdAndSize(BTreeMap::new()))
         .insert_resource(RandomNumberGenerator {
             rng: StdRng::seed_from_u64(
                 SystemTime::now()

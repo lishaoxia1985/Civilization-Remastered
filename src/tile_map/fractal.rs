@@ -7,8 +7,9 @@ use bevy::math::DVec2;
 use image::{imageops::resize, GrayImage, ImageBuffer};
 use rand::{rngs::StdRng, seq::SliceRandom, Rng};
 
-use crate::grid::hex::{
-    Direction, Hex, HexLayout, HexOrientation, Offset, OffsetCoordinate, SQRT_3,
+use crate::grid::{
+    hex::{Hex, HexLayout, HexOrientation, Offset, OffsetCoordinate, SQRT_3},
+    Direction,
 };
 
 const DEFAULT_WIDTH_EXP: i32 = 7;

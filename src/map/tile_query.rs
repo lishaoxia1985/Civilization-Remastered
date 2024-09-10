@@ -4,7 +4,7 @@ use bevy::{
 };
 
 use crate::{
-    grid::hex::{Direction, HexOrientation},
+    grid::{hex::HexOrientation, Direction},
     ruleset::Ruleset,
     tile_map::MapParameters,
 };

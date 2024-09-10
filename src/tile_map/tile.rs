@@ -4,7 +4,10 @@ use bevy::{
 };
 
 use crate::{
-    grid::hex::{Direction, Hex, HexLayout, HexOrientation},
+    grid::{
+        hex::{Hex, HexLayout, HexOrientation},
+        Direction,
+    },
     map::{
         base_terrain::BaseTerrain, feature::Feature, natural_wonder::NaturalWonder,
         terrain_type::TerrainType,

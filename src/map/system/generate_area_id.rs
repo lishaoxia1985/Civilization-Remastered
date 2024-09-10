@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use bevy::{
-    prelude::{Commands, Entity, Query, Res},
+    prelude::{Commands, Entity, Query, Res, ResMut},
     utils::hashbrown::{HashMap, HashSet},
 };
 
@@ -10,7 +10,7 @@ use crate::{
         component::AreaId,
         terrain_type::TerrainType,
         tile_query::{TileQuery, TileQueryItem},
-        TileStorage,
+        AreaIdAndSize, TileStorage,
     },
     tile_map::MapParameters,
 };
@@ -19,6 +19,7 @@ pub fn bfs(
     commands: &mut Commands,
     map_parameters: &MapParameters,
     tile_storage: &TileStorage,
+    area_id_and_size: &mut AreaIdAndSize,
     filter_condition: impl Fn(&TileQueryItem) -> bool,
     query_tile: &Query<TileQuery>,
 ) {
@@ -61,6 +62,9 @@ pub fn bfs(
                     }
                 });
         }
+        area_id_and_size
+            .0
+            .insert(current_area_id, entities_in_current_area.len() as u32);
         current_area_id += 1;
     }
 }
@@ -69,6 +73,7 @@ pub fn dfs(
     mut commands: Commands,
     map_parameters: Res<MapParameters>,
     tile_storage: Res<TileStorage>,
+    area_id_and_size: &mut AreaIdAndSize,
     filter_condition: impl Fn(&TileQueryItem) -> bool,
     query_tile: Query<TileQuery>,
 ) {
@@ -85,6 +90,7 @@ pub fn dfs(
             .entity(initial_area_entity)
             .insert(AreaId(current_area_id));
         area_entities.remove(&initial_area_entity);
+
         // Store all the entities in the current area.
         let mut entities_in_current_area = HashSet::new();
         entities_in_current_area.insert(initial_area_entity);
@@ -109,6 +115,9 @@ pub fn dfs(
                     }
                 });
         }
+        area_id_and_size
+            .0
+            .insert(current_area_id, entities_in_current_area.len() as u32);
         current_area_id += 1;
     }
 }
@@ -117,6 +126,7 @@ pub fn recalculate_areas(
     mut commands: Commands,
     map_parameters: Res<MapParameters>,
     tile_storage: Res<TileStorage>,
+    mut area_id_and_size: ResMut<AreaIdAndSize>,
     query_tile: Query<TileQuery>,
 ) {
     query_tile.iter().into_iter().for_each(|tile| {
@@ -142,6 +152,7 @@ pub fn recalculate_areas(
             &mut commands,
             &map_parameters,
             &tile_storage,
+            &mut area_id_and_size,
             condition,
             &query_tile,
         );
@@ -152,21 +163,14 @@ pub fn reassign_area_id(
     mut commands: Commands,
     map_parameters: Res<MapParameters>,
     tile_storage: Res<TileStorage>,
+    mut area_id_and_size: ResMut<AreaIdAndSize>,
     query_tile: Query<TileQuery>,
 ) {
     const MIN_AREA_SIZE: u32 = 7;
 
-    // BTreeMap is used to store all area ids and their sizes, that makes sure the pairs are processed in the same order every time.
-    // That means that we can get the same 'small_area_id' every time.
-    let mut area_id_and_size = BTreeMap::new();
-
-    query_tile.iter().for_each(|tile| {
-        let entry = area_id_and_size.entry(tile.area_id.0).or_insert(0u32);
-        *entry += 1;
-    });
-
     // Get id of the smaller area whose size < MIN_AREA_SIZE
     let small_area_id: Vec<_> = area_id_and_size
+        .0
         .iter()
         .filter(|(_, size)| **size < MIN_AREA_SIZE)
         .map(|(&id, _)| id)
@@ -213,12 +217,12 @@ pub fn reassign_area_id(
             .map(|&entity| {
                 if let Some(&reassign_id) = reassign_id_entities_and_area_id.get(&entity) {
                     // If the entity is reassign, use the reassign area id
-                    let reassign_area_size = area_id_and_size[&reassign_id];
+                    let reassign_area_size = area_id_and_size.0[&reassign_id];
                     (reassign_area_size, reassign_id)
                 } else {
                     // Otherwise, use the original area id
                     let tile = query_tile.get(entity).unwrap();
-                    let area_size = area_id_and_size[&tile.area_id.0];
+                    let area_size = area_id_and_size.0[&tile.area_id.0];
                     (area_size, tile.area_id.0)
                 }
             })
@@ -230,9 +234,10 @@ pub fn reassign_area_id(
             if area_size >= MIN_AREA_SIZE {
                 let first_entity = current_area_entities[0];
                 let old_area_id = query_tile.get(first_entity).unwrap().area_id;
-                area_id_and_size.remove(&old_area_id.0);
+                area_id_and_size.0.remove(&old_area_id.0);
 
                 area_id_and_size
+                    .0
                     .entry(area_id)
                     .and_modify(|e| *e += current_area_entities.len() as u32);
 
