@@ -1,6 +1,6 @@
 use bevy::{
     prelude::{Commands, Entity, Query, Res, ResMut},
-    utils::{HashMap, HashSet},
+    utils::HashSet,
 };
 use rand::Rng;
 

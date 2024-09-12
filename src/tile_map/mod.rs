@@ -39,7 +39,6 @@ impl TileMap {
             map_parameters.offset,
         );
         Self {
-            //map_parameters,
             random_number_generator,
             tile_list,
             river_list: HashMap::new(),
