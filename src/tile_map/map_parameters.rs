@@ -26,9 +26,11 @@ pub struct MapParameters {
     pub large_lake_num: u32,
     /// The max area size of a lake.
     pub lake_max_area_size: u32,
-    /// Its 'length' is the number of iterations,
-    /// its 'element' is the chance for each eligible plot to become an expansion coast in each iteration. \
-    /// If it is empty the coast will not expand, and then only the water tile is adjacent to the land tile can become coast.
+    /// Store the chance of each eligible plot to become a coast in each iteration.
+    ///
+    /// - Its 'length' is the number of iterations. if 'length' is 3, it means that the max coast length is 4 (3 + 1, because the water tiles adjacent to land must be coast).
+    /// - its 'element' is the chance for each eligible plot to become an expansion coast in each iteration. `0.0` means no chance, `1.0` means 100% chance.\
+    /// If it is empty the coast will not expand, and then only the water tiles adjacent to land can become coast.
     pub coast_expand_chance: Vec<f64>,
     pub sea_level: SeaLevel,
     pub world_age: WorldAge,
@@ -104,7 +106,7 @@ impl Default for MapParameters {
                 .unwrap(),
             large_lake_num: 2,
             lake_max_area_size: 9,
-            coast_expand_chance: vec![0.25, 0.25],
+            coast_expand_chance: vec![0.25, 0.25, 0.25],
             sea_level: SeaLevel::Normal,
             world_age: WorldAge::Normal,
             temperature: Temperature::Normal,
@@ -172,7 +174,7 @@ impl MapParameters {
             y = (y % height + height) % height
         };
 
-        assert!((x >= 0) && (x < map_size.width) && (y >= 0) && (y < map_size.height));
+        assert!((x >= 0) && (x < width) && (y >= 0) && (y < height));
 
         (x + y * map_size.width) as usize
     }

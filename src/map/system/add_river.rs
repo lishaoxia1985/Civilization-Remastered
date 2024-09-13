@@ -39,7 +39,7 @@ pub fn add_rivers(
         let num_river_edges = num_river_edges(tile.area_id, &river, query_tile);
         [
             tile.terrain_type == &TerrainType::Hill || tile.terrain_type == &TerrainType::Mountain,
-            is_coastal_land && random_number_generator.gen_range(0..8) == 0,
+            !is_coastal_land && random_number_generator.gen_range(0..8) == 0,
             (tile.terrain_type == &TerrainType::Hill
                 || tile.terrain_type == &TerrainType::Mountain)
                 && (num_river_edges < num_tiles / plots_per_river_edge + 1),

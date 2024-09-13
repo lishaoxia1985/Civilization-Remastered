@@ -129,6 +129,8 @@ pub fn recalculate_areas(
     mut area_id_and_size: ResMut<AreaIdAndSize>,
     query_tile: Query<TileQuery>,
 ) {
+    area_id_and_size.0.clear();
+
     query_tile.iter().into_iter().for_each(|tile| {
         commands.entity(tile.entity).insert(AreaId(-1));
     });
@@ -185,7 +187,11 @@ pub fn reassign_area_id(
             .map(|tile| tile.entity)
             .collect::<Vec<_>>();
 
-        let area_is_water = query_tile.iter().next().unwrap().terrain_type == &TerrainType::Water;
+        let area_is_water = query_tile
+            .get(current_area_entities[0])
+            .unwrap()
+            .terrain_type
+            == &TerrainType::Water;
 
         // Get the border entities of the current area, these entities don't belong to the area, but they surround the area.
         // Using BTreeSet to store the border entities will make sure the entities are processed in the same order every time.

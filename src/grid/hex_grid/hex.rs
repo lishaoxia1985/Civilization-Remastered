@@ -260,14 +260,14 @@ impl HexLayout {
         Hex::round(fractional_hex)
     }
 
-    /// Get the corner coordinates of the given hexagonal coordinates according to corner direction
+    /// Get the corner pixel coordinates of the given hexagonal coordinates according to corner direction
     pub fn corner(self, hex: Hex, direction: Direction) -> DVec2 {
         let center: DVec2 = self.hex_to_pixel(hex);
         let offset: DVec2 = self.corner_offset(direction);
         center + offset
     }
 
-    /// Retrieves all 6 corner coordinates of the given hexagonal coordinates
+    /// Retrieves all 6 corner pixel coordinates of the given hexagonal coordinates
     pub fn all_corners(self, hex: Hex) -> [DVec2; 6] {
         let corner_array = self.orientation.corner_direction();
         array::from_fn(|i| self.corner(hex, corner_array[i]))
@@ -297,7 +297,7 @@ pub enum Offset {
 }
 
 impl Offset {
-    fn value(self) -> i32 {
+    const fn value(self) -> i32 {
         match self {
             Self::Even => 1,
             Self::Odd => -1,
@@ -419,35 +419,34 @@ impl HexOrientation {
     #[inline]
     /// Get the index of the direction of the `Hex` edge in the array of all the edge direction
     pub const fn edge_index(self, direction: Direction) -> usize {
-        /* self.edge_direction().iter().position(|&x| x == direction).unwrap() */
         match self {
             HexOrientation::Pointy => direction as usize / 10,
             HexOrientation::Flat => direction as usize % 10,
         }
     }
 
-    // Returns the next corner direction in clockwise order
+    /// Returns the next corner direction in clockwise order
     pub const fn corner_clockwise(self, corner_direction: Direction) -> Direction {
         let corner_index = self.corner_index(corner_direction);
-        self.corner_direction()[(corner_index + 1) / 6]
+        self.corner_direction()[(corner_index + 1) % 6]
     }
 
-    // Returns the next edge direction in clockwise order
+    /// Returns the next edge direction in clockwise order
     pub const fn edge_clockwise(self, edge_direction: Direction) -> Direction {
         let edge_index = self.edge_index(edge_direction);
-        self.edge_direction()[(edge_index + 1) / 6]
+        self.edge_direction()[(edge_index + 1) % 6]
     }
 
-    // Returns the next corner direction in counter clockwise order
+    /// Returns the next corner direction in counter clockwise order
     pub const fn corner_counter_clockwise(self, corner_direction: Direction) -> Direction {
         let corner_index = self.corner_index(corner_direction);
-        self.corner_direction()[(corner_index + 5) / 6]
+        self.corner_direction()[(corner_index + 5) % 6]
     }
 
-    // Returns the next edge direction in counter clockwise order
+    /// Returns the next edge direction in counter clockwise order
     pub const fn edge_counter_clockwise(self, edge_direction: Direction) -> Direction {
         let edge_index = self.edge_index(edge_direction);
-        self.edge_direction()[(edge_index + 5) / 6]
+        self.edge_direction()[(edge_index + 5) % 6]
     }
 
     #[inline]
@@ -494,7 +493,7 @@ impl HexOrientation {
     }
 
     #[inline]
-    // Get all the directions of the edges of a `Hex` relative to its center
+    /// Get all the directions of the edges of a `Hex` relative to its center
     pub const fn edge_direction(&self) -> [Direction; 6] {
         match self {
             HexOrientation::Pointy => Self::POINTY_EDGE,
@@ -503,7 +502,7 @@ impl HexOrientation {
     }
 
     #[inline]
-    // Get all the directions of the corners of a `Hex` relative to its center
+    /// Get all the directions of the corners of a `Hex` relative to its center
     pub const fn corner_direction(&self) -> [Direction; 6] {
         match self {
             HexOrientation::Pointy => Self::POINTY_CORNER,

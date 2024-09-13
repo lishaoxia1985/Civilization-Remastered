@@ -24,7 +24,7 @@ use map::{
 };
 use rand::{rngs::StdRng, SeedableRng};
 use ruleset::Ruleset;
-use tile_map::{MapParameters, MapSize};
+use tile_map::{MapParameters, MapSize, TileMap};
 
 use bevy::{
     input::mouse::MouseWheel,
@@ -105,7 +105,7 @@ fn main() {
         .add_systems(OnEnter(AppState::Finished), setup)
         .add_systems(
             OnEnter(AppState::GameStart),
-            (
+            /* (
                 close_on_esc,
                 generate_empty_map,
                 generate_terrain_type_for_fractal,
@@ -121,7 +121,8 @@ fn main() {
                 (recalculate_areas, reassign_area_id).chain(),
                 show_tiles_system,
             )
-                .chain(),
+                .chain(), */
+            create_tile_map,
         )
         .run();
 }
@@ -453,26 +454,302 @@ fn cursor_drag_system(
 fn zoom_camera_system(
     mut scroll_evr: EventReader<MouseWheel>,
     keyboard_input: Res<ButtonInput<KeyCode>>,
-    mut query: Query<&mut Transform, With<Camera>>,
+    mut projection: Query<&mut OrthographicProjection, With<Camera>>,
 ) {
-    let mut transform = query.single_mut();
+    let mut projection = projection.single_mut();
     for event in scroll_evr.read() {
-        let zoom_factor = 1.0 + event.y * 0.1; // 调整缩放因子，这里0.1为缩放增量因子
-        transform.scale *= zoom_factor;
+        let zoom_factor = 1.0 + event.y * 0.1; // Zoom speed
+        projection.scale *= zoom_factor;
     }
 
-    // 处理缩放
+    // Handle keyboard zoom
     if keyboard_input.pressed(KeyCode::KeyQ) {
-        transform.scale *= 1.01;
+        projection.scale *= 1.01;
     }
     if keyboard_input.pressed(KeyCode::KeyE) {
-        transform.scale *= 0.99;
+        projection.scale *= 0.99;
     }
 
-    // 限制缩放范围
-    if transform.scale.max_element() > 2.0 {
-        transform.scale = Vec3::splat(2.0);
-    } else if transform.scale.min_element() < 0.1 {
-        transform.scale = Vec3::splat(0.1);
+    // Restrict zoom range
+    if projection.scale > 2.0 {
+        projection.scale = 2.0;
+    } else if projection.scale < 0.1 {
+        projection.scale = 0.1;
+    }
+}
+
+fn create_tile_map(
+    mut commands: Commands,
+    materials: Res<MaterialResource>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut color_materials: ResMut<Assets<ColorMaterial>>,
+    map_parameters: Res<MapParameters>,
+    ruleset: Res<Ruleset>,
+    mut area_id_and_size: ResMut<AreaIdAndSize>,
+) {
+    /* generate_terrain_type_for_fractal,
+    ((generate_coast_and_ocean, expand_coast).chain()),
+    (recalculate_areas, reassign_area_id).chain(),
+    (generate_lake, generate_terrain),
+    add_rivers,
+    add_lakes,
+    (recalculate_areas, reassign_area_id).chain(),
+    add_features,
+    generate_natural_wonder,
+    regenerate_coast,
+    (recalculate_areas, reassign_area_id).chain(), */
+    let mut tile_map = TileMap::new(&map_parameters);
+    tile_map.generate_terrain_type_for_fractal(&map_parameters);
+    tile_map.generate_coast(&map_parameters);
+    tile_map.recalculate_areas(&map_parameters, &mut area_id_and_size);
+    tile_map.reassign_area_id(&map_parameters, &mut area_id_and_size);
+    tile_map.generate_lake(&map_parameters, &mut area_id_and_size);
+    tile_map.generate_terrain(&map_parameters);
+    tile_map.add_rivers(&map_parameters);
+    tile_map.add_lakes(&map_parameters);
+    tile_map.recalculate_areas(&map_parameters, &mut area_id_and_size);
+    tile_map.reassign_area_id(&map_parameters, &mut area_id_and_size);
+    tile_map.add_feature(&ruleset, &map_parameters);
+    tile_map.generate_natural_wonder(&ruleset, &map_parameters, &mut area_id_and_size);
+
+    let mut base_terrain_and_material = HashMap::new();
+
+    base_terrain_and_material.insert(
+        "Ocean",
+        color_materials.add(materials.texture_handle("sv_terrainhexocean")),
+    );
+
+    // Lake use the same texture as Coast
+    base_terrain_and_material.insert(
+        "Lake",
+        color_materials.add(materials.texture_handle("sv_terrainhexcoast")),
+    );
+
+    base_terrain_and_material.insert(
+        "Coast",
+        color_materials.add(materials.texture_handle("sv_terrainhexcoast")),
+    );
+
+    base_terrain_and_material.insert(
+        "Grassland",
+        color_materials.add(materials.texture_handle("sv_terrainhexgrasslands")),
+    );
+
+    base_terrain_and_material.insert(
+        "Desert",
+        color_materials.add(materials.texture_handle("sv_terrainhexdesert")),
+    );
+
+    base_terrain_and_material.insert(
+        "Plain",
+        color_materials.add(materials.texture_handle("sv_terrainhexplains")),
+    );
+
+    base_terrain_and_material.insert(
+        "Tundra",
+        color_materials.add(materials.texture_handle("sv_terrainhextundra")),
+    );
+
+    base_terrain_and_material.insert(
+        "Snow",
+        color_materials.add(materials.texture_handle("sv_terrainhexsnow")),
+    );
+
+    tile_map.river_list.values().for_each(|river| {
+        let mut path_builder = PathBuilder::new();
+        river
+            .iter()
+            .enumerate()
+            .for_each(|(index, (tile_index, flow_direction))| {
+                let tile = tile_map.tile(*tile_index);
+
+                let (first_point, second_point) = match map_parameters.hex_layout.orientation {
+                    HexOrientation::Pointy => match *flow_direction {
+                        Direction::North => (Direction::SouthEast, Direction::NorthEast),
+                        Direction::NorthEast => (Direction::South, Direction::SouthEast),
+                        Direction::East => panic!(),
+                        Direction::SouthEast => (Direction::SouthWest, Direction::South),
+                        Direction::South => (Direction::NorthEast, Direction::SouthEast),
+                        Direction::SouthWest => (Direction::SouthEast, Direction::South),
+                        Direction::West => panic!(),
+                        Direction::NorthWest => (Direction::South, Direction::SouthWest),
+                        Direction::None => panic!(),
+                    },
+                    HexOrientation::Flat => match *flow_direction {
+                        Direction::North => panic!(),
+                        Direction::NorthEast => (Direction::SouthEast, Direction::East),
+                        Direction::East => (Direction::SouthWest, Direction::SouthEast),
+                        Direction::SouthEast => (Direction::NorthEast, Direction::East),
+                        Direction::South => panic!(),
+                        Direction::SouthWest => (Direction::East, Direction::SouthEast),
+                        Direction::West => (Direction::SouthEast, Direction::SouthWest),
+                        Direction::NorthWest => (Direction::East, Direction::NorthEast),
+                        Direction::None => panic!(),
+                    },
+                };
+
+                /* if index == 0 {
+                    let first_point_position =
+                        hex_position.corner_position(first_point, &map_parameters);
+                    let second_point_position =
+                        hex_position.corner_position(second_point, &map_parameters);
+                    path_builder.move_to(first_point_position.as_vec2());
+                    path_builder.line_to(second_point_position.as_vec2());
+                } else {
+                    let second_point_position =
+                        hex_position.corner_position(second_point, &map_parameters);
+                    path_builder.line_to(second_point_position.as_vec2());
+                } */
+                let first_point_position = tile.corner_position(first_point, &map_parameters);
+                let second_point_position = tile.corner_position(second_point, &map_parameters);
+                path_builder.move_to(first_point_position.as_vec2());
+                path_builder.line_to(second_point_position.as_vec2());
+            });
+
+        let path = path_builder.build();
+
+        commands.spawn((
+            ShapeBundle {
+                path: GeometryBuilder::build_as(&path),
+                spatial: SpatialBundle {
+                    transform: Transform::from_xyz(0., 0., 10.),
+                    ..default()
+                },
+                ..default()
+            },
+            Stroke::new(Color::srgb_u8(140, 215, 215), 2.0),
+        ));
+    });
+
+    /* let tile_pixel_size = match map_parameters.hex_layout.orientation {
+        HexOrientation::Pointy => map_parameters.hex_layout.size * DVec2::new(3_f64.sqrt(), 2.0),
+        HexOrientation::Flat => map_parameters.hex_layout.size * DVec2::new(2.0, 3_f64.sqrt()),
+    }; */
+
+    let tile_pixel_size = map_parameters.hex_layout.size * DVec2::new(2.0, 2.0);
+
+    let (sprite_rotation, text_rotation) = match map_parameters.hex_layout.orientation {
+        HexOrientation::Pointy => (Quat::default(), Quat::default()),
+        HexOrientation::Flat => (
+            Quat::from_rotation_z(std::f32::consts::FRAC_PI_2 * 3.),
+            Quat::from_rotation_z(-std::f32::consts::FRAC_PI_2 * 3.),
+        ),
+    };
+
+    for tile_index in (0..tile_map.tile_count()).into_iter() {
+        let tile = tile_map.tile(tile_index);
+        let pixel_position = tile.pixel_position(map_parameters.hex_layout);
+        commands
+            .spawn(MaterialMesh2dBundle {
+                mesh: Mesh2dHandle(meshes.add(RegularPolygon::new(16.0, 6))),
+                transform: Transform {
+                    translation: Vec3::from((pixel_position.as_vec2(), 0.)),
+                    rotation: sprite_rotation,
+                    ..Default::default()
+                },
+                material: base_terrain_and_material
+                    .get(&tile.base_terrain.name())
+                    .unwrap()
+                    .clone(),
+                ..default()
+            })
+            .with_children(|parent| {
+                if tile.terrain_type == TerrainType::Mountain && tile.natural_wonder.is_none() {
+                    parent.spawn(SpriteBundle {
+                        sprite: Sprite {
+                            custom_size: Some(tile_pixel_size.as_vec2()),
+                            ..Default::default()
+                        },
+                        texture: materials.texture_handle("sv_mountains"),
+                        transform: Transform {
+                            translation: Vec3::new(0., 0., 3.),
+                            rotation: text_rotation,
+                            ..Default::default()
+                        },
+                        ..Default::default()
+                    });
+                } else if tile.terrain_type == TerrainType::Hill {
+                    parent.spawn(SpriteBundle {
+                        sprite: Sprite {
+                            custom_size: Some(tile_pixel_size.as_vec2()),
+                            ..Default::default()
+                        },
+                        texture: materials.texture_handle("sv_hills"),
+                        transform: Transform {
+                            translation: Vec3::new(0., 0., 3.),
+                            rotation: text_rotation,
+                            ..Default::default()
+                        },
+                        ..Default::default()
+                    });
+                }
+
+                // Draw the feature
+                if let Some(feature) = tile.feature {
+                    let feature_name = match feature.name() {
+                        "Forest" => "sv_forest",
+                        "Jungle" => "sv_jungle",
+                        "Marsh" => "sv_marsh",
+                        "Floodplain" => "sv_floodplains",
+                        "Ice" => "sv_ice",
+                        "Oasis" => "sv_oasis",
+                        "Atoll" => "sv_atoll",
+                        "Fallout" => "sv_fallout",
+                        _ => unreachable!(),
+                    };
+
+                    parent.spawn(SpriteBundle {
+                        sprite: Sprite {
+                            custom_size: Some(tile_pixel_size.as_vec2()),
+                            ..Default::default()
+                        },
+                        texture: materials.texture_handle(feature_name),
+                        transform: Transform {
+                            translation: Vec3::new(0., 0., 2.),
+                            rotation: text_rotation,
+                            ..Default::default()
+                        },
+                        ..Default::default()
+                    });
+                }
+
+                // Draw the natural wonder
+                if let Some(natural_wonder) = tile.natural_wonder {
+                    let natural_wonder_name = match natural_wonder.name() {
+                        "Great Barrier Reef" => "sv_coralreef",
+                        "Old Faithful" => "sv_geyser",
+                        "El Dorado" => "sv_el_dorado",
+                        "Fountain of Youth" => "sv_fountain_of_youth",
+                        "Grand Mesa" => "sv_mesa",
+                        "Mount Fuji" => "sv_fuji",
+                        "Krakatoa" => "sv_krakatoa",
+                        "Rock of Gibraltar" => "sv_gibraltar",
+                        "Cerro de Potosi" => "sv_cerro_de_patosi",
+                        "Barringer Crater" => "sv_crater",
+                        "Mount Kailash" => "sv_mount_kailash",
+                        "Mount Sinai" => "sv_mount_sinai",
+                        "Sri Pada" => "sv_sri_pada",
+                        "Uluru" => "sv_uluru",
+                        "King Solomon's Mines" => "sv_kingsolomonsmine",
+                        "Lake Victoria" => "sv_lakevictoria",
+                        "Mount Kilimanjaro" => "sv_mountkilimanjaro",
+                        _ => unreachable!(),
+                    };
+
+                    parent.spawn(SpriteBundle {
+                        sprite: Sprite {
+                            custom_size: Some(tile_pixel_size.as_vec2()),
+                            ..Default::default()
+                        },
+                        texture: materials.texture_handle(natural_wonder_name),
+                        transform: Transform {
+                            translation: Vec3::new(0., 0., 2.),
+                            rotation: text_rotation,
+                            ..Default::default()
+                        },
+                        ..Default::default()
+                    });
+                }
+            });
     }
 }

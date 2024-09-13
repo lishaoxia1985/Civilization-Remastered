@@ -2,7 +2,7 @@ use bevy::prelude::Component;
 
 use crate::ruleset::Ruleset;
 
-#[derive(Component)]
+#[derive(Component, Clone)]
 pub enum NaturalWonder {
     NaturalWonder(String),
 }

@@ -20,6 +20,11 @@ pub enum Direction {
 }
 
 impl Direction {
+    /// Returns the opposite direction of the current direction
+    ///
+    /// # Panics
+    ///
+    /// Panics if the current direction is `Direction::None`
     pub const fn opposite_direction(self) -> Self {
         match self {
             Direction::North => Direction::South,
