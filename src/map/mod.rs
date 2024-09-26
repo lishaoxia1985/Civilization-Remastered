@@ -1,6 +1,4 @@
 mod component;
-mod system;
-mod tile_query;
 
 use std::collections::BTreeMap;
 
@@ -10,8 +8,6 @@ use bevy::{
 };
 pub use component::*;
 use rand::rngs::StdRng;
-pub use system::*;
-pub use tile_query::*;
 
 use crate::grid::Direction;
 

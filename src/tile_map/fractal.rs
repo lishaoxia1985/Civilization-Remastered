@@ -499,13 +499,13 @@ impl CvFractal {
         }
     }
 
-    /// In a wrap map, given the coordinates of a point and an offset epresenting the direction of movement, calculate the new coordinates of the point after it moves accordingly.
+    /// In a Wrap X map, given the coordinates of a point and an offset representing the direction of movement, calculate the new coordinates of the point after it moves accordingly.
     fn yield_x(&self, x: i32, offset_x: i32) -> i32 {
         let width = self.fractal_width;
         // Calculate the new coordinates without wrapping
         let nx = x + offset_x;
         // Wrap the coordinates and return the wrapped coordinates
-        (nx % width + width) % width
+        nx.rem_euclid(width)
     }
 
     pub fn ridge_builder(

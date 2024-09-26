@@ -1,5 +1,6 @@
 use bevy::utils::HashMap;
 use rand::{rngs::StdRng, SeedableRng};
+use tile_index::TileIndex;
 
 use crate::grid::hex::OffsetCoordinate;
 use crate::grid::Direction;
@@ -9,18 +10,18 @@ use crate::map::natural_wonder::NaturalWonder;
 use crate::map::terrain_type::TerrainType;
 mod fractal;
 mod map_parameters;
-mod tile;
+mod tile_index;
 mod tile_map_impls;
 
 pub use self::fractal::{CvFractal, Flags};
-pub use self::tile::Tile;
 pub use map_parameters::*;
 
 pub struct TileMap {
     //pub map_parameters: MapParameters,
     pub random_number_generator: StdRng,
-    pub river_list: HashMap<i32, Vec<(usize, Direction)>>,
-    pub hex_position_query: Vec<[i32; 2]>,
+    pub map_size: MapSize,
+    pub river_list: HashMap<i32, Vec<(TileIndex, Direction)>>,
+    // queries
     pub terrain_type_query: Vec<TerrainType>,
     pub base_terrain_query: Vec<BaseTerrain>,
     pub feature_query: Vec<Option<Feature>>,
@@ -51,8 +52,8 @@ impl TileMap {
 
         Self {
             random_number_generator,
+            map_size: map_parameters.map_size,
             river_list: HashMap::new(),
-            hex_position_query,
             terrain_type_query: vec![TerrainType::Water; size],
             base_terrain_query: vec![BaseTerrain::Ocean; size],
             feature_query: vec![None; size],
@@ -61,19 +62,9 @@ impl TileMap {
         }
     }
 
-    pub fn tile(&self, index: usize) -> Tile {
-        Tile {
-            hex_position: self.hex_position_query[index],
-            terrain_type: self.terrain_type_query[index],
-            base_terrain: self.base_terrain_query[index],
-            feature: self.feature_query[index],
-            natural_wonder: self.natural_wonder_query[index].clone(),
-            area_id: self.area_id_query[index],
-        }
-    }
-
-    pub fn tile_count(&self) -> usize {
-        self.hex_position_query.len()
+    pub fn tile_indices_iter(&self) -> impl Iterator<Item = TileIndex> {
+        let tile_count = (self.map_size.width * self.map_size.height) as usize;
+        (0..tile_count).map(|index| TileIndex::new(index))
     }
 
     /* pub const fn index_to_offset_coordinate(map_size: MapSize, index: usize) -> OffsetCoordinate {

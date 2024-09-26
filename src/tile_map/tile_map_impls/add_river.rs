@@ -1,9 +1,9 @@
-use rand::{rngs::StdRng, seq::SliceRandom, Rng};
+use rand::{seq::SliceRandom, Rng};
 
 use crate::{
     grid::{hex::HexOrientation, Direction},
     map::{base_terrain::BaseTerrain, terrain_type::TerrainType},
-    tile_map::{MapParameters, Tile, TileMap},
+    tile_map::{tile_index::TileIndex, MapParameters, TileMap},
 };
 
 impl TileMap {
@@ -14,117 +14,94 @@ impl TileMap {
         // When tiles_per_river_edge is set to 12, it indicates that for every 12 tiles, there can be 1 river edge.
         const tiles_per_river_edge: u32 = 12;
 
-        // Mountain and Hill are the 1st priority for river starting locations.
-        let pass_condition_1 = |tile: &Tile, _: &TileMap, _: &mut StdRng, _: &MapParameters| {
-            tile.is_hill() || tile.is_mountain()
-        };
-
-        // Land tiles that are not near the ocean are the 2nd priority for river starting locations.
-        let pass_condition_2 = |tile: &Tile,
-                                tile_map: &TileMap,
-                                random_number_generator: &mut StdRng,
-                                map_parameters: &MapParameters| {
-            !tile.is_water()
-                && !tile.is_coastal_land(tile_map, map_parameters)
-                && random_number_generator.gen_range(0..8) == 0
-        };
-
-        // If there are still not enough rivers generated, the algorithm should run again using Mountain and Hill as the river starting locations.
-        let pass_condition_3 =
-            |tile: &Tile, tile_map: &TileMap, _: &mut StdRng, _: &MapParameters| {
-                let num_tiles = tile_map
-                    .area_id_query
-                    .iter()
-                    .filter(|area_id| **area_id == tile.area_id)
-                    .count() as u32;
-                let num_river_edges = tile_map.river_edge_count(tile.area_id);
-                (tile.is_hill() || tile.is_mountain())
-                    && (num_river_edges <= num_tiles / tiles_per_river_edge)
-            };
-
-        // At last if there are still not enough rivers generated, the algorithm should run again using any Land tiles as the river starting locations.
-        let pass_condition_4 =
-            |tile: &Tile, tile_map: &TileMap, _: &mut StdRng, _: &MapParameters| {
-                let num_tiles = tile_map
-                    .area_id_query
-                    .iter()
-                    .filter(|area_id| **area_id == tile.area_id)
-                    .count() as u32;
-                let num_river_edges = tile_map.river_edge_count(tile.area_id);
-                !tile.is_water() && (num_river_edges <= num_tiles / tiles_per_river_edge)
-            };
-
-        let pass_conditions = [
-            pass_condition_1,
-            pass_condition_2,
-            pass_condition_3,
-            pass_condition_4,
-        ];
-
-        let mut random_number_generator = self.random_number_generator.clone();
-
         let mut river_id = 0;
 
-        pass_conditions
-            .iter()
-            .enumerate()
-            .for_each(|(index, pass_condition)| {
-                let (river_source_range, sea_water_range) = if index <= 1 {
-                    (river_source_range_default, sea_water_range_default)
-                } else {
-                    (
-                        (river_source_range_default / 2),
-                        (sea_water_range_default / 2),
-                    )
+        (0..4).for_each(|index| {
+            let (river_source_range, sea_water_range) = if index <= 1 {
+                (river_source_range_default, sea_water_range_default)
+            } else {
+                (
+                    (river_source_range_default / 2),
+                    (sea_water_range_default / 2),
+                )
+            };
+
+            self.tile_indices_iter().for_each(|tile_index| {
+                let pass_condition = match index {
+                    0 => {
+                        // Mountain and Hill are the 1st priority for river starting locations.
+                        matches!(
+                            tile_index.terrain_type(self),
+                            TerrainType::Mountain | TerrainType::Hill
+                        )
+                    }
+                    1 => {
+                        // Land tiles that are not near the ocean are the 2nd priority for river starting locations.
+                        tile_index.terrain_type(self) != TerrainType::Water
+                            && !tile_index.is_coastal_land(self, map_parameters)
+                            && self.random_number_generator.gen_range(0..8) == 0
+                    }
+                    2 => {
+                        // If there are still not enough rivers generated, the algorithm should run again using Mountain and Hill as the river starting locations.
+                        let num_tiles = self
+                            .area_id_query
+                            .iter()
+                            .filter(|area_id| **area_id == tile_index.area_id(self))
+                            .count() as u32;
+                        let num_river_edges = self.river_edge_count(tile_index.area_id(self));
+                        matches!(
+                            tile_index.terrain_type(self),
+                            TerrainType::Mountain | TerrainType::Hill
+                        ) && (num_river_edges <= num_tiles / tiles_per_river_edge)
+                    }
+                    3 => {
+                        // At last if there are still not enough rivers generated, the algorithm should run again using any Land tiles as the river starting locations.
+                        let num_tiles = self
+                            .area_id_query
+                            .iter()
+                            .filter(|area_id| **area_id == tile_index.area_id(self))
+                            .count() as u32;
+                        let num_river_edges = self.river_edge_count(tile_index.area_id(self));
+                        tile_index.terrain_type(self) != TerrainType::Water
+                            && (num_river_edges <= num_tiles / tiles_per_river_edge)
+                    }
+                    _ => panic!("Invalid index"),
                 };
 
-                (0..self.tile_count()).for_each(|tile_index| {
-                    let tile = self.tile(tile_index);
-                    // Tile should meet these conditions:
-                    // 1. It should meet the pass condition
-                    // 2. It should be not a natural wonder
-                    // 3. It should not be adjacent to a natural wonder
-                    // 4. all tiles around it in a given distance `river_source_range` (including self) should be not fresh water
-                    // 5. all tiles around it in a given distance `sea_water_range` (including self) should be not water
-
-                    if pass_condition(&tile, self, &mut random_number_generator, map_parameters)
-                        && tile.natural_wonder.is_none()
-                        && !tile
-                            .tile_neighbors(map_parameters)
-                            .iter()
-                            .any(|&neighbor_index| {
-                                self.natural_wonder_query[neighbor_index].is_some()
-                            })
-                        && !tile
-                            .tiles_in_distance(river_source_range, map_parameters)
-                            .iter()
-                            .any(|tile_index| {
-                                let tile = self.tile(*tile_index);
-                                tile.is_freshwater(self, map_parameters)
-                            })
-                        && !tile
-                            .tiles_in_distance(sea_water_range, map_parameters)
-                            .iter()
-                            .any(|tile_index| {
-                                let tile = self.tile(*tile_index);
-                                tile.is_water()
-                            })
-                    {
-                        let start_tile_index = self.get_inland_corner(tile_index, map_parameters);
-                        if let Some(start_tile_index) = start_tile_index {
-                            self.do_river(
-                                start_tile_index,
-                                Direction::None,
-                                Direction::None,
-                                river_id,
-                                &map_parameters,
-                            );
-                            river_id += 1;
-                        }
+                // Tile should meet these conditions:
+                // 1. It should meet the pass condition
+                // 2. It should be not a natural wonder
+                // 3. It should not be adjacent to a natural wonder
+                // 4. all tiles around it in a given distance `river_source_range` (including self) should be not fresh water
+                // 5. all tiles around it in a given distance `sea_water_range` (including self) should be not water
+                if pass_condition
+                    && tile_index.natural_wonder(self).is_none()
+                    && !tile_index.neighbor_tile_indices(map_parameters).iter().any(
+                        |neighbor_tile_index| neighbor_tile_index.natural_wonder(self).is_some(),
+                    )
+                    && !tile_index
+                        .tile_indices_in_distance(river_source_range, map_parameters)
+                        .iter()
+                        .any(|tile_index| tile_index.is_freshwater(self, map_parameters))
+                    && !tile_index
+                        .tile_indices_in_distance(sea_water_range, map_parameters)
+                        .iter()
+                        .any(|tile_index| tile_index.terrain_type(self) == TerrainType::Water)
+                {
+                    let start_tile_index = self.get_inland_corner(tile_index, map_parameters);
+                    if let Some(start_tile_index) = start_tile_index {
+                        self.do_river(
+                            start_tile_index,
+                            Direction::None,
+                            Direction::None,
+                            river_id,
+                            &map_parameters,
+                        );
+                        river_id += 1;
                     }
-                });
+                }
             });
-        self.random_number_generator = random_number_generator;
+        });
     }
 
     /// This function is called to create a river.
@@ -137,7 +114,7 @@ impl TileMap {
     /// In original Civ V, we only need to consider the case where the map is WrapX and the hex is pointy.
     fn do_river(
         &mut self,
-        start_tile_index: usize,
+        start_tile_index: TileIndex,
         this_flow_direction: Direction,
         original_flow_direction: Direction,
         river_id: i32,
@@ -197,18 +174,16 @@ impl TileMap {
                             .entry(river_id)
                             .or_default()
                             .push((river_tile_index, this_flow_direction));
-                        let river_tile = self.tile(river_tile_index);
-                        if let Some(neighbor_index) =
-                            river_tile.tile_neighbor(Direction::NorthEast, map_parameters)
+                        if let Some(neighbor_tile_index) = river_tile_index
+                            .neighbor_tile_index(Direction::NorthEast, map_parameters)
                         {
-                            let neighbor_tile = self.tile(neighbor_index);
-                            if neighbor_tile.is_water()
-                                || neighbor_tile.has_river(
+                            if neighbor_tile_index.terrain_type(self) == TerrainType::Water
+                                || neighbor_tile_index.has_river(
                                     Direction::SouthEast,
                                     self,
                                     map_parameters,
                                 )
-                                || neighbor_tile.has_river(
+                                || neighbor_tile_index.has_river(
                                     Direction::SouthWest,
                                     self,
                                     map_parameters,
@@ -216,7 +191,7 @@ impl TileMap {
                             {
                                 return;
                             } else {
-                                river_tile_index = neighbor_tile.index(map_parameters);
+                                river_tile_index = neighbor_tile_index;
                             }
                         } else {
                             return;
@@ -228,14 +203,12 @@ impl TileMap {
                             .entry(river_id)
                             .or_default()
                             .push((river_tile_index, this_flow_direction));
-                        let river_tile = self.tile(river_tile_index);
-                        if let Some(neighbor_index) =
-                            river_tile.tile_neighbor(Direction::East, map_parameters)
+                        if let Some(neighbor_tile_index) =
+                            river_tile_index.neighbor_tile_index(Direction::East, map_parameters)
                         {
-                            let neighbor_tile = self.tile(neighbor_index);
-                            if neighbor_tile.is_water()
-                                || river_tile.has_river(Direction::East, self, map_parameters)
-                                || neighbor_tile.has_river(
+                            if neighbor_tile_index.terrain_type(self) == TerrainType::Water
+                                || river_tile_index.has_river(Direction::East, self, map_parameters)
+                                || neighbor_tile_index.has_river(
                                     Direction::SouthWest,
                                     self,
                                     map_parameters,
@@ -248,11 +221,10 @@ impl TileMap {
                         }
                     }
                     Direction::SouthEast => {
-                        let start_tile = self.tile(start_tile_index);
-                        if let Some(neighbor_index) =
-                            start_tile.tile_neighbor(Direction::East, map_parameters)
+                        if let Some(neighbor_tile_index) =
+                            start_tile_index.neighbor_tile_index(Direction::East, map_parameters)
                         {
-                            river_tile_index = neighbor_index
+                            river_tile_index = neighbor_tile_index
                         } else {
                             return;
                         };
@@ -260,25 +232,30 @@ impl TileMap {
                             .entry(river_id)
                             .or_default()
                             .push((river_tile_index, this_flow_direction));
-                        let river_tile = self.tile(river_tile_index);
-                        if let Some(neighbor_index) =
-                            river_tile.tile_neighbor(Direction::SouthEast, map_parameters)
+                        if let Some(neighbor_tile_index) = river_tile_index
+                            .neighbor_tile_index(Direction::SouthEast, map_parameters)
                         {
-                            let neighbor_tile = self.tile(neighbor_index);
-                            if neighbor_tile.is_water()
-                                || river_tile.has_river(Direction::SouthEast, self, map_parameters)
+                            if neighbor_tile_index.terrain_type(self) == TerrainType::Water
+                                || river_tile_index.has_river(
+                                    Direction::SouthEast,
+                                    self,
+                                    map_parameters,
+                                )
                             {
                                 return;
                             }
                         } else {
                             return;
                         }
-                        if let Some(neighbor_index2) =
-                            river_tile.tile_neighbor(Direction::SouthWest, map_parameters)
+                        if let Some(neighbor_tile_index2) = river_tile_index
+                            .neighbor_tile_index(Direction::SouthWest, map_parameters)
                         {
-                            let neighbor_tile2 = self.tile(neighbor_index2);
-                            if neighbor_tile2.is_water()
-                                || neighbor_tile2.has_river(Direction::East, self, map_parameters)
+                            if neighbor_tile_index2.terrain_type(self) == TerrainType::Water
+                                || neighbor_tile_index2.has_river(
+                                    Direction::East,
+                                    self,
+                                    map_parameters,
+                                )
                             {
                                 return;
                             }
@@ -287,11 +264,10 @@ impl TileMap {
                         }
                     }
                     Direction::South => {
-                        let start_tile = self.tile(start_tile_index);
-                        if let Some(neighbor_index) =
-                            start_tile.tile_neighbor(Direction::SouthWest, map_parameters)
+                        if let Some(neighbor_tile_index) = start_tile_index
+                            .neighbor_tile_index(Direction::SouthWest, map_parameters)
                         {
-                            river_tile_index = neighbor_index
+                            river_tile_index = neighbor_tile_index
                         } else {
                             return;
                         };
@@ -299,25 +275,29 @@ impl TileMap {
                             .entry(river_id)
                             .or_default()
                             .push((river_tile_index, this_flow_direction));
-                        let river_tile = self.tile(river_tile_index);
-                        if let Some(neighbor_index) =
-                            river_tile.tile_neighbor(Direction::SouthEast, map_parameters)
+                        if let Some(neighbor_tile_index) = river_tile_index
+                            .neighbor_tile_index(Direction::SouthEast, map_parameters)
                         {
-                            let neighbor_tile = self.tile(neighbor_index);
-                            if neighbor_tile.is_water()
-                                || river_tile.has_river(Direction::SouthEast, self, map_parameters)
+                            if neighbor_tile_index.terrain_type(self) == TerrainType::Water
+                                || river_tile_index.has_river(
+                                    Direction::SouthEast,
+                                    self,
+                                    map_parameters,
+                                )
                             {
                                 return;
                             }
                         } else {
                             return;
                         }
-                        if let Some(neighbor_index2) =
-                            river_tile.tile_neighbor(Direction::East, map_parameters)
+                        if let Some(neighbor_tile_index2) =
+                            river_tile_index.neighbor_tile_index(Direction::East, map_parameters)
                         {
-                            let neighbor_tile2 = self.tile(neighbor_index2);
-                            if neighbor_tile2.has_river(Direction::SouthWest, self, map_parameters)
-                            {
+                            if neighbor_tile_index2.has_river(
+                                Direction::SouthWest,
+                                self,
+                                map_parameters,
+                            ) {
                                 return;
                             }
                         } else {
@@ -330,14 +310,20 @@ impl TileMap {
                             .entry(river_id)
                             .or_default()
                             .push((river_tile_index, this_flow_direction));
-                        let river_tile = self.tile(river_tile_index);
-                        if let Some(neighbor_index) =
-                            river_tile.tile_neighbor(Direction::SouthWest, map_parameters)
+                        if let Some(neighbor_tile_index) = river_tile_index
+                            .neighbor_tile_index(Direction::SouthWest, map_parameters)
                         {
-                            let neighbor_tile = self.tile(neighbor_index);
-                            if neighbor_tile.is_water()
-                                || neighbor_tile.has_river(Direction::East, self, map_parameters)
-                                || river_tile.has_river(Direction::SouthWest, self, map_parameters)
+                            if neighbor_tile_index.terrain_type(self) == TerrainType::Water
+                                || neighbor_tile_index.has_river(
+                                    Direction::East,
+                                    self,
+                                    map_parameters,
+                                )
+                                || river_tile_index.has_river(
+                                    Direction::SouthWest,
+                                    self,
+                                    map_parameters,
+                                )
                             {
                                 return;
                             }
@@ -351,14 +337,16 @@ impl TileMap {
                             .entry(river_id)
                             .or_default()
                             .push((river_tile_index, this_flow_direction));
-                        let river_tile = self.tile(river_tile_index);
-                        if let Some(neighbor_index) =
-                            river_tile.tile_neighbor(Direction::West, map_parameters)
+                        if let Some(neighbor_tile_index) =
+                            river_tile_index.neighbor_tile_index(Direction::West, map_parameters)
                         {
-                            let neighbor_tile = self.tile(neighbor_index);
-                            if neighbor_tile.is_water()
-                                || neighbor_tile.has_river(Direction::East, self, map_parameters)
-                                || neighbor_tile.has_river(
+                            if neighbor_tile_index.terrain_type(self) == TerrainType::Water
+                                || neighbor_tile_index.has_river(
+                                    Direction::East,
+                                    self,
+                                    map_parameters,
+                                )
+                                || neighbor_tile_index.has_river(
                                     Direction::SouthEast,
                                     self,
                                     map_parameters,
@@ -366,7 +354,7 @@ impl TileMap {
                             {
                                 return;
                             } else {
-                                river_tile_index = neighbor_tile.index(map_parameters);
+                                river_tile_index = neighbor_tile_index;
                             }
                         } else {
                             return;
@@ -384,14 +372,20 @@ impl TileMap {
                             .entry(river_id)
                             .or_default()
                             .push((river_tile_index, this_flow_direction));
-                        let river_tile = self.tile(river_tile_index);
-                        if let Some(neighbor_index) =
-                            river_tile.tile_neighbor(Direction::NorthEast, map_parameters)
+                        if let Some(neighbor_tile_index) = river_tile_index
+                            .neighbor_tile_index(Direction::NorthEast, map_parameters)
                         {
-                            let neighbor_tile = self.tile(neighbor_index);
-                            if neighbor_tile.is_water()
-                                || river_tile.has_river(Direction::NorthEast, self, map_parameters)
-                                || neighbor_tile.has_river(Direction::South, self, map_parameters)
+                            if neighbor_tile_index.terrain_type(self) == TerrainType::Water
+                                || river_tile_index.has_river(
+                                    Direction::NorthEast,
+                                    self,
+                                    map_parameters,
+                                )
+                                || neighbor_tile_index.has_river(
+                                    Direction::South,
+                                    self,
+                                    map_parameters,
+                                )
                             {
                                 return;
                             }
@@ -400,11 +394,10 @@ impl TileMap {
                         }
                     }
                     Direction::East => {
-                        let start_tile = self.tile(start_tile_index);
-                        if let Some(neighbor_index) =
-                            start_tile.tile_neighbor(Direction::NorthEast, map_parameters)
+                        if let Some(neighbor_tile_index) = start_tile_index
+                            .neighbor_tile_index(Direction::NorthEast, map_parameters)
                         {
-                            river_tile_index = neighbor_index
+                            river_tile_index = neighbor_tile_index
                         } else {
                             return;
                         };
@@ -412,25 +405,26 @@ impl TileMap {
                             .entry(river_id)
                             .or_default()
                             .push((river_tile_index, this_flow_direction));
-                        let river_tile = self.tile(river_tile_index);
-                        if let Some(neighbor_index) =
-                            river_tile.tile_neighbor(Direction::SouthEast, map_parameters)
+                        if let Some(neighbor_tile_index) = river_tile_index
+                            .neighbor_tile_index(Direction::SouthEast, map_parameters)
                         {
-                            let neighbor_tile = self.tile(neighbor_index);
-                            if neighbor_tile.is_water()
-                                || river_tile.has_river(Direction::SouthEast, self, map_parameters)
+                            if neighbor_tile_index.terrain_type(self) == TerrainType::Water
+                                || river_tile_index.has_river(
+                                    Direction::SouthEast,
+                                    self,
+                                    map_parameters,
+                                )
                             {
                                 return;
                             }
                         } else {
                             return;
                         }
-                        if let Some(neighbor_index2) =
-                            river_tile.tile_neighbor(Direction::South, map_parameters)
+                        if let Some(neighbor_tile_index2) =
+                            river_tile_index.neighbor_tile_index(Direction::South, map_parameters)
                         {
-                            let neighbor_tile2 = self.tile(neighbor_index2);
-                            if neighbor_tile2.is_water()
-                                || neighbor_tile2.has_river(
+                            if neighbor_tile_index2.terrain_type(self) == TerrainType::Water
+                                || neighbor_tile_index2.has_river(
                                     Direction::NorthEast,
                                     self,
                                     map_parameters,
@@ -443,11 +437,10 @@ impl TileMap {
                         }
                     }
                     Direction::SouthEast => {
-                        let start_tile = self.tile(start_tile_index);
-                        if let Some(neighbor_index) =
-                            start_tile.tile_neighbor(Direction::South, map_parameters)
+                        if let Some(neighbor_tile_index) =
+                            start_tile_index.neighbor_tile_index(Direction::South, map_parameters)
                         {
-                            river_tile_index = neighbor_index
+                            river_tile_index = neighbor_tile_index
                         } else {
                             return;
                         };
@@ -455,25 +448,30 @@ impl TileMap {
                             .entry(river_id)
                             .or_default()
                             .push((river_tile_index, this_flow_direction));
-                        let river_tile = self.tile(river_tile_index);
-                        if let Some(neighbor_index) =
-                            river_tile.tile_neighbor(Direction::SouthEast, map_parameters)
+                        if let Some(neighbor_tile_index) = river_tile_index
+                            .neighbor_tile_index(Direction::SouthEast, map_parameters)
                         {
-                            let neighbor_tile = self.tile(neighbor_index);
-                            if neighbor_tile.is_water()
-                                || river_tile.has_river(Direction::SouthEast, self, map_parameters)
+                            if neighbor_tile_index.terrain_type(self) == TerrainType::Water
+                                || river_tile_index.has_river(
+                                    Direction::SouthEast,
+                                    self,
+                                    map_parameters,
+                                )
                             {
                                 return;
                             }
                         } else {
                             return;
                         }
-                        if let Some(neighbor_index2) =
-                            river_tile.tile_neighbor(Direction::NorthEast, map_parameters)
+                        if let Some(neighbor_tile_index2) = river_tile_index
+                            .neighbor_tile_index(Direction::NorthEast, map_parameters)
                         {
-                            let neighbor_tile2 = self.tile(neighbor_index2);
-                            if neighbor_tile2.is_water()
-                                || neighbor_tile2.has_river(Direction::South, self, map_parameters)
+                            if neighbor_tile_index2.terrain_type(self) == TerrainType::Water
+                                || neighbor_tile_index2.has_river(
+                                    Direction::South,
+                                    self,
+                                    map_parameters,
+                                )
                             {
                                 return;
                             }
@@ -487,14 +485,16 @@ impl TileMap {
                             .entry(river_id)
                             .or_default()
                             .push((river_tile_index, this_flow_direction));
-                        let river_tile = self.tile(river_tile_index);
-                        if let Some(neighbor_index) =
-                            river_tile.tile_neighbor(Direction::South, map_parameters)
+                        if let Some(neighbor_tile_index) =
+                            river_tile_index.neighbor_tile_index(Direction::South, map_parameters)
                         {
-                            let neighbor_tile = self.tile(neighbor_index);
-                            if neighbor_tile.is_water()
-                                || river_tile.has_river(Direction::South, self, map_parameters)
-                                || neighbor_tile.has_river(
+                            if neighbor_tile_index.terrain_type(self) == TerrainType::Water
+                                || river_tile_index.has_river(
+                                    Direction::South,
+                                    self,
+                                    map_parameters,
+                                )
+                                || neighbor_tile_index.has_river(
                                     Direction::NorthEast,
                                     self,
                                     map_parameters,
@@ -512,18 +512,16 @@ impl TileMap {
                             .entry(river_id)
                             .or_default()
                             .push((river_tile_index, this_flow_direction));
-                        let river_tile = self.tile(river_tile_index);
-                        if let Some(neighbor_index) =
-                            river_tile.tile_neighbor(Direction::SouthWest, map_parameters)
+                        if let Some(neighbor_tile_index) = river_tile_index
+                            .neighbor_tile_index(Direction::SouthWest, map_parameters)
                         {
-                            let neighbor_tile = self.tile(neighbor_index);
-                            if neighbor_tile.is_water()
-                                || neighbor_tile.has_river(
+                            if neighbor_tile_index.terrain_type(self) == TerrainType::Water
+                                || neighbor_tile_index.has_river(
                                     Direction::NorthEast,
                                     self,
                                     map_parameters,
                                 )
-                                || neighbor_tile.has_river(
+                                || neighbor_tile_index.has_river(
                                     Direction::SouthEast,
                                     self,
                                     map_parameters,
@@ -531,7 +529,7 @@ impl TileMap {
                             {
                                 return;
                             } else {
-                                river_tile_index = neighbor_tile.index(map_parameters);
+                                river_tile_index = neighbor_tile_index;
                             }
                         } else {
                             return;
@@ -543,14 +541,16 @@ impl TileMap {
                             .entry(river_id)
                             .or_default()
                             .push((river_tile_index, this_flow_direction));
-                        let river_tile = self.tile(river_tile_index);
-                        if let Some(neighbor_index) =
-                            river_tile.tile_neighbor(Direction::North, map_parameters)
+                        if let Some(neighbor_tile_index) =
+                            river_tile_index.neighbor_tile_index(Direction::North, map_parameters)
                         {
-                            let neighbor_tile = self.tile(neighbor_index);
-                            if neighbor_tile.is_water()
-                                || neighbor_tile.has_river(Direction::South, self, map_parameters)
-                                || neighbor_tile.has_river(
+                            if neighbor_tile_index.terrain_type(self) == TerrainType::Water
+                                || neighbor_tile_index.has_river(
+                                    Direction::South,
+                                    self,
+                                    map_parameters,
+                                )
+                                || neighbor_tile_index.has_river(
                                     Direction::SouthEast,
                                     self,
                                     map_parameters,
@@ -558,7 +558,7 @@ impl TileMap {
                             {
                                 return;
                             } else {
-                                river_tile_index = neighbor_tile.index(map_parameters);
+                                river_tile_index = neighbor_tile_index;
                             }
                         } else {
                             return;
@@ -570,18 +570,17 @@ impl TileMap {
                 },
             }
 
-            let river_tile = self.tile(river_tile_index);
-            if river_tile.is_water() {
+            if river_tile_index.terrain_type(self) == TerrainType::Water {
                 return;
             }
 
             fn river_value_at_tile(
-                tile_index: usize,
+                tile_index: TileIndex,
                 tile_map: &mut TileMap,
                 map_parameters: &MapParameters,
             ) -> i32 {
-                fn tile_elevation(tile: &Tile) -> i32 {
-                    match tile.terrain_type {
+                fn tile_elevation(tile_index: TileIndex, tile_map: &TileMap) -> i32 {
+                    match tile_index.terrain_type(tile_map) {
                         TerrainType::Mountain => 4,
                         TerrainType::Hill => 3,
                         TerrainType::Water => 2,
@@ -589,33 +588,33 @@ impl TileMap {
                     }
                 }
 
-                let tile = tile_map.tile(tile_index);
-
-                if tile.natural_wonder.is_some()
-                    || tile
-                        .tile_neighbors(map_parameters)
-                        .iter()
-                        .any(|&neighbor_index| {
-                            let neighbor_tile = tile_map.tile(neighbor_index);
-                            neighbor_tile.natural_wonder.is_some()
-                        })
+                // Check if the tile itself or any of its neighboring tiles are natural wonders.
+                if tile_index.natural_wonder(tile_map).is_some()
+                    || tile_index.neighbor_tile_indices(map_parameters).iter().any(
+                        |&neighbor_tile_index| {
+                            neighbor_tile_index.natural_wonder(tile_map).is_some()
+                        },
+                    )
                 {
                     return -1;
                 }
 
-                let mut sum = tile_elevation(&tile) * 20;
-                let direction_array = map_parameters.edge_direction_array();
-                direction_array.iter().for_each(|&direction| {
-                    if let Some(adjacent_index) = tile.tile_neighbor(direction, map_parameters) {
-                        let adjacent_tile = tile_map.tile(adjacent_index);
-                        sum += tile_elevation(&adjacent_tile);
-                        if adjacent_tile.base_terrain == BaseTerrain::Desert {
+                let mut sum = tile_elevation(tile_index, tile_map) * 20;
+
+                let neighbor_tile_indices = tile_index.neighbor_tile_indices(map_parameters);
+
+                // Usually, the tile have 6 neighbors. If not, the sum increases by 40 for each missing neighbor of the tile.
+                sum += 40 * (6 - neighbor_tile_indices.len() as i32);
+
+                neighbor_tile_indices
+                    .iter()
+                    .for_each(|&neighbor_tile_index| {
+                        sum += tile_elevation(neighbor_tile_index, tile_map);
+                        if neighbor_tile_index.base_terrain(tile_map) == BaseTerrain::Desert {
                             sum += 4;
                         }
-                    } else {
-                        sum += 40;
-                    }
-                });
+                    });
+
                 sum += tile_map.random_number_generator.gen_range(0..10);
                 sum
             }
@@ -636,8 +635,8 @@ impl TileMap {
                                 || next_flow_directions(this_flow_direction, map_parameters)
                                     .contains(&flow_direction))
                     {
-                        river_tile
-                            .tile_neighbor(direction, map_parameters)
+                        river_tile_index
+                            .neighbor_tile_index(direction, map_parameters)
                             .map(|neighbor_index| (flow_direction, neighbor_index))
                     } else {
                         None
@@ -684,45 +683,56 @@ impl TileMap {
         /************ Do river End ************/
     }
 
-    /// Finds an *inland* corner of this plot at which to place a river.
+    /// Retrieves an inland corner tile index based on the provided tile index and map parameters.
+    ///
+    /// An inland corner is defined as a tile that has all its neighboring tiles in specific directions
+    /// (0 to 3) not being water. The function will first collect the current tile and its neighbors
+    /// located in specified edge directions (3 to 5), then filter out those that do not qualify
+    /// as inland corners.
+    ///
+    /// # Parameters
+    /// - `tile_index`: The index of the current tile.
+    /// - `map_parameters`: Parameters that define the map, including terrain types and edge directions.
+    ///
+    /// # Returns
+    /// An `Option<TileIndex>`, which will be `Some(TileIndex)` if an inland corner is found,
+    /// or `None` if no such corner exists.
     fn get_inland_corner(
         &mut self,
-        tile_index: usize,
+        tile_index: TileIndex,
         map_parameters: &MapParameters,
-    ) -> Option<usize> {
-        let mut plot_list = vec![tile_index];
+    ) -> Option<TileIndex> {
+        // We choose current tile and its `map_parameters.edge_direction_array()[3..6]` neighbors as the candidate inland corners
 
-        let corner_candidate_direction = &map_parameters.edge_direction_array()[3..6];
+        // Initialize a list with the current tile index
+        let mut tile_index_list = vec![tile_index];
 
-        corner_candidate_direction
-            .iter()
-            .filter_map(|&direction| {
-                let tile = self.tile(tile_index);
-                tile.tile_neighbor(direction, map_parameters)
-            })
-            .for_each(|neighbor_index| {
-                plot_list.push(neighbor_index);
-            });
+        // Collect valid neighbor tiles in edge directions [3..6]
+        tile_index_list.extend(
+            map_parameters.edge_direction_array()[3..6]
+                .iter()
+                .filter_map(|&direction| tile_index.neighbor_tile_index(direction, map_parameters)),
+        );
 
-        // Remove plots that are not corners
-        // A corner is a plot whose `map_parameters.edge_direction_array()[0..3]` neighbor exists and is not water
-        plot_list.retain(|&tile_index| {
-            let tile = self.tile(tile_index);
+        // Retain only those tiles that qualify as inland corners
+        // An inland corner requires all neighbors in edge directions [0..3] to exist and not be water
+        tile_index_list.retain(|&tile_index| {
             map_parameters.edge_direction_array()[0..3]
                 .iter()
                 .all(|&direction| {
-                    let neighbor_index = tile.tile_neighbor(direction, map_parameters);
-                    if let Some(neighbor_index) = neighbor_index {
-                        let neighbor_tile = self.tile(neighbor_index);
-                        !neighbor_tile.is_water()
+                    let neighbor_index = tile_index.neighbor_tile_index(direction, map_parameters);
+                    if let Some(neighbor_tile_index) = neighbor_index {
+                        neighbor_tile_index.terrain_type(self) != TerrainType::Water
                     } else {
                         false
                     }
                 })
         });
 
-        // Choose a random corner
-        plot_list.choose(&mut self.random_number_generator).copied()
+        // Choose a random corner if any exist
+        tile_index_list
+            .choose(&mut self.random_number_generator)
+            .copied()
     }
 
     /// Returns the number of river edges in the current area according to `area_id`
@@ -730,15 +740,21 @@ impl TileMap {
         self.river_list
             .values()
             .flatten()
-            .filter(|(tile_index, _)| {
-                let area_id = self.area_id_query[*tile_index];
-                area_id == current_area_id
-            })
+            .filter(|(tile_index, _)| tile_index.area_id(self) == current_area_id)
             .count() as u32
     }
 }
 
-/// Returns the next possible flow directions of the river according to the current flow direction.
+/// Returns the next possible flow directions of the river based on the current flow direction.
+///
+/// # Parameters
+/// - `flow_direction`: The current direction of the river flow.
+/// - `map_parameters`: A reference to the map parameters that include hex layout information.
+///
+/// # Returns
+/// An array containing two `Direction` values:
+/// - The first element represents the flow direction after a clockwise turn.
+/// - The second element represents the flow direction after a counterclockwise turn.
 const fn next_flow_directions(
     flow_direction: Direction,
     map_parameters: &MapParameters,

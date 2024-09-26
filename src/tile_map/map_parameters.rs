@@ -3,9 +3,11 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use bevy::{math::DVec2, prelude::Resource};
 
 use crate::grid::{
-    hex::{HexLayout, HexOrientation, Offset, OffsetCoordinate},
+    hex::{HexLayout, HexOrientation, Offset},
     Direction,
 };
+
+use super::tile_index::TileIndex;
 
 #[derive(Resource)]
 pub struct MapParameters {
@@ -126,8 +128,7 @@ impl MapParameters {
         let (min_offset_x, min_offset_y) = [0, 1, width].into_iter().fold(
             (0.0_f64, 0.0_f64),
             |(min_offset_x, min_offset_y), index| {
-                let offset_coordinate = self.index_to_offset_coordinate(index as usize);
-                let hex = offset_coordinate.to_hex(self.offset, self.hex_layout.orientation);
+                let hex = TileIndex::new(index as usize).to_hex_coordinate(self);
 
                 let [offset_x, offset_y] = self.hex_layout.hex_to_pixel(hex).to_array();
                 (min_offset_x.min(offset_x), min_offset_y.min(offset_y))
@@ -141,8 +142,7 @@ impl MapParameters {
         ]
         .into_iter()
         .fold((0.0_f64, 0.0_f64), |(max_offset_x, max_offset_y), index| {
-            let offset_coordinate = self.index_to_offset_coordinate(index as usize);
-            let hex = offset_coordinate.to_hex(self.offset, self.hex_layout.orientation);
+            let hex = TileIndex::new(index as usize).to_hex_coordinate(self);
 
             let [offset_x, offset_y] = self.hex_layout.hex_to_pixel(hex).to_array();
             (max_offset_x.max(offset_x), max_offset_y.max(offset_y))
@@ -152,48 +152,11 @@ impl MapParameters {
             -(DVec2::new(min_offset_x, min_offset_y) + DVec2::new(max_offset_x, max_offset_y)) / 2.;
     }
 
-    pub const fn index_to_offset_coordinate(&self, index: usize) -> OffsetCoordinate {
-        let map_size = self.map_size;
-        assert!(index < (map_size.width * map_size.height) as usize);
-        let x = index as i32 % map_size.width;
-        let y = index as i32 / map_size.width;
-        OffsetCoordinate::new(x, y)
-    }
-
-    pub const fn offset_coordinate_to_index(&self, offset_coordinate: OffsetCoordinate) -> usize {
-        let map_size = self.map_size;
-        let width = self.map_size.width as i32;
-        let height = self.map_size.height as i32;
-        // Check if the offset coordinate is inside the map
-        let [mut x, mut y] = offset_coordinate.to_array();
-
-        if self.wrap_x {
-            x = (x % width + width) % width
-        };
-        if self.wrap_y {
-            y = (y % height + height) % height
-        };
-
-        assert!((x >= 0) && (x < width) && (y >= 0) && (y < height));
-
-        (x + y * map_size.width) as usize
-    }
-
     pub const fn edge_direction_array(&self) -> [Direction; 6] {
         self.hex_layout.orientation.edge_direction()
     }
 
     pub const fn corner_direction_array(&self) -> [Direction; 6] {
         self.hex_layout.orientation.corner_direction()
-    }
-
-    /// Calculates the latitude of the tile on the tile map.
-    ///
-    /// Define that the latitude of the equator is `0.0` and the latitudes of the poles are `1.0`.
-    /// The closer the latitude is to `0.0`, the closer the tile is to the equator; the closer the latitude is to `1.0`, the closer the tile is to the poles.
-    pub fn latitude(&self, index: usize) -> f64 {
-        let y = Self::index_to_offset_coordinate(self, index).0.y;
-        let half_height = self.map_size.height as f64 / 2.0;
-        ((half_height - y as f64) / half_height).abs()
     }
 }

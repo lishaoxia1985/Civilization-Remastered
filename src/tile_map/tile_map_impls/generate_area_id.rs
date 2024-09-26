@@ -4,7 +4,7 @@ use bevy::utils::hashbrown::HashSet;
 
 use crate::{
     map::{terrain_type::TerrainType, AreaIdAndSize},
-    tile_map::{MapParameters, Tile, TileMap},
+    tile_map::{tile_index::TileIndex, MapParameters, TileMap},
 };
 
 impl TileMap {
@@ -12,21 +12,12 @@ impl TileMap {
         &mut self,
         map_parameters: &MapParameters,
         area_id_and_size: &mut AreaIdAndSize,
-        filter_condition: impl Fn(&Tile) -> bool,
+        mut area_tile_indices: HashSet<TileIndex>,
     ) {
-        let mut area_tile_indices = (0..self.tile_count())
-            .into_iter()
-            .filter(|&tile_index| {
-                let tile = self.tile(tile_index);
-                filter_condition(&tile)
-            })
-            .map(|tile_index| tile_index)
-            .collect::<HashSet<_>>();
-
         let mut current_area_id = self.area_id_query.iter().max().unwrap() + 1;
 
         while let Some(&initial_area_tile_index) = area_tile_indices.iter().next() {
-            self.area_id_query[initial_area_tile_index] = current_area_id;
+            self.area_id_query[*initial_area_tile_index] = current_area_id;
             area_tile_indices.remove(&initial_area_tile_index);
 
             // Store all the entities in the current area.
@@ -38,16 +29,15 @@ impl TileMap {
             tile_indices_to_check.push_back(initial_area_tile_index);
 
             while let Some(tile_index_we_are_checking) = tile_indices_to_check.pop_front() {
-                let tile_we_are_checking = self.tile(tile_index_we_are_checking);
-                tile_we_are_checking
-                    .tile_neighbors(map_parameters)
+                tile_index_we_are_checking
+                    .neighbor_tile_indices(map_parameters)
                     .iter()
                     .for_each(|&tile_index| {
                         if !tile_indices_in_current_area.contains(&tile_index)
                             && area_tile_indices.contains(&tile_index)
                         {
                             tile_indices_in_current_area.insert(tile_index);
-                            self.area_id_query[tile_index] = current_area_id;
+                            self.area_id_query[*tile_index] = current_area_id;
                             tile_indices_to_check.push_back(tile_index);
                             area_tile_indices.remove(&tile_index);
                         }
@@ -64,21 +54,12 @@ impl TileMap {
         &mut self,
         map_parameters: &MapParameters,
         area_id_and_size: &mut AreaIdAndSize,
-        filter_condition: impl Fn(&Tile) -> bool,
+        mut area_tile_indices: HashSet<TileIndex>,
     ) {
-        let mut area_tile_indices = (0..self.tile_count())
-            .into_iter()
-            .filter(|&tile_index| {
-                let tile = self.tile(tile_index);
-                filter_condition(&tile)
-            })
-            .map(|tile_index| tile_index)
-            .collect::<HashSet<_>>();
-
         let mut current_area_id = self.area_id_query.iter().max().unwrap() + 1;
 
         while let Some(&initial_area_tile_index) = area_tile_indices.iter().next() {
-            self.area_id_query[initial_area_tile_index] = current_area_id;
+            self.area_id_query[*initial_area_tile_index] = current_area_id;
             area_tile_indices.remove(&initial_area_tile_index);
 
             // Store all the entities in the current area.
@@ -90,16 +71,15 @@ impl TileMap {
             tile_indices_to_check.push(initial_area_tile_index);
 
             while let Some(tile_index_we_are_checking) = tile_indices_to_check.pop() {
-                let tile_we_are_checking = self.tile(tile_index_we_are_checking);
-                tile_we_are_checking
-                    .tile_neighbors(map_parameters)
+                tile_index_we_are_checking
+                    .neighbor_tile_indices(map_parameters)
                     .iter()
                     .for_each(|&tile_index| {
                         if !tile_indices_in_current_area.contains(&tile_index)
                             && area_tile_indices.contains(&tile_index)
                         {
                             tile_indices_in_current_area.insert(tile_index);
-                            self.area_id_query[tile_index] = current_area_id;
+                            self.area_id_query[*tile_index] = current_area_id;
                             tile_indices_to_check.push(tile_index);
                             area_tile_indices.remove(&tile_index);
                         }
@@ -115,29 +95,40 @@ impl TileMap {
     pub fn recalculate_areas(
         &mut self,
         map_parameters: &MapParameters,
-        mut area_id_and_size: &mut AreaIdAndSize,
+        area_id_and_size: &mut AreaIdAndSize,
     ) {
         area_id_and_size.0.clear();
 
-        self.area_id_query = vec![-1; self.tile_count()];
+        let height = map_parameters.map_size.height;
+        let width = map_parameters.map_size.width;
 
-        let water_condition = |tile: &Tile| tile.terrain_type == TerrainType::Water;
+        let size = (height * width) as usize;
 
-        let hill_and_flatland_condition = |tile: &Tile| {
-            tile.terrain_type == TerrainType::Flatland || tile.terrain_type == TerrainType::Hill
-        };
+        self.area_id_query = vec![-1; size];
 
-        let mountain_condition = |tile: &Tile| tile.terrain_type == TerrainType::Mountain;
+        let mut water_tile_indices = HashSet::new();
+        let mut hill_and_flatland_tile_indices = HashSet::new();
+        let mut mountain_tile_indices = HashSet::new();
 
-        let conditions = vec![
-            water_condition,
-            hill_and_flatland_condition,
-            mountain_condition,
-        ];
-
-        conditions.iter().for_each(|condition| {
-            self.bfs(&map_parameters, &mut area_id_and_size, condition);
+        self.tile_indices_iter().for_each(|tile_index| {
+            match tile_index.terrain_type(self) {
+                TerrainType::Water => water_tile_indices.insert(tile_index),
+                TerrainType::Flatland | TerrainType::Hill => {
+                    hill_and_flatland_tile_indices.insert(tile_index)
+                }
+                TerrainType::Mountain => mountain_tile_indices.insert(tile_index),
+            };
         });
+
+        self.bfs(map_parameters, area_id_and_size, water_tile_indices);
+        self.bfs(
+            map_parameters,
+            area_id_and_size,
+            hill_and_flatland_tile_indices,
+        );
+        self.bfs(map_parameters, area_id_and_size, mountain_tile_indices);
+
+        self.reassign_area_id(map_parameters, area_id_and_size);
     }
 
     pub fn reassign_area_id(
@@ -147,54 +138,54 @@ impl TileMap {
     ) {
         const MIN_AREA_SIZE: u32 = 7;
 
-        // Get id of the smaller area whose size < MIN_AREA_SIZE
+        // Get the id of the smaller area whose size < MIN_AREA_SIZE
         let small_area_id: Vec<_> = area_id_and_size
             .0
             .iter()
-            .filter(|(_, size)| **size < MIN_AREA_SIZE)
-            .map(|(&id, _)| id)
+            .filter_map(|(&id, &size)| (size < MIN_AREA_SIZE).then_some(id))
             .collect();
 
         small_area_id.into_iter().for_each(|current_area_id| {
-            let tile_indices_current_area = self
-                .area_id_query
-                .iter()
-                .enumerate()
-                .filter(|(_, area_id)| **area_id == current_area_id)
-                .map(|(tile_index, _)| tile_index)
+            let tile_indices_in_current_area = self
+                .tile_indices_iter()
+                .filter(|tile_index| tile_index.area_id(self) == current_area_id)
                 .collect::<Vec<_>>();
 
+            let first_tile_index = tile_indices_in_current_area[0];
             // Check if the current area is water
-            let area_is_water =
-                self.terrain_type_query[tile_indices_current_area[0]] == TerrainType::Water;
+            let current_area_is_water = first_tile_index.terrain_type(self) == TerrainType::Water;
 
             // Get the border entities of the current area, these entities don't belong to the area, but they surround the area.
             // Using BTreeSet to store the border entities will make sure the entities are processed in the same order every time.
             // That means that we can get the same 'surround_area_size_and_id' every time.
             let mut border_tile_indices = BTreeSet::new();
 
-            tile_indices_current_area.iter().for_each(|&tile_index| {
-                let tile = self.tile(tile_index);
+            tile_indices_in_current_area.iter().for_each(|&tile_index| {
                 // Get the neighbor entities of the current tile
-                let neighbor_indices = tile.tile_neighbors(&map_parameters);
+                let neighbor_tile_indices = tile_index.neighbor_tile_indices(&map_parameters);
                 // Get the neighbor entities that don't belong to the current area and add them to the border entities
-                neighbor_indices.into_iter().for_each(|neighbor_index| {
-                    let neighbor_is_water =
-                        self.terrain_type_query[neighbor_index] == TerrainType::Water;
-                    if area_is_water == neighbor_is_water
-                        && !tile_indices_current_area.contains(&neighbor_index)
-                    {
-                        border_tile_indices.insert(neighbor_index);
-                    }
-                });
+                neighbor_tile_indices
+                    .into_iter()
+                    .for_each(|neighbor_tile_index| {
+                        let neighbor_tile_is_water =
+                            neighbor_tile_index.terrain_type(self) == TerrainType::Water;
+                        // The neigbor tile is border tile if it meets the following conditions:
+                        // 1. If the current area is water the neighbor tile is water, or if the current area is land the neighbor tile is land.
+                        // 2. The neighbor tile doesn't belong to the current area.
+                        if current_area_is_water == neighbor_tile_is_water
+                            && !tile_indices_in_current_area.contains(&neighbor_tile_index)
+                        {
+                            border_tile_indices.insert(neighbor_tile_index);
+                        }
+                    });
             });
 
             // Get the size and area id of the surround area
             // Notice: different surround area may have the same size, we use BTreeMap only to retain the last added pair (area_size, area_id)
             let surround_area_size_and_id: BTreeMap<u32, i32> = border_tile_indices
                 .iter()
-                .map(|&tile_index| {
-                    let area_id = self.area_id_query[tile_index];
+                .map(|tile_index| {
+                    let area_id = tile_index.area_id(self);
                     let area_size = area_id_and_size.0[&area_id];
                     (area_size, area_id)
                 })
@@ -204,18 +195,17 @@ impl TileMap {
             // Get the area id of the largest surround area and assign it to the current area
             if let Some((&area_size, &new_area_id)) = surround_area_size_and_id.last_key_value() {
                 if area_size >= MIN_AREA_SIZE {
-                    let first_tile_index = tile_indices_current_area[0];
-                    let old_area_id = self.area_id_query[first_tile_index];
+                    let old_area_id = first_tile_index.area_id(self);
 
                     area_id_and_size.0.remove(&old_area_id);
 
                     area_id_and_size
                         .0
                         .entry(new_area_id)
-                        .and_modify(|e| *e += tile_indices_current_area.len() as u32);
+                        .and_modify(|e| *e += tile_indices_in_current_area.len() as u32);
 
-                    tile_indices_current_area.iter().for_each(|&tile_index| {
-                        self.area_id_query[tile_index] = new_area_id;
+                    tile_indices_in_current_area.iter().for_each(|&tile_index| {
+                        self.area_id_query[*tile_index] = new_area_id;
                     })
                 }
             }

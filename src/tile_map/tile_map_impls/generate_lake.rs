@@ -1,9 +1,8 @@
-use bevy::utils::HashSet;
 use rand::Rng;
 
 use crate::{
     map::{base_terrain::BaseTerrain, terrain_type::TerrainType, AreaIdAndSize},
-    tile_map::{MapParameters, TileMap},
+    tile_map::{tile_index::TileIndex, MapParameters, TileMap},
 };
 
 impl TileMap {
@@ -16,12 +15,12 @@ impl TileMap {
         map_parameters: &MapParameters,
         area_id_and_size: &AreaIdAndSize,
     ) {
-        (0..self.tile_count()).into_iter().for_each(|tile_index| {
-            let tile = self.tile(tile_index);
-            if tile.terrain_type == TerrainType::Water
-                && area_id_and_size.0[&tile.area_id] <= map_parameters.lake_max_area_size
+        self.tile_indices_iter().for_each(|tile_index| {
+            if tile_index.terrain_type(self) == TerrainType::Water
+                && area_id_and_size.0[&tile_index.area_id(self)]
+                    <= map_parameters.lake_max_area_size
             {
-                self.base_terrain_query[tile_index] = BaseTerrain::Lake;
+                self.base_terrain_query[*tile_index] = BaseTerrain::Lake;
             }
         });
     }
@@ -32,7 +31,7 @@ impl TileMap {
         let mut num_large_lakes_added = 0;
         let lake_plot_rand = 25;
 
-        (0..self.tile_count()).into_iter().for_each(|tile_index| {
+        self.tile_indices_iter().for_each(|tile_index| {
             if self.can_add_lake(tile_index, &map_parameters)
                 && self.random_number_generator.gen_range(0..lake_plot_rand) == 0
             {
@@ -43,66 +42,73 @@ impl TileMap {
                         num_large_lakes_added += 1;
                     }
                 }
-                self.terrain_type_query[tile_index] = TerrainType::Water;
-                self.base_terrain_query[tile_index] = BaseTerrain::Lake;
-                self.feature_query[tile_index] = None;
+                self.terrain_type_query[*tile_index] = TerrainType::Water;
+                self.base_terrain_query[*tile_index] = BaseTerrain::Lake;
+                self.feature_query[*tile_index] = None;
             }
         });
     }
 
-    fn add_more_lake(&mut self, tile_index: usize, map_parameters: &MapParameters) -> bool {
+    fn add_more_lake(&mut self, tile_index: TileIndex, map_parameters: &MapParameters) -> bool {
         let mut large_lake = 0;
 
-        let edge_direction_array = map_parameters.edge_direction_array();
+        let mut lake_tile_index = Vec::new();
 
-        let tile = self.tile(tile_index);
-
-        edge_direction_array.into_iter().for_each(|direction| {
-            let neighbor_index = tile.tile_neighbor(direction, map_parameters);
-            if let Some(neighbor_index) = neighbor_index {
-                if self.can_add_lake(neighbor_index, map_parameters)
+        tile_index
+            .neighbor_tile_indices(map_parameters)
+            .into_iter()
+            .for_each(|neighbor_tile_index| {
+                if self.can_add_lake(neighbor_tile_index, map_parameters)
                     && self.random_number_generator.gen_range(0..(large_lake + 4)) < 3
                 {
-                    self.terrain_type_query[neighbor_index] = TerrainType::Water;
-                    self.base_terrain_query[neighbor_index] = BaseTerrain::Lake;
-                    self.feature_query[neighbor_index] = None;
+                    lake_tile_index.push(neighbor_tile_index);
                     large_lake += 1;
                 }
-            }
+            });
+
+        lake_tile_index.into_iter().for_each(|tile_index| {
+            self.terrain_type_query[*tile_index] = TerrainType::Water;
+            self.base_terrain_query[*tile_index] = BaseTerrain::Lake;
+            self.feature_query[*tile_index] = None;
         });
 
         large_lake > 2
     }
 
-    /// This function checks if a tile can have a lake.
+    /// Checks if a tile can have a lake.
     ///
-    /// The tile that can have a lake should meet these conditions:
-    /// 1. The tile is not water
-    /// 2. The tile is not a natural wonder
-    /// 3. The tile is not adjacent to a river
-    /// 4. The tile is not adjacent to water
-    /// 5. The tile is not adjacent to a natural wonder
-    fn can_add_lake(&self, tile_index: usize, map_parameters: &MapParameters) -> bool {
+    /// A tile can have a lake if it meets the following conditions:
+    /// 1. The tile is not water.
+    /// 2. The tile is not a natural wonder.
+    /// 3. The tile is not adjacent to a river.
+    /// 4. The tile is not adjacent to water.
+    /// 5. The tile is not adjacent to a natural wonder.
+    ///
+    /// # Parameters
+    /// - `tile_index`: The index of the tile being checked.
+    /// - `map_parameters`: A reference to the map parameters to retrieve edge directions and neighboring tile information.
+    ///
+    /// # Returns
+    /// - `true` if the tile can have a lake, otherwise `false`.
+    fn can_add_lake(&self, tile_index: TileIndex, map_parameters: &MapParameters) -> bool {
         let edge_direction_array = map_parameters.edge_direction_array();
 
-        let tile = self.tile(tile_index);
-
         // Check if the current tile is suitable for a lake
-        if tile.terrain_type == TerrainType::Water
-            || tile.natural_wonder.is_some()
+        if tile_index.terrain_type(self) == TerrainType::Water
+            || tile_index.natural_wonder(self).is_some()
             || edge_direction_array
                 .iter()
-                .any(|&direction| tile.has_river(direction, self, map_parameters))
+                .any(|&direction| tile_index.has_river(direction, self, map_parameters))
         {
             return false;
         }
 
-        let neighbor_indices = tile.tile_neighbors(&map_parameters);
+        let neighbor_tile_indices = tile_index.neighbor_tile_indices(&map_parameters);
 
         // Check if all neighbor tiles are also suitable
-        neighbor_indices.iter().all(|&neighbor_index| {
-            let tile = self.tile(neighbor_index);
-            tile.terrain_type != TerrainType::Water && tile.natural_wonder.is_none()
+        neighbor_tile_indices.iter().all(|neighbor_tile_index| {
+            neighbor_tile_index.terrain_type(self) != TerrainType::Water
+                && neighbor_tile_index.natural_wonder(self).is_none()
         })
     }
 }

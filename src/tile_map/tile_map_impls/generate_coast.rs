@@ -12,15 +12,13 @@ impl TileMap {
     /// 1. For each tile, if it is water and has at least one neighbor that is not water, set its base_terrain to coast.
     /// 2. Expand the coast terrain to its eligible neighbors according the Vec `coast_expand_chance` in MapParameters.
     pub fn generate_coast(&mut self, map_parameters: &MapParameters) {
-        (0..self.tile_count()).into_iter().for_each(|tile_index| {
-            let tile = self.tile(tile_index);
-            if tile.terrain_type == TerrainType::Water {
-                let neighbor_indices = tile.tile_neighbors(&map_parameters);
-                if neighbor_indices.iter().any(|&index| {
-                    let tile = self.tile(index);
-                    tile.terrain_type != TerrainType::Water
+        self.tile_indices_iter().for_each(|tile_index| {
+            if tile_index.terrain_type(self) == TerrainType::Water {
+                let neighbor_tile_indices = tile_index.neighbor_tile_indices(&map_parameters);
+                if neighbor_tile_indices.iter().any(|&neighbor_tile_index| {
+                    neighbor_tile_index.terrain_type(self) != TerrainType::Water
                 }) {
-                    self.base_terrain_query[tile_index] = BaseTerrain::Coast;
+                    self.base_terrain_query[*tile_index] = BaseTerrain::Coast;
                 }
             }
         });
@@ -43,8 +41,7 @@ impl TileMap {
                 Because if we update the base_terrain of the tile in the iteration,
                 the tile will be used in the next iteration(e.g. tile.tile_neighbors().iter().any()),
                 which will cause the result to be wrong. */
-                (0..self.tile_count()).into_iter().for_each(|tile_index| {
-                    let tile = self.tile(tile_index);
+                self.tile_indices_iter().for_each(|tile_index| {
                     // The tiles that can be expanded should meet some conditions:
                     //      1. They are water and not already coast
                     //      2. They have at least one neighbor that is coast
@@ -53,15 +50,13 @@ impl TileMap {
                     //      because when we create the map we set Ocean as the default BaseTerrain to all the tile,
                     //      that means at this time there are some tiles that their base_terrain = Ocean but their terrain_type is not Water!
                     //      We will tackle with this situation in [`TileMap::generate_terrain`].
-                    if tile.is_water()
-                        && tile.base_terrain != BaseTerrain::Coast
-                        && tile
-                            .tile_neighbors(map_parameters)
-                            .iter()
-                            .any(|&tile_index| {
-                                let tile = self.tile(tile_index);
-                                tile.base_terrain == BaseTerrain::Coast
-                            })
+                    if tile_index.terrain_type(self) == TerrainType::Water
+                        && tile_index.base_terrain(self) != BaseTerrain::Coast
+                        && tile_index.neighbor_tile_indices(map_parameters).iter().any(
+                            |neighbor_tile_index| {
+                                neighbor_tile_index.base_terrain(self) == BaseTerrain::Coast
+                            },
+                        )
                         && self.random_number_generator.gen_bool(chance)
                     {
                         expansion_tile_index.push(tile_index);
@@ -69,7 +64,7 @@ impl TileMap {
                 });
 
                 expansion_tile_index.into_iter().for_each(|tile_index| {
-                    self.base_terrain_query[tile_index] = BaseTerrain::Coast;
+                    self.base_terrain_query[*tile_index] = BaseTerrain::Coast;
                 });
             });
     }

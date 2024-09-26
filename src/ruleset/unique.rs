@@ -16,8 +16,9 @@ impl Unique {
         let unique_without_conditionals = CONDITION_REGEX.replace_all(unique, "");
         let unique_without_conditionals = unique_without_conditionals.trim();
 
-        let placeholder_text = PARAMS_REGEX.replace_all(unique_without_conditionals, "[]");
-        let placeholder_text = placeholder_text.as_ref().to_owned();
+        let placeholder_text = PARAMS_REGEX
+            .replace_all(unique_without_conditionals, "[]")
+            .to_string();
 
         let params = PARAMS_REGEX
             .captures_iter(unique_without_conditionals)

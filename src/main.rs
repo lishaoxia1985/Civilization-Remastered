@@ -6,7 +6,6 @@ mod ruleset;
 mod tile_map;
 
 use std::collections::BTreeMap;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use assets::{check_textures, load_textures, setup, AppState, MaterialResource};
 use bevy_prototype_lyon::{
@@ -15,14 +14,8 @@ use bevy_prototype_lyon::{
 };
 use grid::hex::{HexLayout, HexOrientation, Offset};
 use grid::Direction;
+use map::terrain_type::TerrainType;
 use map::AreaIdAndSize;
-use map::{
-    add_features, add_lakes, add_rivers, expand_coast, generate_coast_and_ocean,
-    generate_empty_map, generate_lake, generate_natural_wonder, generate_terrain,
-    generate_terrain_type_for_fractal, reassign_area_id, recalculate_areas, regenerate_coast,
-    terrain_type::TerrainType, RandomNumberGenerator, River, TileQuery, TileStorage,
-};
-use rand::{rngs::StdRng, SeedableRng};
 use ruleset::Ruleset;
 use tile_map::{MapParameters, MapSize, TileMap};
 
@@ -65,19 +58,7 @@ fn main() {
         .init_state::<AppState>()
         .init_resource::<MaterialResource>()
         .insert_resource(Ruleset::new())
-        .insert_resource(TileStorage { tiles: Vec::new() })
-        .insert_resource(River(HashMap::new()))
         .insert_resource(AreaIdAndSize(BTreeMap::new()))
-        .insert_resource(RandomNumberGenerator {
-            rng: StdRng::seed_from_u64(
-                SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .unwrap()
-                    .as_millis()
-                    .try_into()
-                    .unwrap(),
-            ),
-        })
         .insert_resource({
             let mut map_parameters = MapParameters {
                 map_size: MapSize {
@@ -145,258 +126,6 @@ pub fn close_on_esc(
 
 fn camera_setup(mut commands: Commands) {
     commands.spawn(Camera2dBundle::default());
-}
-
-fn show_tiles_system(
-    mut commands: Commands,
-    materials: Res<MaterialResource>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut color_materials: ResMut<Assets<ColorMaterial>>,
-    map_parameters: Res<MapParameters>,
-    river: Res<River>,
-    query_tile: Query<TileQuery>,
-) {
-    let mut base_terrain_and_material = HashMap::new();
-
-    base_terrain_and_material.insert(
-        "Ocean",
-        color_materials.add(materials.texture_handle("sv_terrainhexocean")),
-    );
-
-    // Lake use the same texture as Coast
-    base_terrain_and_material.insert(
-        "Lake",
-        color_materials.add(materials.texture_handle("sv_terrainhexcoast")),
-    );
-
-    base_terrain_and_material.insert(
-        "Coast",
-        color_materials.add(materials.texture_handle("sv_terrainhexcoast")),
-    );
-
-    base_terrain_and_material.insert(
-        "Grassland",
-        color_materials.add(materials.texture_handle("sv_terrainhexgrasslands")),
-    );
-
-    base_terrain_and_material.insert(
-        "Desert",
-        color_materials.add(materials.texture_handle("sv_terrainhexdesert")),
-    );
-
-    base_terrain_and_material.insert(
-        "Plain",
-        color_materials.add(materials.texture_handle("sv_terrainhexplains")),
-    );
-
-    base_terrain_and_material.insert(
-        "Tundra",
-        color_materials.add(materials.texture_handle("sv_terrainhextundra")),
-    );
-
-    base_terrain_and_material.insert(
-        "Snow",
-        color_materials.add(materials.texture_handle("sv_terrainhexsnow")),
-    );
-
-    river.0.values().for_each(|river| {
-        let mut path_builder = PathBuilder::new();
-        river
-            .iter()
-            .enumerate()
-            .for_each(|(index, (tile_index, flow_direction))| {
-                let hex_position = query_tile.get(*tile_index).unwrap().hex_position;
-
-                let (first_point, second_point) = match map_parameters.hex_layout.orientation {
-                    HexOrientation::Pointy => match *flow_direction {
-                        Direction::North => (Direction::SouthEast, Direction::NorthEast),
-                        Direction::NorthEast => (Direction::South, Direction::SouthEast),
-                        Direction::East => panic!(),
-                        Direction::SouthEast => (Direction::SouthWest, Direction::South),
-                        Direction::South => (Direction::NorthEast, Direction::SouthEast),
-                        Direction::SouthWest => (Direction::SouthEast, Direction::South),
-                        Direction::West => panic!(),
-                        Direction::NorthWest => (Direction::South, Direction::SouthWest),
-                        Direction::None => panic!(),
-                    },
-                    HexOrientation::Flat => match *flow_direction {
-                        Direction::North => panic!(),
-                        Direction::NorthEast => (Direction::SouthEast, Direction::East),
-                        Direction::East => (Direction::SouthWest, Direction::SouthEast),
-                        Direction::SouthEast => (Direction::NorthEast, Direction::East),
-                        Direction::South => panic!(),
-                        Direction::SouthWest => (Direction::East, Direction::SouthEast),
-                        Direction::West => (Direction::SouthEast, Direction::SouthWest),
-                        Direction::NorthWest => (Direction::East, Direction::NorthEast),
-                        Direction::None => panic!(),
-                    },
-                };
-
-                /* if index == 0 {
-                    let first_point_position =
-                        hex_position.corner_position(first_point, &map_parameters);
-                    let second_point_position =
-                        hex_position.corner_position(second_point, &map_parameters);
-                    path_builder.move_to(first_point_position.as_vec2());
-                    path_builder.line_to(second_point_position.as_vec2());
-                } else {
-                    let second_point_position =
-                        hex_position.corner_position(second_point, &map_parameters);
-                    path_builder.line_to(second_point_position.as_vec2());
-                } */
-                let first_point_position =
-                    hex_position.corner_position(first_point, &map_parameters);
-                let second_point_position =
-                    hex_position.corner_position(second_point, &map_parameters);
-                path_builder.move_to(first_point_position.as_vec2());
-                path_builder.line_to(second_point_position.as_vec2());
-            });
-
-        let path = path_builder.build();
-
-        commands.spawn((
-            ShapeBundle {
-                path: GeometryBuilder::build_as(&path),
-                spatial: SpatialBundle {
-                    transform: Transform::from_xyz(0., 0., 10.),
-                    ..default()
-                },
-                ..default()
-            },
-            Stroke::new(Color::srgb_u8(140, 215, 215), 2.0),
-        ));
-    });
-
-    /* let tile_pixel_size = match map_parameters.hex_layout.orientation {
-        HexOrientation::Pointy => map_parameters.hex_layout.size * DVec2::new(3_f64.sqrt(), 2.0),
-        HexOrientation::Flat => map_parameters.hex_layout.size * DVec2::new(2.0, 3_f64.sqrt()),
-    }; */
-
-    let tile_pixel_size = map_parameters.hex_layout.size * DVec2::new(2.0, 2.0);
-
-    let (sprite_rotation, text_rotation) = match map_parameters.hex_layout.orientation {
-        HexOrientation::Pointy => (Quat::default(), Quat::default()),
-        HexOrientation::Flat => (
-            Quat::from_rotation_z(std::f32::consts::FRAC_PI_2 * 3.),
-            Quat::from_rotation_z(-std::f32::consts::FRAC_PI_2 * 3.),
-        ),
-    };
-
-    for tile in query_tile.iter() {
-        let pixel_position = tile.hex_position.pixel_position(&map_parameters);
-        commands
-            .spawn(MaterialMesh2dBundle {
-                mesh: Mesh2dHandle(meshes.add(RegularPolygon::new(16.0, 6))),
-                transform: Transform {
-                    translation: Vec3::from((pixel_position.as_vec2(), 0.)),
-                    rotation: sprite_rotation,
-                    ..Default::default()
-                },
-                material: base_terrain_and_material
-                    .get(&tile.base_terrain.name())
-                    .unwrap()
-                    .clone(),
-                ..default()
-            })
-            .with_children(|parent| {
-                if tile.terrain_type == &TerrainType::Mountain && tile.natural_wonder.is_none() {
-                    parent.spawn(SpriteBundle {
-                        sprite: Sprite {
-                            custom_size: Some(tile_pixel_size.as_vec2()),
-                            ..Default::default()
-                        },
-                        texture: materials.texture_handle("sv_mountains"),
-                        transform: Transform {
-                            translation: Vec3::new(0., 0., 3.),
-                            rotation: text_rotation,
-                            ..Default::default()
-                        },
-                        ..Default::default()
-                    });
-                } else if tile.terrain_type == &TerrainType::Hill {
-                    parent.spawn(SpriteBundle {
-                        sprite: Sprite {
-                            custom_size: Some(tile_pixel_size.as_vec2()),
-                            ..Default::default()
-                        },
-                        texture: materials.texture_handle("sv_hills"),
-                        transform: Transform {
-                            translation: Vec3::new(0., 0., 3.),
-                            rotation: text_rotation,
-                            ..Default::default()
-                        },
-                        ..Default::default()
-                    });
-                }
-
-                // Draw the feature
-                if let Some(feature) = tile.feature {
-                    let feature_name = match feature.name() {
-                        "Forest" => "sv_forest",
-                        "Jungle" => "sv_jungle",
-                        "Marsh" => "sv_marsh",
-                        "Floodplain" => "sv_floodplains",
-                        "Ice" => "sv_ice",
-                        "Oasis" => "sv_oasis",
-                        "Atoll" => "sv_atoll",
-                        "Fallout" => "sv_fallout",
-                        _ => unreachable!(),
-                    };
-
-                    parent.spawn(SpriteBundle {
-                        sprite: Sprite {
-                            custom_size: Some(tile_pixel_size.as_vec2()),
-                            ..Default::default()
-                        },
-                        texture: materials.texture_handle(feature_name),
-                        transform: Transform {
-                            translation: Vec3::new(0., 0., 2.),
-                            rotation: text_rotation,
-                            ..Default::default()
-                        },
-                        ..Default::default()
-                    });
-                }
-
-                // Draw the natural wonder
-                if let Some(natural_wonder) = tile.natural_wonder {
-                    let natural_wonder_name = match natural_wonder.name() {
-                        "Great Barrier Reef" => "sv_coralreef",
-                        "Old Faithful" => "sv_geyser",
-                        "El Dorado" => "sv_el_dorado",
-                        "Fountain of Youth" => "sv_fountain_of_youth",
-                        "Grand Mesa" => "sv_mesa",
-                        "Mount Fuji" => "sv_fuji",
-                        "Krakatoa" => "sv_krakatoa",
-                        "Rock of Gibraltar" => "sv_gibraltar",
-                        "Cerro de Potosi" => "sv_cerro_de_patosi",
-                        "Barringer Crater" => "sv_crater",
-                        "Mount Kailash" => "sv_mount_kailash",
-                        "Mount Sinai" => "sv_mount_sinai",
-                        "Sri Pada" => "sv_sri_pada",
-                        "Uluru" => "sv_uluru",
-                        "King Solomon's Mines" => "sv_kingsolomonsmine",
-                        "Lake Victoria" => "sv_lakevictoria",
-                        "Mount Kilimanjaro" => "sv_mountkilimanjaro",
-                        _ => unreachable!(),
-                    };
-
-                    parent.spawn(SpriteBundle {
-                        sprite: Sprite {
-                            custom_size: Some(tile_pixel_size.as_vec2()),
-                            ..Default::default()
-                        },
-                        texture: materials.texture_handle(natural_wonder_name),
-                        transform: Transform {
-                            translation: Vec3::new(0., 0., 2.),
-                            rotation: text_rotation,
-                            ..Default::default()
-                        },
-                        ..Default::default()
-                    });
-                }
-            });
-    }
 }
 
 fn camera_movement(
@@ -502,13 +231,11 @@ fn create_tile_map(
     tile_map.generate_terrain_type_for_fractal(&map_parameters);
     tile_map.generate_coast(&map_parameters);
     tile_map.recalculate_areas(&map_parameters, &mut area_id_and_size);
-    tile_map.reassign_area_id(&map_parameters, &mut area_id_and_size);
     tile_map.generate_lake(&map_parameters, &mut area_id_and_size);
     tile_map.generate_terrain(&map_parameters);
     tile_map.add_rivers(&map_parameters);
     tile_map.add_lakes(&map_parameters);
     tile_map.recalculate_areas(&map_parameters, &mut area_id_and_size);
-    tile_map.reassign_area_id(&map_parameters, &mut area_id_and_size);
     tile_map.add_feature(&ruleset, &map_parameters);
     tile_map.generate_natural_wonder(&ruleset, &map_parameters, &mut area_id_and_size);
 
@@ -561,8 +288,6 @@ fn create_tile_map(
             .iter()
             .enumerate()
             .for_each(|(index, (tile_index, flow_direction))| {
-                let tile = tile_map.tile(*tile_index);
-
                 let (first_point, second_point) = match map_parameters.hex_layout.orientation {
                     HexOrientation::Pointy => match *flow_direction {
                         Direction::North => (Direction::SouthEast, Direction::NorthEast),
@@ -600,8 +325,9 @@ fn create_tile_map(
                         hex_position.corner_position(second_point, &map_parameters);
                     path_builder.line_to(second_point_position.as_vec2());
                 } */
-                let first_point_position = tile.corner_position(first_point, &map_parameters);
-                let second_point_position = tile.corner_position(second_point, &map_parameters);
+                let first_point_position = tile_index.corner_position(first_point, &map_parameters);
+                let second_point_position =
+                    tile_index.corner_position(second_point, &map_parameters);
                 path_builder.move_to(first_point_position.as_vec2());
                 path_builder.line_to(second_point_position.as_vec2());
             });
@@ -636,9 +362,8 @@ fn create_tile_map(
         ),
     };
 
-    for tile_index in (0..tile_map.tile_count()).into_iter() {
-        let tile = tile_map.tile(tile_index);
-        let pixel_position = tile.pixel_position(map_parameters.hex_layout);
+    for tile_index in tile_map.tile_indices_iter() {
+        let pixel_position = tile_index.pixel_position(&map_parameters);
         commands
             .spawn(MaterialMesh2dBundle {
                 mesh: Mesh2dHandle(meshes.add(RegularPolygon::new(16.0, 6))),
@@ -648,13 +373,15 @@ fn create_tile_map(
                     ..Default::default()
                 },
                 material: base_terrain_and_material
-                    .get(&tile.base_terrain.name())
+                    .get(&tile_index.base_terrain(&tile_map).name())
                     .unwrap()
                     .clone(),
                 ..default()
             })
             .with_children(|parent| {
-                if tile.terrain_type == TerrainType::Mountain && tile.natural_wonder.is_none() {
+                if tile_index.terrain_type(&tile_map) == TerrainType::Mountain
+                    && tile_index.natural_wonder(&tile_map).is_none()
+                {
                     parent.spawn(SpriteBundle {
                         sprite: Sprite {
                             custom_size: Some(tile_pixel_size.as_vec2()),
@@ -668,7 +395,7 @@ fn create_tile_map(
                         },
                         ..Default::default()
                     });
-                } else if tile.terrain_type == TerrainType::Hill {
+                } else if tile_index.terrain_type(&tile_map) == TerrainType::Hill {
                     parent.spawn(SpriteBundle {
                         sprite: Sprite {
                             custom_size: Some(tile_pixel_size.as_vec2()),
@@ -685,7 +412,7 @@ fn create_tile_map(
                 }
 
                 // Draw the feature
-                if let Some(feature) = tile.feature {
+                if let Some(feature) = tile_index.feature(&tile_map) {
                     let feature_name = match feature.name() {
                         "Forest" => "sv_forest",
                         "Jungle" => "sv_jungle",
@@ -714,7 +441,7 @@ fn create_tile_map(
                 }
 
                 // Draw the natural wonder
-                if let Some(natural_wonder) = tile.natural_wonder {
+                if let Some(natural_wonder) = tile_index.natural_wonder(&tile_map) {
                     let natural_wonder_name = match natural_wonder.name() {
                         "Great Barrier Reef" => "sv_coralreef",
                         "Old Faithful" => "sv_geyser",

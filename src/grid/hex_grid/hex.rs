@@ -91,6 +91,7 @@ impl Hex {
         }
     }
 
+    /// Get the hex at the given `direction` from `self`, according to the given `orientation` is `HexOrientation::Pointy` or `HexOrientation::Flat`.
     pub fn neighbor(self, orientation: HexOrientation, direction: Direction) -> Hex {
         let edge_index = orientation.edge_index(direction);
         Self(self.0 + Self::HEX_DIRECTIONS[edge_index].0)

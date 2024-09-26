@@ -166,39 +166,37 @@ impl TileMap {
             panic!("Vec length does not match the pattern")
         };
 
-        (0..self.tile_count()).into_iter().for_each(|tile_index| {
-            let [x, y] = map_parameters
-                .index_to_offset_coordinate(tile_index)
-                .to_array();
+        self.tile_indices_iter().for_each(|tile_index| {
+            let [x, y] = tile_index.to_offset_coordinate(map_parameters).to_array();
             let height = continents_fractal.get_height(x, y);
 
             let mountain_height = mountains_fractal.get_height(x, y);
             let hill_height = hills_fractal.get_height(x, y);
 
             if height <= water_threshold {
-                self.terrain_type_query[tile_index] = TerrainType::Water;
+                self.terrain_type_query[*tile_index] = TerrainType::Water;
                 if tectonic_islands {
                     if mountain_height == mountain_100 {
-                        self.terrain_type_query[tile_index] = TerrainType::Mountain;
+                        self.terrain_type_query[*tile_index] = TerrainType::Mountain;
                     } else if mountain_height == mountain_99 {
-                        self.terrain_type_query[tile_index] = TerrainType::Hill;
+                        self.terrain_type_query[*tile_index] = TerrainType::Hill;
                     } else if (mountain_height == mountain_97) || (mountain_height == mountain_95) {
-                        self.terrain_type_query[tile_index] = TerrainType::Flatland;
+                        self.terrain_type_query[*tile_index] = TerrainType::Flatland;
                     }
                 }
             } else if mountain_height >= mountain_threshold {
                 if hill_height >= pass_threshold {
-                    self.terrain_type_query[tile_index] = TerrainType::Hill;
+                    self.terrain_type_query[*tile_index] = TerrainType::Hill;
                 } else {
-                    self.terrain_type_query[tile_index] = TerrainType::Mountain;
+                    self.terrain_type_query[*tile_index] = TerrainType::Mountain;
                 }
             } else if mountain_height >= hills_near_mountains
                 || (hill_height >= hills_bottom1 && hill_height <= hills_top1)
                 || (hill_height >= hills_bottom2 && hill_height <= hills_top2)
             {
-                self.terrain_type_query[tile_index] = TerrainType::Hill;
+                self.terrain_type_query[*tile_index] = TerrainType::Hill;
             } else {
-                self.terrain_type_query[tile_index] = TerrainType::Flatland;
+                self.terrain_type_query[*tile_index] = TerrainType::Flatland;
             };
         });
     }
@@ -366,10 +364,8 @@ impl TileMap {
 
         let axis = center_position * 3. / 5.;
 
-        (0..self.tile_count()).into_iter().for_each(|tile_index| {
-            let [x, y] = map_parameters
-                .index_to_offset_coordinate(tile_index)
-                .to_array();
+        self.tile_indices_iter().for_each(|tile_index| {
+            let [x, y] = tile_index.to_offset_coordinate(map_parameters).to_array();
             let height = continents_fractal.get_height(x, y);
 
             let mountain_height = mountains_fractal.get_height(x, y);
@@ -389,27 +385,27 @@ impl TileMap {
             let height = ((height as f64 + h + h) * 0.33) as i32;
 
             if height <= water_threshold {
-                self.terrain_type_query[tile_index] = TerrainType::Water;
+                self.terrain_type_query[*tile_index] = TerrainType::Water;
                 if height == mountain_100 {
-                    self.terrain_type_query[tile_index] = TerrainType::Mountain;
+                    self.terrain_type_query[*tile_index] = TerrainType::Mountain;
                 } else if height == mountain_99 {
-                    self.terrain_type_query[tile_index] = TerrainType::Hill;
+                    self.terrain_type_query[*tile_index] = TerrainType::Hill;
                 } else if height == mountain_97 || height == mountain_95 {
-                    self.terrain_type_query[tile_index] = TerrainType::Flatland;
+                    self.terrain_type_query[*tile_index] = TerrainType::Flatland;
                 }
             } else if mountain_height >= mountain_threshold {
                 if hill_height >= pass_threshold {
-                    self.terrain_type_query[tile_index] = TerrainType::Hill;
+                    self.terrain_type_query[*tile_index] = TerrainType::Hill;
                 } else {
-                    self.terrain_type_query[tile_index] = TerrainType::Mountain;
+                    self.terrain_type_query[*tile_index] = TerrainType::Mountain;
                 }
             } else if mountain_height >= hills_near_mountains
                 || (hill_height >= hills_bottom1 && hill_height <= hills_top1)
                 || (hill_height >= hills_bottom2 && hill_height <= hills_top2)
             {
-                self.terrain_type_query[tile_index] = TerrainType::Hill;
+                self.terrain_type_query[*tile_index] = TerrainType::Hill;
             } else {
-                self.terrain_type_query[tile_index] = TerrainType::Flatland;
+                self.terrain_type_query[*tile_index] = TerrainType::Flatland;
             };
         });
     }
