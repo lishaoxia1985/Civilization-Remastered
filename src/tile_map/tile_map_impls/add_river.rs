@@ -26,7 +26,7 @@ impl TileMap {
                 )
             };
 
-            self.tile_indices_iter().for_each(|tile_index| {
+            self.iter_tile_indices().for_each(|tile_index| {
                 let pass_condition = match index {
                     0 => {
                         // Mountain and Hill are the 1st priority for river starting locations.

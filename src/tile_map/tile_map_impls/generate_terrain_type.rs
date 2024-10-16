@@ -166,7 +166,7 @@ impl TileMap {
             panic!("Vec length does not match the pattern")
         };
 
-        self.tile_indices_iter().for_each(|tile_index| {
+        self.iter_tile_indices().for_each(|tile_index| {
             let [x, y] = tile_index.to_offset_coordinate(map_parameters).to_array();
             let height = continents_fractal.get_height(x, y);
 
@@ -364,7 +364,7 @@ impl TileMap {
 
         let axis = center_position * 3. / 5.;
 
-        self.tile_indices_iter().for_each(|tile_index| {
+        self.iter_tile_indices().for_each(|tile_index| {
             let [x, y] = tile_index.to_offset_coordinate(map_parameters).to_array();
             let height = continents_fractal.get_height(x, y);
 

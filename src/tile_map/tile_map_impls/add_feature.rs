@@ -41,7 +41,7 @@ impl TileMap {
         let jungle_bottom = equator - (jungle_percent as f64 * 0.5).ceil() as i32;
         let jungle_top = equator + (jungle_percent as f64 * 0.5).ceil() as i32;
 
-        for tile_index in self.tile_indices_iter() {
+        for tile_index in self.iter_tile_indices() {
             let latitude = tile_index.latitude(&map_parameters);
 
             let neighbor_tile_indices = tile_index.neighbor_tile_indices(&map_parameters);

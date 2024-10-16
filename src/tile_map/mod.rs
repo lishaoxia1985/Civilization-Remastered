@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use bevy::utils::HashMap;
 use rand::{rngs::StdRng, SeedableRng};
 use tile_index::TileIndex;
@@ -17,7 +19,6 @@ pub use self::fractal::{CvFractal, Flags};
 pub use map_parameters::*;
 
 pub struct TileMap {
-    //pub map_parameters: MapParameters,
     pub random_number_generator: StdRng,
     pub map_size: MapSize,
     pub river_list: HashMap<i32, Vec<(TileIndex, Direction)>>,
@@ -27,28 +28,19 @@ pub struct TileMap {
     pub feature_query: Vec<Option<Feature>>,
     pub natural_wonder_query: Vec<Option<NaturalWonder>>,
     pub area_id_query: Vec<i32>,
+    /// The area id and the size of the area
+    pub area_id_and_size: BTreeMap<i32, u32>,
 }
 
 impl TileMap {
+    /// Creates a new tile map with the given parameters.
     pub fn new(map_parameters: &MapParameters) -> Self {
         let random_number_generator = StdRng::seed_from_u64(map_parameters.seed);
 
         let height = map_parameters.map_size.height;
         let width = map_parameters.map_size.width;
-        let offset = map_parameters.offset;
-        let hex_layout = map_parameters.hex_layout;
 
         let size = (height * width) as usize;
-
-        let mut hex_position_query = Vec::with_capacity(size);
-
-        for y in 0..height {
-            for x in 0..width {
-                let offset_coordinate = OffsetCoordinate::new(x, y);
-                let hex_coordinate = offset_coordinate.to_hex(offset, hex_layout.orientation);
-                hex_position_query.push(hex_coordinate.to_array());
-            }
-        }
 
         Self {
             random_number_generator,
@@ -59,12 +51,13 @@ impl TileMap {
             feature_query: vec![None; size],
             natural_wonder_query: vec![None; size],
             area_id_query: vec![-1; size],
+            area_id_and_size: BTreeMap::new(),
         }
     }
 
-    pub fn tile_indices_iter(&self) -> impl Iterator<Item = TileIndex> {
-        let tile_count = (self.map_size.width * self.map_size.height) as usize;
-        (0..tile_count).map(|index| TileIndex::new(index))
+    /// Returns an iterator over all tile indices in the map.
+    pub fn iter_tile_indices(&self) -> impl Iterator<Item = TileIndex> {
+        (0..((self.map_size.width * self.map_size.height) as usize)).map(TileIndex::new)
     }
 
     /* pub const fn index_to_offset_coordinate(map_size: MapSize, index: usize) -> OffsetCoordinate {

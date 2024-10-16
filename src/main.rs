@@ -5,8 +5,6 @@ mod map;
 mod ruleset;
 mod tile_map;
 
-use std::collections::BTreeMap;
-
 use assets::{check_textures, load_textures, setup, AppState, MaterialResource};
 use bevy_prototype_lyon::{
     draw::Stroke, entity::ShapeBundle, path::PathBuilder, plugin::ShapePlugin,
@@ -15,7 +13,6 @@ use bevy_prototype_lyon::{
 use grid::hex::{HexLayout, HexOrientation, Offset};
 use grid::Direction;
 use map::terrain_type::TerrainType;
-use map::AreaIdAndSize;
 use ruleset::Ruleset;
 use tile_map::{MapParameters, MapSize, TileMap};
 
@@ -58,7 +55,6 @@ fn main() {
         .init_state::<AppState>()
         .init_resource::<MaterialResource>()
         .insert_resource(Ruleset::new())
-        .insert_resource(AreaIdAndSize(BTreeMap::new()))
         .insert_resource({
             let mut map_parameters = MapParameters {
                 map_size: MapSize {
@@ -214,7 +210,6 @@ fn create_tile_map(
     mut color_materials: ResMut<Assets<ColorMaterial>>,
     map_parameters: Res<MapParameters>,
     ruleset: Res<Ruleset>,
-    mut area_id_and_size: ResMut<AreaIdAndSize>,
 ) {
     /* generate_terrain_type_for_fractal,
     ((generate_coast_and_ocean, expand_coast).chain()),
@@ -230,14 +225,14 @@ fn create_tile_map(
     let mut tile_map = TileMap::new(&map_parameters);
     tile_map.generate_terrain_type_for_fractal(&map_parameters);
     tile_map.generate_coast(&map_parameters);
-    tile_map.recalculate_areas(&map_parameters, &mut area_id_and_size);
-    tile_map.generate_lake(&map_parameters, &mut area_id_and_size);
+    tile_map.recalculate_areas(&map_parameters);
+    tile_map.generate_lake(&map_parameters);
     tile_map.generate_terrain(&map_parameters);
     tile_map.add_rivers(&map_parameters);
     tile_map.add_lakes(&map_parameters);
-    tile_map.recalculate_areas(&map_parameters, &mut area_id_and_size);
+    tile_map.recalculate_areas(&map_parameters);
     tile_map.add_feature(&ruleset, &map_parameters);
-    tile_map.generate_natural_wonder(&ruleset, &map_parameters, &mut area_id_and_size);
+    tile_map.generate_natural_wonder(&ruleset, &map_parameters);
 
     let mut base_terrain_and_material = HashMap::new();
 
@@ -362,7 +357,7 @@ fn create_tile_map(
         ),
     };
 
-    for tile_index in tile_map.tile_indices_iter() {
+    for tile_index in tile_map.iter_tile_indices() {
         let pixel_position = tile_index.pixel_position(&map_parameters);
         commands
             .spawn(MaterialMesh2dBundle {

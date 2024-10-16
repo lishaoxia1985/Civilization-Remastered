@@ -1,7 +1,7 @@
 use rand::Rng;
 
 use crate::{
-    map::{base_terrain::BaseTerrain, terrain_type::TerrainType, AreaIdAndSize},
+    map::{base_terrain::BaseTerrain, terrain_type::TerrainType},
     tile_map::{tile_index::TileIndex, MapParameters, TileMap},
 };
 
@@ -10,14 +10,10 @@ impl TileMap {
     ///
     /// This fun is used because when we create the world map by System `spawn_tile_type`, some water areas will be created surrounded by land.
     /// If these water areas are small enough, they will be considered as lakes and will be replaced by the `TerrainType::Lake` terrain.
-    pub fn generate_lake(
-        &mut self,
-        map_parameters: &MapParameters,
-        area_id_and_size: &AreaIdAndSize,
-    ) {
-        self.tile_indices_iter().for_each(|tile_index| {
+    pub fn generate_lake(&mut self, map_parameters: &MapParameters) {
+        self.iter_tile_indices().for_each(|tile_index| {
             if tile_index.terrain_type(self) == TerrainType::Water
-                && area_id_and_size.0[&tile_index.area_id(self)]
+                && self.area_id_and_size[&tile_index.area_id(self)]
                     <= map_parameters.lake_max_area_size
             {
                 self.base_terrain_query[*tile_index] = BaseTerrain::Lake;
@@ -31,7 +27,7 @@ impl TileMap {
         let mut num_large_lakes_added = 0;
         let lake_plot_rand = 25;
 
-        self.tile_indices_iter().for_each(|tile_index| {
+        self.iter_tile_indices().for_each(|tile_index| {
             if self.can_add_lake(tile_index, &map_parameters)
                 && self.random_number_generator.gen_range(0..lake_plot_rand) == 0
             {

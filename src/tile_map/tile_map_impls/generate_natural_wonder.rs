@@ -6,30 +6,25 @@ use crate::{
     grid::hex::Hex,
     map::{
         base_terrain::BaseTerrain, feature::Feature, natural_wonder::NaturalWonder,
-        terrain_type::TerrainType, AreaIdAndSize,
+        terrain_type::TerrainType,
     },
     ruleset::{Ruleset, Unique},
     tile_map::{tile_index::TileIndex, MapParameters, TileMap},
 };
 
 impl TileMap {
-    pub fn generate_natural_wonder(
-        &mut self,
-        ruleset: &Ruleset,
-        map_parameters: &MapParameters,
-        area_id_and_size: &AreaIdAndSize,
-    ) {
+    pub fn generate_natural_wonder(&mut self, ruleset: &Ruleset, map_parameters: &MapParameters) {
         let natural_wonder_list: Vec<_> = ruleset.natural_wonders.keys().collect();
 
         let mut natural_wonder_and_tile_index_and_score = HashMap::new();
 
         // Find all land areas and size
         let land_area_id_and_size: HashSet<_> = self
-            .tile_indices_iter()
+            .iter_tile_indices()
             .filter(|&tile_index| tile_index.terrain_type(self) != TerrainType::Water)
             .map(|tile_index| {
                 let area_id = tile_index.area_id(self);
-                (area_id, area_id_and_size.0[&area_id])
+                (area_id, self.area_id_and_size[&area_id])
             })
             .collect();
 
@@ -40,7 +35,7 @@ impl TileMap {
         land_area_id_and_size
             .sort_unstable_by_key(|&(land_id, area_size)| (std::cmp::Reverse(area_size), land_id));
 
-        for tile_index in self.tile_indices_iter() {
+        for tile_index in self.iter_tile_indices() {
             for &natural_wonder_name in &natural_wonder_list {
                 let possible_natural_wonder = &ruleset.natural_wonders[natural_wonder_name];
 

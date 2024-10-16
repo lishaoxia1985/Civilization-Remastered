@@ -3,17 +3,12 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use bevy::utils::hashbrown::HashSet;
 
 use crate::{
-    map::{terrain_type::TerrainType, AreaIdAndSize},
+    map::terrain_type::TerrainType,
     tile_map::{tile_index::TileIndex, MapParameters, TileMap},
 };
 
 impl TileMap {
-    pub fn bfs(
-        &mut self,
-        map_parameters: &MapParameters,
-        area_id_and_size: &mut AreaIdAndSize,
-        mut area_tile_indices: HashSet<TileIndex>,
-    ) {
+    fn bfs(&mut self, map_parameters: &MapParameters, mut area_tile_indices: HashSet<TileIndex>) {
         let mut current_area_id = self.area_id_query.iter().max().unwrap() + 1;
 
         while let Some(&initial_area_tile_index) = area_tile_indices.iter().next() {
@@ -43,19 +38,13 @@ impl TileMap {
                         }
                     });
             }
-            area_id_and_size
-                .0
+            self.area_id_and_size
                 .insert(current_area_id, tile_indices_in_current_area.len() as u32);
             current_area_id += 1;
         }
     }
 
-    pub fn dfs(
-        &mut self,
-        map_parameters: &MapParameters,
-        area_id_and_size: &mut AreaIdAndSize,
-        mut area_tile_indices: HashSet<TileIndex>,
-    ) {
+    fn dfs(&mut self, map_parameters: &MapParameters, mut area_tile_indices: HashSet<TileIndex>) {
         let mut current_area_id = self.area_id_query.iter().max().unwrap() + 1;
 
         while let Some(&initial_area_tile_index) = area_tile_indices.iter().next() {
@@ -85,19 +74,14 @@ impl TileMap {
                         }
                     });
             }
-            area_id_and_size
-                .0
+            self.area_id_and_size
                 .insert(current_area_id, tile_indices_in_current_area.len() as u32);
             current_area_id += 1;
         }
     }
 
-    pub fn recalculate_areas(
-        &mut self,
-        map_parameters: &MapParameters,
-        area_id_and_size: &mut AreaIdAndSize,
-    ) {
-        area_id_and_size.0.clear();
+    pub fn recalculate_areas(&mut self, map_parameters: &MapParameters) {
+        self.area_id_and_size.clear();
 
         let height = map_parameters.map_size.height;
         let width = map_parameters.map_size.width;
@@ -110,7 +94,7 @@ impl TileMap {
         let mut hill_and_flatland_tile_indices = HashSet::new();
         let mut mountain_tile_indices = HashSet::new();
 
-        self.tile_indices_iter().for_each(|tile_index| {
+        self.iter_tile_indices().for_each(|tile_index| {
             match tile_index.terrain_type(self) {
                 TerrainType::Water => water_tile_indices.insert(tile_index),
                 TerrainType::Flatland | TerrainType::Hill => {
@@ -120,34 +104,26 @@ impl TileMap {
             };
         });
 
-        self.bfs(map_parameters, area_id_and_size, water_tile_indices);
-        self.bfs(
-            map_parameters,
-            area_id_and_size,
-            hill_and_flatland_tile_indices,
-        );
-        self.bfs(map_parameters, area_id_and_size, mountain_tile_indices);
+        self.bfs(map_parameters, water_tile_indices);
+        self.bfs(map_parameters, hill_and_flatland_tile_indices);
+        self.bfs(map_parameters, mountain_tile_indices);
 
-        self.reassign_area_id(map_parameters, area_id_and_size);
+        self.reassign_area_id(map_parameters);
     }
 
-    pub fn reassign_area_id(
-        &mut self,
-        map_parameters: &MapParameters,
-        area_id_and_size: &mut AreaIdAndSize,
-    ) {
+    fn reassign_area_id(&mut self, map_parameters: &MapParameters) {
         const MIN_AREA_SIZE: u32 = 7;
 
         // Get the id of the smaller area whose size < MIN_AREA_SIZE
-        let small_area_id: Vec<_> = area_id_and_size
-            .0
+        let small_area_id: Vec<_> = self
+            .area_id_and_size
             .iter()
             .filter_map(|(&id, &size)| (size < MIN_AREA_SIZE).then_some(id))
             .collect();
 
         small_area_id.into_iter().for_each(|current_area_id| {
             let tile_indices_in_current_area = self
-                .tile_indices_iter()
+                .iter_tile_indices()
                 .filter(|tile_index| tile_index.area_id(self) == current_area_id)
                 .collect::<Vec<_>>();
 
@@ -186,7 +162,7 @@ impl TileMap {
                 .iter()
                 .map(|tile_index| {
                     let area_id = tile_index.area_id(self);
-                    let area_size = area_id_and_size.0[&area_id];
+                    let area_size = self.area_id_and_size[&area_id];
                     (area_size, area_id)
                 })
                 .collect();
@@ -197,10 +173,9 @@ impl TileMap {
                 if area_size >= MIN_AREA_SIZE {
                     let old_area_id = first_tile_index.area_id(self);
 
-                    area_id_and_size.0.remove(&old_area_id);
+                    self.area_id_and_size.remove(&old_area_id);
 
-                    area_id_and_size
-                        .0
+                    self.area_id_and_size
                         .entry(new_area_id)
                         .and_modify(|e| *e += tile_indices_in_current_area.len() as u32);
 
