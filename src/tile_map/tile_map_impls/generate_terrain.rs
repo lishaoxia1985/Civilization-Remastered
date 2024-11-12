@@ -1,7 +1,7 @@
 use std::cmp::max;
 
 use crate::{
-    map::{base_terrain::BaseTerrain, terrain_type::TerrainType},
+    component::{base_terrain::BaseTerrain, terrain_type::TerrainType},
     tile_map::{CvFractal, Flags, MapParameters, Temperature, TileMap},
 };
 
@@ -91,34 +91,34 @@ impl TileMap {
             panic!("Vec length does not match the pattern")
         };
 
-        self.iter_tile_indices().for_each(|tile_index| {
-            if self.terrain_type_query[*tile_index] != TerrainType::Water {
-                let [x, y] = tile_index.to_offset_coordinate(map_parameters).to_array();
+        self.iter_tiles().for_each(|tile| {
+            if self.terrain_type_query[tile.index()] != TerrainType::Water {
+                let [x, y] = tile.to_offset_coordinate(map_parameters).to_array();
 
                 // Set default base terrain of all land tiles to `BaseTerrain::Grassland` because the default base terrain is `BaseTerrain::Ocean` in the tile map.
-                self.base_terrain_query[*tile_index] = BaseTerrain::Grassland;
+                self.base_terrain_query[tile.index()] = BaseTerrain::Grassland;
 
                 let deserts_height = deserts_fractal.get_height(x, y);
                 let plains_height = plains_fractal.get_height(x, y);
 
-                let mut latitude = tile_index.latitude(map_parameters);
+                let mut latitude = tile.latitude(map_parameters);
                 latitude += (128 - variation_fractal.get_height(x, y)) as f64 / (255.0 * 5.0);
                 latitude = latitude.clamp(0., 1.);
 
                 if latitude >= snow_latitude {
-                    self.base_terrain_query[*tile_index] = BaseTerrain::Snow;
+                    self.base_terrain_query[tile.index()] = BaseTerrain::Snow;
                 } else if latitude >= tundra_latitude {
-                    self.base_terrain_query[*tile_index] = BaseTerrain::Tundra;
+                    self.base_terrain_query[tile.index()] = BaseTerrain::Tundra;
                 } else if latitude < grass_latitude {
-                    self.base_terrain_query[*tile_index] = BaseTerrain::Grassland;
+                    self.base_terrain_query[tile.index()] = BaseTerrain::Grassland;
                 } else if deserts_height >= desert_bottom
                     && deserts_height <= desert_top
                     && latitude >= desert_bottom_latitude
                     && latitude < desert_top_latitude
                 {
-                    self.base_terrain_query[*tile_index] = BaseTerrain::Desert;
+                    self.base_terrain_query[tile.index()] = BaseTerrain::Desert;
                 } else if plains_height >= plains_bottom && plains_height <= plains_top {
-                    self.base_terrain_query[*tile_index] = BaseTerrain::Plain;
+                    self.base_terrain_query[tile.index()] = BaseTerrain::Plain;
                 }
             }
         });

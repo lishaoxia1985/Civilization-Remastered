@@ -8,13 +8,14 @@ use std::ops::{Add, Sub};
 use bevy::math::{DMat2, DVec2, IVec2};
 
 use crate::grid::direction::Direction;
+use crate::grid::offset_coordinate::OffsetCoordinate;
 
 pub const SQRT_3: f64 = 1.732_050_807_568_877_2_f64;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Hex(IVec2);
 impl Hex {
-    /// Hexagon neighbor coordinates array, following [`Direction::POINTY_EDGE`] or [`Direction::FLAT_EDGE`] order
+    /// Hexagon neighbor coordinates array, following [`HexOrientation::POINTY_EDGE`] or [`HexOrientation::FLAT_EDGE`] order
     pub const HEX_DIRECTIONS: [Self; 6] = [
         Self::new(1, 0),
         Self::new(1, -1),
@@ -33,7 +34,7 @@ impl Hex {
         Self::new(1, 1),
     ];
 
-    const fn new(x: i32, y: i32) -> Self {
+    pub const fn new(x: i32, y: i32) -> Self {
         Self(IVec2::new(x, y))
     }
 
@@ -62,33 +63,25 @@ impl Hex {
         offset: Offset,
         orientation: HexOrientation,
     ) -> OffsetCoordinate {
-        match orientation {
-            HexOrientation::Pointy => {
-                let col: i32 = self.0.x + (self.0.y + offset.value() * (self.0.y & 1)) / 2;
-                let row: i32 = self.0.y;
-                OffsetCoordinate::new(col, row)
-            }
-            HexOrientation::Flat => {
-                let col: i32 = self.0.x;
-                let row: i32 = self.0.y + (self.0.x + offset.value() * (self.0.x & 1)) / 2;
-                OffsetCoordinate::new(col, row)
-            }
-        }
+        let (col, row) = match orientation {
+            HexOrientation::Pointy => (
+                self.0.x + (self.0.y + offset.value() * (self.0.y & 1)) / 2,
+                self.0.y,
+            ),
+            HexOrientation::Flat => (
+                self.0.x,
+                self.0.y + (self.0.x + offset.value() * (self.0.x & 1)) / 2,
+            ),
+        };
+        OffsetCoordinate::new(col, row)
     }
 
     pub fn to_doubled_coordinate(self, orientation: HexOrientation) -> DoubledCoordinate {
-        match orientation {
-            HexOrientation::Pointy => {
-                let col: i32 = 2 * self.0.x + self.0.y;
-                let row: i32 = self.0.y;
-                DoubledCoordinate::new(col, row)
-            }
-            HexOrientation::Flat => {
-                let col: i32 = self.0.x;
-                let row: i32 = 2 * self.0.y + self.0.x;
-                DoubledCoordinate::new(col, row)
-            }
-        }
+        let (col, row) = match orientation {
+            HexOrientation::Pointy => (2 * self.0.x + self.0.y, self.0.y),
+            HexOrientation::Flat => (self.0.x, 2 * self.0.y + self.0.x),
+        };
+        DoubledCoordinate::new(col, row)
     }
 
     /// Get the hex at the given `direction` from `self`, according to the given `orientation` is `HexOrientation::Pointy` or `HexOrientation::Flat`.
@@ -101,12 +94,24 @@ impl Hex {
         Self(self.0 + Self::HEX_DIAGONALS[direction as usize].0)
     }
 
-    pub fn hex_length(self) -> i32 {
+    /// Computes coordinates length as a signed integer.
+    /// The length of a [`Hex`] coordinate is equal to its distance from the origin.
+    pub const fn length(self) -> i32 {
+        /* let [x, y, z] = [self.x.abs(), self.y.abs(), self.z().abs()];
+        if x >= y && x >= z {
+            x
+        } else if y >= x && y >= z {
+            y
+        } else {
+            z
+        } */
+
+        // The following code is equivalent to the commented code above, but it is faster.
         (self.0.x.abs() + self.0.y.abs() + self.z().abs()) / 2
     }
 
     pub fn hex_distance(a: Self, b: Self) -> i32 {
-        Self(a.0 - b.0).hex_length()
+        Self(a.0 - b.0).length()
     }
 
     /// Return a `Vec<Hex>` containing all [`Hex`] which are exactly at a given `distance` from `self`.
@@ -115,7 +120,8 @@ impl Hex {
     pub fn hexes_at_distance(self, distance: u32) -> Vec<Hex> {
         let mut hex_list = Vec::with_capacity((6 * distance) as usize);
         let radius = distance as i32;
-        for q in -radius..=radius {
+
+        /* for q in -radius..=radius {
             for r in max(-radius, -q - radius)..=min(radius, -q + radius) {
                 let offset_hex = Hex::from([q, r]);
                 if Self::hex_distance(offset_hex, Hex::from([0, 0])) == radius {
@@ -123,7 +129,17 @@ impl Hex {
                     hex_list.push(hex);
                 }
             }
+        } */
+
+        // The following code is equivalent to the commented code above, but it is faster.
+        let mut hex = Hex(self.0 + Self::HEX_DIRECTIONS[4].0 * radius);
+        for hex_direction in Self::HEX_DIRECTIONS {
+            for _ in 0..radius {
+                hex_list.push(hex);
+                hex = hex + hex_direction;
+            }
         }
+
         hex_list
     }
 
@@ -187,33 +203,6 @@ impl From<[i32; 2]> for Hex {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub struct OffsetCoordinate(pub IVec2);
-impl OffsetCoordinate {
-    pub const fn new(x: i32, y: i32) -> Self {
-        Self(IVec2::new(x, y))
-    }
-
-    pub fn to_hex(self, offset: Offset, orientation: HexOrientation) -> Hex {
-        match orientation {
-            HexOrientation::Pointy => {
-                let q: i32 = self.0.x - (self.0.y + offset.value() * (self.0.y & 1)) / 2;
-                let r: i32 = self.0.y;
-                Hex::new(q, r)
-            }
-            HexOrientation::Flat => {
-                let q: i32 = self.0.x;
-                let r: i32 = self.0.y - (self.0.x + offset.value() * (self.0.x & 1)) / 2;
-                Hex::new(q, r)
-            }
-        }
-    }
-
-    pub const fn to_array(self) -> [i32; 2] {
-        [self.0.x, self.0.y]
-    }
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct DoubledCoordinate(IVec2);
 impl DoubledCoordinate {
     pub fn new(x: i32, y: i32) -> Self {
@@ -221,18 +210,11 @@ impl DoubledCoordinate {
     }
 
     pub fn to_hex(self, orientation: HexOrientation) -> Hex {
-        match orientation {
-            HexOrientation::Pointy => {
-                let q: i32 = (self.0.x - self.0.y) / 2;
-                let r: i32 = self.0.y;
-                Hex::new(q, r)
-            }
-            HexOrientation::Flat => {
-                let q: i32 = self.0.x;
-                let r: i32 = (self.0.y - self.0.x) / 2;
-                Hex::new(q, r)
-            }
-        }
+        let (q, r) = match orientation {
+            HexOrientation::Pointy => ((self.0.x - self.0.y) / 2, self.0.y),
+            HexOrientation::Flat => (self.0.x, (self.0.y - self.0.x) / 2),
+        };
+        Hex::new(q, r)
     }
 }
 
@@ -298,7 +280,8 @@ pub enum Offset {
 }
 
 impl Offset {
-    const fn value(self) -> i32 {
+    #[inline]
+    pub const fn value(self) -> i32 {
         match self {
             Self::Even => 1,
             Self::Odd => -1,

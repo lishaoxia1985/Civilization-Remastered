@@ -1,13 +1,17 @@
 use rand::Rng;
 
 use crate::{
-    map::{base_terrain::BaseTerrain, feature::Feature, terrain_type::TerrainType},
+    component::{base_terrain::BaseTerrain, feature::Feature, terrain_type::TerrainType},
     ruleset::Ruleset,
     tile_map::{MapParameters, Rainfall, TileMap},
 };
 
 impl TileMap {
-    pub fn add_feature(&mut self, ruleset: &Ruleset, map_parameters: &MapParameters) {
+    /// Add features to the tile map.
+    ///
+    /// # Notice
+    /// We have not implemented the feature `Atoll` generation yet.
+    pub fn add_features(&mut self, map_parameters: &MapParameters, ruleset: &Ruleset) {
         let rainfall = match map_parameters.rainfall {
             Rainfall::Arid => -4,
             Rainfall::Normal => 0,
@@ -41,42 +45,39 @@ impl TileMap {
         let jungle_bottom = equator - (jungle_percent as f64 * 0.5).ceil() as i32;
         let jungle_top = equator + (jungle_percent as f64 * 0.5).ceil() as i32;
 
-        for tile_index in self.iter_tile_indices() {
-            let latitude = tile_index.latitude(&map_parameters);
+        for tile in self.iter_tiles() {
+            let latitude = tile.latitude(map_parameters);
 
-            let neighbor_tile_indices = tile_index.neighbor_tile_indices(&map_parameters);
+            let neighbor_tiles = tile.neighbor_tiles(map_parameters);
 
             /* **********start to add ice********** */
-            if tile_index.is_impassable(self, &ruleset) {
+            if tile.is_impassable(self, &ruleset) {
                 continue;
-            } else if tile_index.terrain_type(self) == TerrainType::Water {
-                if !map_parameters
-                    .edge_direction_array()
-                    .iter()
-                    .any(|&direction| tile_index.has_river(direction, self, &map_parameters))
+            } else if tile.terrain_type(self) == TerrainType::Water {
+                if !tile.has_river(self, map_parameters)
                     && ruleset.features["Ice"]
                         .occurs_on_type
-                        .contains(&tile_index.terrain_type(self))
+                        .contains(&tile.terrain_type(self))
                     && ruleset.features["Ice"]
                         .occurs_on_base
-                        .contains(&tile_index.base_terrain(self))
+                        .contains(&tile.base_terrain(self))
                 {
                     if latitude > 0.78 {
                         let mut score = self.random_number_generator.gen_range(0..100) as f64;
                         score += latitude * 100.;
-                        if neighbor_tile_indices
+                        if neighbor_tiles
                             .iter()
-                            .any(|&tile_index| tile_index.terrain_type(self) != TerrainType::Water)
+                            .any(|&tile| tile.terrain_type(self) != TerrainType::Water)
                         {
                             score /= 2.0;
                         }
-                        let a = neighbor_tile_indices
+                        let a = neighbor_tiles
                             .iter()
-                            .filter(|tile_index| tile_index.feature(self) == Some(Feature::Ice))
+                            .filter(|tile| tile.feature(self) == Some(Feature::Ice))
                             .count();
                         score += 10. * a as f64;
                         if score > 130. {
-                            self.feature_query[*tile_index] = Some(Feature::Ice);
+                            self.feature_query[tile.index()] = Some(Feature::Ice);
                         }
                     }
                 }
@@ -85,33 +86,30 @@ impl TileMap {
             else {
                 /* **********start to add Floodplain********** */
                 num_land_plots += 1;
-                if map_parameters
-                    .edge_direction_array()
-                    .iter()
-                    .any(|&direction| tile_index.has_river(direction, self, &map_parameters))
+                if tile.has_river(self, map_parameters)
                     && ruleset.features["Floodplain"]
                         .occurs_on_type
-                        .contains(&tile_index.terrain_type(self))
+                        .contains(&tile.terrain_type(self))
                     && ruleset.features["Floodplain"]
                         .occurs_on_base
-                        .contains(&tile_index.base_terrain(self))
+                        .contains(&tile.base_terrain(self))
                 {
-                    self.feature_query[*tile_index] = Some(Feature::Floodplain);
+                    self.feature_query[tile.index()] = Some(Feature::Floodplain);
                     continue;
                 }
                 /* **********the end of add Floodplain********** */
                 /* **********start to add oasis********** */
                 else if ruleset.features["Oasis"]
                     .occurs_on_type
-                    .contains(&tile_index.terrain_type(self))
+                    .contains(&tile.terrain_type(self))
                     && ruleset.features["Oasis"]
                         .occurs_on_base
-                        .contains(&tile_index.base_terrain(self))
+                        .contains(&tile.base_terrain(self))
                     && (oasis_count as f64 * 100. / num_land_plots as f64).ceil() as i32
                         <= oasis_max_percent
                     && self.random_number_generator.gen_range(0..4) == 1
                 {
-                    self.feature_query[*tile_index] = Some(Feature::Oasis);
+                    self.feature_query[tile.index()] = Some(Feature::Oasis);
                     oasis_count += 1;
                     continue;
                 }
@@ -119,18 +117,18 @@ impl TileMap {
                 /* **********start to add march********** */
                 if ruleset.features["Marsh"]
                     .occurs_on_type
-                    .contains(&tile_index.terrain_type(self))
+                    .contains(&tile.terrain_type(self))
                     && ruleset.features["Marsh"]
                         .occurs_on_base
-                        .contains(&tile_index.base_terrain(self))
+                        .contains(&tile.base_terrain(self))
                     && (marsh_count as f64 * 100. / num_land_plots as f64).ceil() as i32
                         <= marsh_max_percent
                 {
                     let mut score = 300;
 
-                    let a = neighbor_tile_indices
+                    let a = neighbor_tiles
                         .iter()
-                        .filter(|tile_index| tile_index.feature(self) == Some(Feature::Marsh))
+                        .filter(|tile| tile.feature(self) == Some(Feature::Marsh))
                         .count();
                     match a {
                         0 => (),
@@ -140,7 +138,7 @@ impl TileMap {
                         _ => score -= 200,
                     };
                     if self.random_number_generator.gen_range(0..300) <= score {
-                        self.feature_query[*tile_index] = Some(Feature::Marsh);
+                        self.feature_query[tile.index()] = Some(Feature::Marsh);
                         marsh_count += 1;
                         continue;
                     }
@@ -149,10 +147,10 @@ impl TileMap {
                 /* **********start to add jungle********** */
                 if ruleset.features["Jungle"]
                     .occurs_on_type
-                    .contains(&tile_index.terrain_type(self))
+                    .contains(&tile.terrain_type(self))
                     && ruleset.features["Jungle"]
                         .occurs_on_base
-                        .contains(&tile_index.base_terrain(self))
+                        .contains(&tile.base_terrain(self))
                     && (jungle_count as f64 * 100. / num_land_plots as f64).ceil() as i32
                         <= jungle_max_percent
                     && (latitude >= jungle_bottom as f64 / 100.
@@ -160,9 +158,9 @@ impl TileMap {
                 {
                     let mut score = 300;
 
-                    let a = neighbor_tile_indices
+                    let a = neighbor_tiles
                         .iter()
-                        .filter(|tile_index| tile_index.feature(self) == Some(Feature::Jungle))
+                        .filter(|tile| tile.feature(self) == Some(Feature::Jungle))
                         .count();
                     match a {
                         0 => (),
@@ -172,18 +170,18 @@ impl TileMap {
                         _ => score -= 200,
                     };
                     if self.random_number_generator.gen_range(0..300) <= score {
-                        self.feature_query[*tile_index] = Some(Feature::Jungle);
+                        self.feature_query[tile.index()] = Some(Feature::Jungle);
 
-                        if tile_index.terrain_type(self) == TerrainType::Hill
+                        if tile.terrain_type(self) == TerrainType::Hill
                             && matches!(
-                                tile_index.base_terrain(self),
+                                tile.base_terrain(self),
                                 BaseTerrain::Grassland | BaseTerrain::Plain
                             )
                         {
-                            self.base_terrain_query[*tile_index] = BaseTerrain::Plain;
+                            self.base_terrain_query[tile.index()] = BaseTerrain::Plain;
                         } else {
-                            self.terrain_type_query[*tile_index] = TerrainType::Flatland;
-                            self.base_terrain_query[*tile_index] = BaseTerrain::Plain;
+                            self.terrain_type_query[tile.index()] = TerrainType::Flatland;
+                            self.base_terrain_query[tile.index()] = BaseTerrain::Plain;
                         }
 
                         jungle_count += 1;
@@ -194,18 +192,18 @@ impl TileMap {
                 /* **********start to add forest********** */
                 if ruleset.features["Forest"]
                     .occurs_on_type
-                    .contains(&tile_index.terrain_type(self))
+                    .contains(&tile.terrain_type(self))
                     && ruleset.features["Forest"]
                         .occurs_on_base
-                        .contains(&tile_index.base_terrain(self))
+                        .contains(&tile.base_terrain(self))
                     && (forest_count as f64 * 100. / num_land_plots as f64).ceil() as i32
                         <= forest_max_percent
                 {
                     let mut score = 300;
 
-                    let a = neighbor_tile_indices
+                    let a = neighbor_tiles
                         .iter()
-                        .filter(|tile_index| tile_index.feature(self) == Some(Feature::Forest))
+                        .filter(|tile| tile.feature(self) == Some(Feature::Forest))
                         .count();
                     match a {
                         0 => (),
@@ -215,7 +213,7 @@ impl TileMap {
                         _ => score -= 200,
                     };
                     if self.random_number_generator.gen_range(0..300) <= score {
-                        self.feature_query[*tile_index] = Some(Feature::Forest);
+                        self.feature_query[tile.index()] = Some(Feature::Forest);
                         forest_count += 1;
                         continue;
                     }

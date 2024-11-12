@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::ruleset::Ruleset;
 
-#[derive(PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Debug, Component)]
+#[derive(PartialEq, Eq, Clone, Copy, Hash, Serialize, Deserialize, Debug, Component)]
 pub enum Feature {
     Forest,
     Jungle,

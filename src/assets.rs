@@ -1,5 +1,3 @@
-use std::{any::Any, borrow::Borrow};
-
 use bevy::{asset::LoadedFolder, prelude::*, utils::HashMap};
 
 #[derive(Resource)]
@@ -11,7 +9,7 @@ impl MaterialResource {
     pub fn texture_handle(&self, name: &str) -> Handle<Image> {
         self.textures
             .get(name)
-            .unwrap_or_else(|| panic!("Can't find Image: {}", name))
+            .expect(&format!("Can't find Image: {}", name))
             .clone()
     }
 }
@@ -37,7 +35,8 @@ pub struct SpriteFolder(Handle<LoadedFolder>);
 pub fn load_textures(mut commands: Commands, asset_server: Res<AssetServer>) {
     // load multiple, individual sprites from a folder
     commands.insert_resource(SpriteFolder(
-        asset_server.load_folder("Images/TileSets/HexaRealm/Tiles"),
+        asset_server.load_folder("./"),
+        // asset_server.load_folder("Images/TileSets/HexaRealm/Tiles"),
     ));
 }
 

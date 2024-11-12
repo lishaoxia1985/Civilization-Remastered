@@ -7,23 +7,19 @@ use crate::grid::{
     Direction,
 };
 
-use super::tile_index::TileIndex;
+use super::{tile::Tile, tile_map_impls::generate_regions::Rectangle};
 
 #[derive(Resource)]
 pub struct MapParameters {
     pub name: String,
-    //it.type = type
-    //it.mapResources = mapResources
     pub map_size: MapSize,
+    pub map_type: MapType,
     pub hex_layout: HexLayout,
     pub wrap_x: bool,
     pub wrap_y: bool,
     /// the map use which type of offset coordinate
     pub offset: Offset,
     pub no_ruins: bool,
-    //it.worldWrap = worldWrap
-    //it.mods = LinkedHashSet(mods)
-    //it.baseRuleset = baseRuleset
     pub seed: u64,
     pub large_lake_num: u32,
     /// The max area size of a lake.
@@ -38,8 +34,16 @@ pub struct MapParameters {
     pub world_age: WorldAge,
     pub temperature: Temperature,
     pub rainfall: Rainfall,
-    /// In fact, it is related to map size, we don't need to set singlely.
+    /// TODO: In fact, it is related to map size, we don't need to set singlely.
     pub natural_wonder_num: u32,
+    /// The number of civilizations, excluding city states.
+    pub civilization_num: u32,
+    /// The number of city states.
+    pub city_state_num: u32,
+    pub region_divide_method: RegionDivideMethod,
+    /// If true, the civilization starting tile must be coastal land. Otherwise, it can be any hill/flatland tile.
+    pub civilization_starting_tile_must_be_coastal_land: bool,
+    pub resource_setting: ResourceSetting,
 }
 
 #[derive(Clone, Copy)]
@@ -56,6 +60,11 @@ pub struct MapSize {
     Large,
     Huge,
 } */
+
+pub enum MapType {
+    Fractal,
+    Pangaea,
+}
 
 pub enum SeaLevel {
     Low,
@@ -83,6 +92,38 @@ pub enum Rainfall {
     Random,
 }
 
+/// Defines the method used to divide regions for civilizations in the game. This enum is used to determine how civilizations are assigned to different regions on the map.
+pub enum RegionDivideMethod {
+    /// All civilizations start on the biggest landmass.
+    ///
+    /// This method places all civs on a single, largest landmass.
+    Pangaea,
+    /// Civs are assigned to continents. Any continents with more than one civ are divided.
+    Continent,
+    /// This method is primarily used for Archipelago or other maps with many small islands.
+    /// The entire map is treated as one large rectangular region.
+    /// The `WholeMapRectangle` method is equivalent to `CustomRectangle(Rectangle)` when the `Rectangle` encompasses the entire map area.
+    /// We will ignore the landmass id when method is set to WholeMapRectangle.
+    WholeMapRectangle,
+    /// Civs start within a custom-defined rectangle.
+    /// We will ignore the landmass id when method is set to CustomRectangle.
+    CustomRectangle(Rectangle),
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum ResourceSetting {
+    /// 1
+    Sparse,
+    /// 2
+    Standard,
+    /// 3
+    Abundant,
+    /// 4
+    LegendaryStart,
+    /// 5
+    StrategicBalance,
+}
+
 impl Default for MapParameters {
     fn default() -> Self {
         let mut map_parameters = Self {
@@ -91,6 +132,7 @@ impl Default for MapParameters {
                 width: 100,
                 height: 50,
             },
+            map_type: MapType::Fractal,
             hex_layout: HexLayout {
                 orientation: HexOrientation::Flat,
                 size: DVec2::new(8., 8.),
@@ -114,6 +156,11 @@ impl Default for MapParameters {
             temperature: Temperature::Normal,
             rainfall: Rainfall::Normal,
             natural_wonder_num: 6,
+            civilization_num: 4,
+            city_state_num: 8,
+            region_divide_method: RegionDivideMethod::Continent,
+            civilization_starting_tile_must_be_coastal_land: false,
+            resource_setting: ResourceSetting::Standard,
         };
         map_parameters.update_origin();
         map_parameters
@@ -128,7 +175,7 @@ impl MapParameters {
         let (min_offset_x, min_offset_y) = [0, 1, width].into_iter().fold(
             (0.0_f64, 0.0_f64),
             |(min_offset_x, min_offset_y), index| {
-                let hex = TileIndex::new(index as usize).to_hex_coordinate(self);
+                let hex = Tile::new(index as usize).to_hex_coordinate(self);
 
                 let [offset_x, offset_y] = self.hex_layout.hex_to_pixel(hex).to_array();
                 (min_offset_x.min(offset_x), min_offset_y.min(offset_y))
@@ -142,7 +189,7 @@ impl MapParameters {
         ]
         .into_iter()
         .fold((0.0_f64, 0.0_f64), |(max_offset_x, max_offset_y), index| {
-            let hex = TileIndex::new(index as usize).to_hex_coordinate(self);
+            let hex = Tile::new(index as usize).to_hex_coordinate(self);
 
             let [offset_x, offset_y] = self.hex_layout.hex_to_pixel(hex).to_array();
             (max_offset_x.max(offset_x), max_offset_y.max(offset_y))

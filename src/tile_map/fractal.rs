@@ -8,8 +8,8 @@ use image::{imageops::resize, GrayImage, ImageBuffer};
 use rand::{rngs::StdRng, seq::SliceRandom, Rng};
 
 use crate::grid::{
-    hex::{Hex, HexLayout, HexOrientation, Offset, OffsetCoordinate, SQRT_3},
-    Direction,
+    hex::{Hex, HexLayout, HexOrientation, Offset, SQRT_3},
+    Direction, OffsetCoordinate,
 };
 
 const DEFAULT_WIDTH_EXP: i32 = 7;
@@ -333,7 +333,7 @@ impl CvFractal {
             //      1. Diamond Step and Square Step are in the independent iter of each other in the original,
             //         in this code them are in the same iter.
             //      2. In the original Square Step will use the calculation result of the Diamond Step,
-            //         in this code Square Step does'nt use the calculation result of the Diamond Step.
+            //         in this code Square Step doesn't use the calculation result of the Diamond Step.
             for x in 0..((self.fractal_width >> pass) + if self.flags.wrap_x { 0 } else { 1 }) {
                 for y in 0..((self.fractal_height >> pass) + if self.flags.wrap_y { 0 } else { 1 })
                 {
@@ -611,7 +611,6 @@ impl CvFractal {
     ///
     /// If A is located to the north of B, the function returns [Direction::North].
     fn estimate_direction(hex_a: Hex, hex_b: Hex, orientation: HexOrientation) -> Direction {
-        let estimate_vector = hex_a - hex_b;
         // Define hex_layout and set the size to 1/sqrt(3) to make sure we can get the unit vectors
         // A unit vector refers to a vector whose norm is 1.
         let hex_layout = HexLayout {
@@ -624,14 +623,14 @@ impl CvFractal {
         let direction_vectors: [DVec2; 6] =
             array::from_fn(|i| hex_layout.hex_to_pixel(Hex::HEX_DIRECTIONS[i]));
 
-        let estimate_vector = estimate_vector.into_inner().as_dvec2();
+        let estimate_vector = (hex_a - hex_b).into_inner().as_dvec2();
 
         // Find the index of the direction vector with the largest dot product with the estimate vector.
         let max_index = direction_vectors
             .into_iter()
             .enumerate()
             .map(|(index, direction_vector)| (index, estimate_vector.dot(direction_vector)))
-            .max_by(|(_, dot_a), (_, dot_b)| dot_a.partial_cmp(dot_b).unwrap())
+            .max_by(|(_, dot_a), (_, dot_b)| dot_a.total_cmp(dot_b))
             .map(|(index, _)| index)
             .unwrap();
 

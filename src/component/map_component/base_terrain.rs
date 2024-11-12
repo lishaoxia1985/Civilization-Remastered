@@ -1,7 +1,7 @@
 use bevy::prelude::Component;
 use serde::{Deserialize, Serialize};
 
-#[derive(PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Debug, Component)]
+#[derive(PartialEq, Eq, Clone, Copy, Hash, Serialize, Deserialize, Debug, Component)]
 pub enum BaseTerrain {
     Ocean,
     Lake,

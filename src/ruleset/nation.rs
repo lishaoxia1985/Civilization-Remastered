@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::tile_map::RegionType;
+
 use super::Name;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -7,43 +9,54 @@ use super::Name;
 pub struct Nation {
     pub name: String,
     #[serde(default)]
-    leader_name: String,
+    pub leader_name: String,
     #[serde(default)]
-    adjective: Vec<String>,
+    pub adjective: Vec<String>,
+    // These fields below are relevant to Civilization starting position.
     #[serde(default)]
-    start_bias: Vec<String>,
+    pub along_ocean: bool,
     #[serde(default)]
-    preferred_victory_type: String,
+    /// This field is only used in CityState `Venice`, we don't tackle it because I don't know what it means.
+    pub place_first_along_ocean: bool,
     #[serde(default)]
-    start_intro_part1: String,
+    /// Now this field is not used in the game, so we don't tackle it.
+    pub along_river: bool,
     #[serde(default)]
-    start_intro_part2: String,
+    pub region_type_priority: Vec<RegionType>,
     #[serde(default)]
-    declaring_war: String,
+    pub avoid_region_type: Vec<RegionType>,
     #[serde(default)]
-    attacked: String,
+    pub preferred_victory_type: String,
     #[serde(default)]
-    defeated: String,
+    pub start_intro_part1: String,
     #[serde(default)]
-    introduction: String,
+    pub start_intro_part2: String,
     #[serde(default)]
-    neutral_hello: String,
+    pub declaring_war: String,
     #[serde(default)]
-    hate_hello: String,
+    pub attacked: String,
     #[serde(default)]
-    trade_request: String,
-    outer_color: Option<[u8; 3]>,
-    inner_color: Option<[u8; 3]>,
+    pub defeated: String,
     #[serde(default)]
-    favored_religion: String,
+    pub introduction: String,
     #[serde(default)]
-    unique_name: String,
+    pub neutral_hello: String,
     #[serde(default)]
-    uniques: Vec<String>,
+    pub hate_hello: String,
     #[serde(default)]
-    cities: Vec<String>,
+    pub trade_request: String,
+    pub outer_color: Option<[u8; 3]>,
+    pub inner_color: Option<[u8; 3]>,
     #[serde(default)]
-    city_state_type: String,
+    pub favored_religion: String,
+    #[serde(default)]
+    pub unique_name: String,
+    #[serde(default)]
+    pub uniques: Vec<String>,
+    #[serde(default)]
+    pub cities: Vec<String>,
+    #[serde(default)]
+    pub city_state_type: String,
 }
 
 impl Name for Nation {

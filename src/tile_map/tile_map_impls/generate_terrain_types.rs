@@ -2,12 +2,19 @@ use bevy::math::{DVec2, IVec2};
 use rand::Rng;
 
 use crate::{
-    map::terrain_type::TerrainType,
-    tile_map::{CvFractal, Flags, MapParameters, SeaLevel, TileMap, WorldAge},
+    component::terrain_type::TerrainType,
+    tile_map::{CvFractal, Flags, MapParameters, MapType, SeaLevel, TileMap, WorldAge},
 };
 
 impl TileMap {
-    pub fn generate_terrain_type_for_fractal(&mut self, map_parameters: &MapParameters) {
+    pub fn generate_terrain_types(&mut self, map_parameters: &MapParameters) {
+        match map_parameters.map_type {
+            MapType::Fractal => self.generate_terrain_types_for_fractal(map_parameters),
+            MapType::Pangaea => self.generate_terrain_types_for_pangaea(map_parameters),
+        }
+    }
+
+    pub fn generate_terrain_types_for_fractal(&mut self, map_parameters: &MapParameters) {
         let continent_grain = 2;
 
         let sea_level_low = 65;
@@ -39,12 +46,9 @@ impl TileMap {
             SeaLevel::Low => sea_level_low,
             SeaLevel::Normal => sea_level_normal,
             SeaLevel::High => sea_level_high,
-            SeaLevel::Random => {
-                sea_level_low
-                    + self
-                        .random_number_generator
-                        .gen_range(0..=(sea_level_high - sea_level_low))
-            }
+            SeaLevel::Random => self
+                .random_number_generator
+                .gen_range(sea_level_low..=sea_level_high),
         };
 
         let orientation = map_parameters.hex_layout.orientation;
@@ -166,42 +170,42 @@ impl TileMap {
             panic!("Vec length does not match the pattern")
         };
 
-        self.iter_tile_indices().for_each(|tile_index| {
-            let [x, y] = tile_index.to_offset_coordinate(map_parameters).to_array();
+        self.iter_tiles().for_each(|tile| {
+            let [x, y] = tile.to_offset_coordinate(map_parameters).to_array();
             let height = continents_fractal.get_height(x, y);
 
             let mountain_height = mountains_fractal.get_height(x, y);
             let hill_height = hills_fractal.get_height(x, y);
 
             if height <= water_threshold {
-                self.terrain_type_query[*tile_index] = TerrainType::Water;
+                self.terrain_type_query[tile.index()] = TerrainType::Water;
                 if tectonic_islands {
                     if mountain_height == mountain_100 {
-                        self.terrain_type_query[*tile_index] = TerrainType::Mountain;
+                        self.terrain_type_query[tile.index()] = TerrainType::Mountain;
                     } else if mountain_height == mountain_99 {
-                        self.terrain_type_query[*tile_index] = TerrainType::Hill;
+                        self.terrain_type_query[tile.index()] = TerrainType::Hill;
                     } else if (mountain_height == mountain_97) || (mountain_height == mountain_95) {
-                        self.terrain_type_query[*tile_index] = TerrainType::Flatland;
+                        self.terrain_type_query[tile.index()] = TerrainType::Flatland;
                     }
                 }
             } else if mountain_height >= mountain_threshold {
                 if hill_height >= pass_threshold {
-                    self.terrain_type_query[*tile_index] = TerrainType::Hill;
+                    self.terrain_type_query[tile.index()] = TerrainType::Hill;
                 } else {
-                    self.terrain_type_query[*tile_index] = TerrainType::Mountain;
+                    self.terrain_type_query[tile.index()] = TerrainType::Mountain;
                 }
             } else if mountain_height >= hills_near_mountains
                 || (hill_height >= hills_bottom1 && hill_height <= hills_top1)
                 || (hill_height >= hills_bottom2 && hill_height <= hills_top2)
             {
-                self.terrain_type_query[*tile_index] = TerrainType::Hill;
+                self.terrain_type_query[tile.index()] = TerrainType::Hill;
             } else {
-                self.terrain_type_query[*tile_index] = TerrainType::Flatland;
+                self.terrain_type_query[tile.index()] = TerrainType::Flatland;
             };
         });
     }
 
-    pub fn generate_terrain_type_for_pangaea(&mut self, map_parameters: &MapParameters) {
+    pub fn generate_terrain_types_for_pangaea(&mut self, map_parameters: &MapParameters) {
         let continent_grain = 2;
 
         let sea_level_low = 71;
@@ -231,12 +235,9 @@ impl TileMap {
             SeaLevel::Low => sea_level_low,
             SeaLevel::Normal => sea_level_normal,
             SeaLevel::High => sea_level_high,
-            SeaLevel::Random => {
-                sea_level_low
-                    + self
-                        .random_number_generator
-                        .gen_range(0..=(sea_level_high - sea_level_low))
-            }
+            SeaLevel::Random => self
+                .random_number_generator
+                .gen_range(sea_level_low..=sea_level_high),
         };
 
         let orientation = map_parameters.hex_layout.orientation;
@@ -364,8 +365,8 @@ impl TileMap {
 
         let axis = center_position * 3. / 5.;
 
-        self.iter_tile_indices().for_each(|tile_index| {
-            let [x, y] = tile_index.to_offset_coordinate(map_parameters).to_array();
+        self.iter_tiles().for_each(|tile| {
+            let [x, y] = tile.to_offset_coordinate(map_parameters).to_array();
             let height = continents_fractal.get_height(x, y);
 
             let mountain_height = mountains_fractal.get_height(x, y);
@@ -385,27 +386,27 @@ impl TileMap {
             let height = ((height as f64 + h + h) * 0.33) as i32;
 
             if height <= water_threshold {
-                self.terrain_type_query[*tile_index] = TerrainType::Water;
+                self.terrain_type_query[tile.index()] = TerrainType::Water;
                 if height == mountain_100 {
-                    self.terrain_type_query[*tile_index] = TerrainType::Mountain;
+                    self.terrain_type_query[tile.index()] = TerrainType::Mountain;
                 } else if height == mountain_99 {
-                    self.terrain_type_query[*tile_index] = TerrainType::Hill;
+                    self.terrain_type_query[tile.index()] = TerrainType::Hill;
                 } else if height == mountain_97 || height == mountain_95 {
-                    self.terrain_type_query[*tile_index] = TerrainType::Flatland;
+                    self.terrain_type_query[tile.index()] = TerrainType::Flatland;
                 }
             } else if mountain_height >= mountain_threshold {
                 if hill_height >= pass_threshold {
-                    self.terrain_type_query[*tile_index] = TerrainType::Hill;
+                    self.terrain_type_query[tile.index()] = TerrainType::Hill;
                 } else {
-                    self.terrain_type_query[*tile_index] = TerrainType::Mountain;
+                    self.terrain_type_query[tile.index()] = TerrainType::Mountain;
                 }
             } else if mountain_height >= hills_near_mountains
                 || (hill_height >= hills_bottom1 && hill_height <= hills_top1)
                 || (hill_height >= hills_bottom2 && hill_height <= hills_top2)
             {
-                self.terrain_type_query[*tile_index] = TerrainType::Hill;
+                self.terrain_type_query[tile.index()] = TerrainType::Hill;
             } else {
-                self.terrain_type_query[*tile_index] = TerrainType::Flatland;
+                self.terrain_type_query[tile.index()] = TerrainType::Flatland;
             };
         });
     }

@@ -165,7 +165,8 @@
 		],
 		"occursOnBase": [
 			"Ocean",
-			"Coast"
+			"Coast",
+			"Lake"
 		],
 		"uniques": [
 			"Occurs at temperature between [-1] and [-0.8] and humidity between [0] and [1]",
