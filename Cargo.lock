@@ -1400,6 +1400,7 @@ checksum = "613afe47fcd5fac7ccf1db93babcb082c5994d996f20b8b159f2ad1658eb5724"
 [[package]]
 name = "civ_map_generator"
 version = "0.1.0"
+source = "git+https://github.com/lishaoxia1985/civ-map-generator.git?branch=master#85a94d9f4beb5eee94bcf821c0ada127a07434ad"
 dependencies = [
  "glam",
  "hashbrown 0.15.2",
