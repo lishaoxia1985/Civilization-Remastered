@@ -1,20 +1,18 @@
 mod assets;
 
-mod component;
-mod grid;
-mod ruleset;
-mod tile_map;
+use civ_map_generator::{
+    hex::{HexLayout, HexOrientation, Offset},
+    ruleset::Ruleset,
+    terrain_type::TerrainType,
+    tile_map::{MapParameters, MapSize, TileMap},
+    Direction,
+};
 
 use assets::{check_textures, load_textures, setup, AppState, MaterialResource};
 use bevy_prototype_lyon::{
     draw::Stroke, entity::ShapeBundle, path::PathBuilder, plugin::ShapePlugin,
     prelude::GeometryBuilder,
 };
-use component::terrain_type::TerrainType;
-use grid::hex::{HexLayout, HexOrientation, Offset};
-use grid::Direction;
-use ruleset::Ruleset;
-use tile_map::{MapParameters, MapSize, TileMap};
 
 use bevy::{
     input::mouse::MouseWheel,
@@ -24,7 +22,7 @@ use bevy::{
     utils::HashMap,
 };
 
-use crate::ruleset::Unique;
+// use crate::ruleset::Unique;
 
 fn main() {
     /* let ruleset = Ruleset::new();
@@ -54,7 +52,7 @@ fn main() {
         }))
         .init_state::<AppState>()
         .init_resource::<MaterialResource>()
-        .insert_resource(Ruleset::new())
+        /* .insert_resource(Ruleset::new())
         .insert_resource({
             let mut map_parameters = MapParameters {
                 map_size: MapSize {
@@ -71,7 +69,7 @@ fn main() {
             };
             map_parameters.update_origin();
             map_parameters
-        })
+        }) */
         .add_plugins(ShapePlugin)
         .add_systems(OnEnter(AppState::Setup), (load_textures, camera_setup))
         .add_systems(
@@ -186,9 +184,27 @@ fn create_tile_map(
     materials: Res<MaterialResource>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut color_materials: ResMut<Assets<ColorMaterial>>,
-    map_parameters: Res<MapParameters>,
-    ruleset: Res<Ruleset>,
+    // map_parameters: Res<MapParameters>,
+    // ruleset: Res<Ruleset>,
 ) {
+    let ruleset = Ruleset::new();
+
+    let mut map_parameters = MapParameters {
+        map_size: MapSize {
+            width: 80,
+            height: 40,
+        },
+        hex_layout: HexLayout {
+            orientation: HexOrientation::Pointy,
+            size: DVec2::new(16., 16.),
+            origin: DVec2::new(0., 0.),
+        },
+        offset: Offset::Odd,
+        ..Default::default()
+    };
+
+    map_parameters.update_origin();
+
     dbg!(&map_parameters.seed);
 
     let tile_map = TileMap::generate(&map_parameters, &ruleset);
