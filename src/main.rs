@@ -1,10 +1,11 @@
 mod assets;
 
 use civ_map_generator::{
+    generate_map,
     hex::{HexLayout, HexOrientation, Offset},
     ruleset::Ruleset,
     terrain_type::TerrainType,
-    tile_map::{MapParameters, MapSize, TileMap},
+    tile_map::{MapParameters, MapSize},
     Direction,
 };
 
@@ -190,10 +191,7 @@ fn create_tile_map(
     let ruleset = Ruleset::new();
 
     let mut map_parameters = MapParameters {
-        map_size: MapSize {
-            width: 80,
-            height: 40,
-        },
+        map_size: MapSize::new(128, 80),
         hex_layout: HexLayout {
             orientation: HexOrientation::Pointy,
             size: DVec2::new(16., 16.),
@@ -207,7 +205,7 @@ fn create_tile_map(
 
     dbg!(&map_parameters.seed);
 
-    let tile_map = TileMap::generate(&map_parameters, &ruleset);
+    let tile_map = generate_map(&map_parameters, &ruleset);
 
     let mut base_terrain_and_material = HashMap::new();
 
