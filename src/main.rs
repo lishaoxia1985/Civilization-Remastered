@@ -1,6 +1,13 @@
 mod assets;
 
+use bevy_asset_loader::loading_state::{
+    config::ConfigureLoadingState, LoadingState, LoadingStateAppExt,
+};
+
+use enum_map::{enum_map, EnumMap};
+
 use civ_map_generator::{
+    base_terrain::BaseTerrain,
     generate_map,
     hex::{HexLayout, HexOrientation, Offset},
     ruleset::Ruleset,
@@ -9,7 +16,7 @@ use civ_map_generator::{
     Direction,
 };
 
-use assets::{check_textures, load_textures, setup, AppState, MaterialResource};
+use assets::{AppState, MaterialResource};
 use bevy_prototype_lyon::{
     draw::Stroke, entity::ShapeBundle, path::PathBuilder, plugin::ShapePlugin,
     prelude::GeometryBuilder,
@@ -52,7 +59,11 @@ fn main() {
             ..default()
         }))
         .init_state::<AppState>()
-        .init_resource::<MaterialResource>()
+        .add_loading_state(
+            LoadingState::new(AppState::AssetLoading)
+                .continue_to_state(AppState::GameStart)
+                .load_collection::<MaterialResource>(),
+        )
         /* .insert_resource(Ruleset::new())
         .insert_resource({
             let mut map_parameters = MapParameters {
@@ -72,13 +83,11 @@ fn main() {
             map_parameters
         }) */
         .add_plugins(ShapePlugin)
-        .add_systems(OnEnter(AppState::Setup), (load_textures, camera_setup))
+        .add_systems(OnEnter(AppState::AssetLoading), (camera_setup))
         .add_systems(
             Update,
             (camera_movement, cursor_drag_system, zoom_camera_system),
         )
-        .add_systems(Update, check_textures.run_if(in_state(AppState::Setup)))
-        .add_systems(OnEnter(AppState::Finished), setup)
         .add_systems(OnEnter(AppState::GameStart), create_tile_map)
         .run();
 }
@@ -207,50 +216,29 @@ fn create_tile_map(
 
     let tile_map = generate_map(&map_parameters, &ruleset);
 
-    let mut base_terrain_and_material = HashMap::new();
+    let base_terrain_and_texture_name = enum_map! {
+        BaseTerrain::Ocean => "sv_terrainhexocean",
+        BaseTerrain::Lake => "sv_terrainhexcoast",
+        BaseTerrain::Coast => "sv_terrainhexcoast",
+        BaseTerrain::Grassland => "sv_terrainhexgrasslands",
+        BaseTerrain::Desert => "sv_terrainhexdesert",
+        BaseTerrain::Plain => "sv_terrainhexplains",
+        BaseTerrain::Tundra => "sv_terrainhextundra",
+        BaseTerrain::Snow => "sv_terrainhexsnow",
+    };
 
-    base_terrain_and_material.insert(
-        "Ocean",
-        color_materials.add(materials.texture_handle("sv_terrainhexocean")),
-    );
+    let base_terrain_and_material: EnumMap<_, _> = base_terrain_and_texture_name
+        .into_iter()
+        .map(|(base_terrain, base_terrain_texture)| {
+            (
+                base_terrain,
+                color_materials.add(materials.texture_handle(base_terrain_texture)),
+            )
+        })
+        .collect();
 
-    // Lake use the same texture as Coast
-    base_terrain_and_material.insert(
-        "Lake",
-        color_materials.add(materials.texture_handle("sv_terrainhexcoast")),
-    );
-
-    base_terrain_and_material.insert(
-        "Coast",
-        color_materials.add(materials.texture_handle("sv_terrainhexcoast")),
-    );
-
-    base_terrain_and_material.insert(
-        "Grassland",
-        color_materials.add(materials.texture_handle("sv_terrainhexgrasslands")),
-    );
-
-    base_terrain_and_material.insert(
-        "Desert",
-        color_materials.add(materials.texture_handle("sv_terrainhexdesert")),
-    );
-
-    base_terrain_and_material.insert(
-        "Plain",
-        color_materials.add(materials.texture_handle("sv_terrainhexplains")),
-    );
-
-    base_terrain_and_material.insert(
-        "Tundra",
-        color_materials.add(materials.texture_handle("sv_terrainhextundra")),
-    );
-
-    base_terrain_and_material.insert(
-        "Snow",
-        color_materials.add(materials.texture_handle("sv_terrainhexsnow")),
-    );
-
-    tile_map.river_list.values().for_each(|river| {
+    // Draw rivers
+    tile_map.river_list.iter().for_each(|river| {
         let mut path_builder = PathBuilder::new();
         river
             .iter()
@@ -266,7 +254,6 @@ fn create_tile_map(
                         Direction::SouthWest => (Direction::SouthEast, Direction::South),
                         Direction::West => panic!(),
                         Direction::NorthWest => (Direction::South, Direction::SouthWest),
-                        Direction::None => panic!(),
                     },
                     HexOrientation::Flat => match *flow_direction {
                         Direction::North => panic!(),
@@ -277,7 +264,6 @@ fn create_tile_map(
                         Direction::SouthWest => (Direction::East, Direction::SouthEast),
                         Direction::West => (Direction::SouthEast, Direction::SouthWest),
                         Direction::NorthWest => (Direction::East, Direction::NorthEast),
-                        Direction::None => panic!(),
                     },
                 };
 
@@ -314,11 +300,6 @@ fn create_tile_map(
         ));
     });
 
-    /* let tile_pixel_size = match map_parameters.hex_layout.orientation {
-        HexOrientation::Pointy => map_parameters.hex_layout.size * DVec2::new(3_f64.sqrt(), 2.0),
-        HexOrientation::Flat => map_parameters.hex_layout.size * DVec2::new(2.0, 3_f64.sqrt()),
-    }; */
-
     let tile_pixel_size = map_parameters.hex_layout.size * DVec2::new(2.0, 2.0);
 
     let (sprite_rotation, text_rotation) = match map_parameters.hex_layout.orientation {
@@ -331,6 +312,7 @@ fn create_tile_map(
 
     for tile in tile_map.iter_tiles() {
         let pixel_position = tile.pixel_position(&map_parameters);
+        // Spawn the tile with base terrain
         commands
             .spawn(MaterialMesh2dBundle {
                 mesh: Mesh2dHandle(meshes.add(RegularPolygon::new(16.0, 6))),
@@ -339,13 +321,12 @@ fn create_tile_map(
                     rotation: sprite_rotation,
                     ..Default::default()
                 },
-                material: base_terrain_and_material
-                    .get(&tile.base_terrain(&tile_map).name())
-                    .unwrap()
-                    .clone(),
+                material: base_terrain_and_material[tile.base_terrain(&tile_map)].clone(),
                 ..default()
             })
             .with_children(|parent| {
+                // Draw terrain type Mountain with no natural wonder and Hill
+                // Notice terrain type Flatland and Water are not drawn in this moment because they only need to be drawn with base terrain
                 if tile.terrain_type(&tile_map) == TerrainType::Mountain
                     && tile.natural_wonder(&tile_map).is_none()
                 {
@@ -380,7 +361,7 @@ fn create_tile_map(
 
                 // Draw the feature
                 if let Some(feature) = tile.feature(&tile_map) {
-                    let feature_name = match feature.name() {
+                    let feature_texture = match feature.name() {
                         "Forest" => "sv_forest",
                         "Jungle" => "sv_jungle",
                         "Marsh" => "sv_marsh",
@@ -397,7 +378,7 @@ fn create_tile_map(
                             custom_size: Some(tile_pixel_size.as_vec2()),
                             ..Default::default()
                         },
-                        texture: materials.texture_handle(feature_name),
+                        texture: materials.texture_handle(feature_texture),
                         transform: Transform {
                             translation: Vec3::new(0., 0., 2.),
                             rotation: text_rotation,
@@ -409,7 +390,7 @@ fn create_tile_map(
 
                 // Draw the natural wonder
                 if let Some(natural_wonder) = tile.natural_wonder(&tile_map) {
-                    let natural_wonder_name = match natural_wonder.name() {
+                    let natural_wonder_texture = match natural_wonder.name() {
                         "Great Barrier Reef" => "sv_coralreef",
                         "Old Faithful" => "sv_geyser",
                         "El Dorado" => "sv_el_dorado",
@@ -435,7 +416,7 @@ fn create_tile_map(
                             custom_size: Some(tile_pixel_size.as_vec2()),
                             ..Default::default()
                         },
-                        texture: materials.texture_handle(natural_wonder_name),
+                        texture: materials.texture_handle(natural_wonder_texture),
                         transform: Transform {
                             translation: Vec3::new(0., 0., 2.),
                             rotation: text_rotation,
@@ -445,6 +426,7 @@ fn create_tile_map(
                     });
                 }
 
+                // Draw the civilization
                 tile_map.civilization_and_starting_tile.iter().for_each(
                     |(civilization, &starting_tile)| {
                         if starting_tile == tile {
@@ -466,6 +448,7 @@ fn create_tile_map(
                     },
                 );
 
+                // Draw the city state
                 tile_map
                     .city_state_and_starting_tile
                     .iter()
