@@ -1,5 +1,8 @@
 mod assets;
 
+use bevy_asset_loader::loading_state::{
+    config::ConfigureLoadingState, LoadingState, LoadingStateAppExt,
+};
 use civ_map_generator::{
     generate_map,
     hex::{HexLayout, HexOrientation, Offset},
@@ -9,7 +12,7 @@ use civ_map_generator::{
     Direction,
 };
 
-use assets::{check_textures, load_textures, setup, AppState, MaterialResource};
+use assets::{AppState, MaterialResource};
 use bevy_prototype_lyon::{
     draw::Stroke, entity::ShapeBundle, path::PathBuilder, plugin::ShapePlugin,
     prelude::GeometryBuilder,
@@ -52,7 +55,11 @@ fn main() {
             ..default()
         }))
         .init_state::<AppState>()
-        .init_resource::<MaterialResource>()
+        .add_loading_state(
+            LoadingState::new(AppState::AssetLoading)
+                .continue_to_state(AppState::GameStart)
+                .load_collection::<MaterialResource>(),
+        )
         /* .insert_resource(Ruleset::new())
         .insert_resource({
             let mut map_parameters = MapParameters {
@@ -72,13 +79,11 @@ fn main() {
             map_parameters
         }) */
         .add_plugins(ShapePlugin)
-        .add_systems(OnEnter(AppState::Setup), (load_textures, camera_setup))
+        .add_systems(OnEnter(AppState::AssetLoading), (camera_setup))
         .add_systems(
             Update,
             (camera_movement, cursor_drag_system, zoom_camera_system),
         )
-        .add_systems(Update, check_textures.run_if(in_state(AppState::Setup)))
-        .add_systems(OnEnter(AppState::Finished), setup)
         .add_systems(OnEnter(AppState::GameStart), create_tile_map)
         .run();
 }
@@ -313,11 +318,6 @@ fn create_tile_map(
             Stroke::new(Color::srgb_u8(140, 215, 215), 2.0),
         ));
     });
-
-    /* let tile_pixel_size = match map_parameters.hex_layout.orientation {
-        HexOrientation::Pointy => map_parameters.hex_layout.size * DVec2::new(3_f64.sqrt(), 2.0),
-        HexOrientation::Flat => map_parameters.hex_layout.size * DVec2::new(2.0, 3_f64.sqrt()),
-    }; */
 
     let tile_pixel_size = map_parameters.hex_layout.size * DVec2::new(2.0, 2.0);
 
