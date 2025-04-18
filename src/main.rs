@@ -1,5 +1,7 @@
 mod assets;
 
+use std::{f32::consts::FRAC_PI_2, sync::Arc};
+
 use bevy_asset_loader::loading_state::{
     config::ConfigureLoadingState, LoadingState, LoadingStateAppExt,
 };
@@ -7,13 +9,19 @@ use bevy_asset_loader::loading_state::{
 use enum_map::{enum_map, EnumMap};
 
 use civ_map_generator::{
-    base_terrain::BaseTerrain,
+    component::map_component::{base_terrain::BaseTerrain, terrain_type::TerrainType},
     generate_map,
-    hex::{HexLayout, HexOrientation, Offset},
+    grid::{
+        direction::Direction,
+        hex_grid::{
+            hex::{HexLayout, HexOrientation, Offset},
+            HexGrid,
+        },
+        Grid, GridSize, WorldSizeType, WrapFlags,
+    },
+    map_parameters::{MapParameters, WorldGrid},
     ruleset::Ruleset,
-    terrain_type::TerrainType,
-    tile_map::{MapParameters, MapSize, TileMap},
-    Direction,
+    tile_map::TileMap,
 };
 
 use assets::{AppState, MaterialResource};
@@ -24,9 +32,9 @@ use bevy_prototype_lyon::{
 
 use bevy::{
     input::mouse::MouseWheel,
-    math::DVec2,
     prelude::*,
     sprite::{MaterialMesh2dBundle, Mesh2dHandle},
+    tasks::{block_on, futures_lite::future, AsyncComputeTaskPool, Task},
 };
 
 // use crate::ruleset::Unique;
@@ -65,29 +73,37 @@ fn main() {
         )
         // .insert_resource(Ruleset::new())
         .insert_resource({
-            let mut map_parameters = MapParameters {
-                map_size: MapSize::new(128, 80),
-                hex_layout: HexLayout {
+            let world_size = WorldSizeType::Huge;
+            let grid = HexGrid {
+                size: HexGrid::default_size(world_size),
+                layout: HexLayout {
                     orientation: HexOrientation::Pointy,
-                    size: DVec2::new(16., 16.),
-                    origin: DVec2::new(0., 0.),
+                    size: Vec2::new(8., 8.),
+                    origin: Vec2::new(0., 0.),
                 },
+                wrap_flags: WrapFlags::WrapX,
                 offset: Offset::Odd,
+            };
+
+            let world_grid = WorldGrid::new(grid, world_size);
+            let map_parameters = MapParameters {
+                world_grid,
                 ..Default::default()
             };
-            map_parameters.update_origin();
-            MapSetting(map_parameters)
+            MapSetting(Arc::new(map_parameters))
         })
         .add_plugins(ShapePlugin)
         .add_systems(OnEnter(AppState::AssetLoading), camera_setup)
         .add_systems(
             Update,
-            (camera_movement, cursor_drag_system, zoom_camera_system),
+            (
+                camera_movement,
+                cursor_drag_system,
+                zoom_camera_system,
+                show_tile_map.run_if(in_state(AppState::GameStart)),
+            ),
         )
-        .add_systems(
-            OnEnter(AppState::GameStart),
-            (generate_tile_map, show_tile_map).chain(),
-        )
+        .add_systems(OnEnter(AppState::GameStart), generate_tile_map)
         .run();
 }
 
@@ -107,8 +123,14 @@ pub fn close_on_esc(
     }
 }
 
-fn camera_setup(mut commands: Commands) {
-    commands.spawn(Camera2dBundle::default());
+fn camera_setup(mut commands: Commands, map_setting: Res<MapSetting>) {
+    let map_parameters = &map_setting.0;
+    let grid = map_parameters.world_grid.grid;
+    let map_center = grid.center();
+    commands.spawn(Camera2dBundle {
+        transform: Transform::from_xyz(map_center.x, map_center.y, 0.0),
+        ..Default::default()
+    });
 }
 
 fn camera_movement(
@@ -116,24 +138,24 @@ fn camera_movement(
     keyboard_input: Res<ButtonInput<KeyCode>>,
     mut query: Query<&mut Transform, With<Camera>>,
 ) {
-    for mut transform in query.iter_mut() {
-        let mut movement = Vec3::ZERO;
+    let mut transform = query.single_mut();
 
-        if keyboard_input.pressed(KeyCode::KeyW) {
-            movement.y += 1.0;
-        }
-        if keyboard_input.pressed(KeyCode::KeyS) {
-            movement.y -= 1.0;
-        }
-        if keyboard_input.pressed(KeyCode::KeyA) {
-            movement.x -= 1.0;
-        }
-        if keyboard_input.pressed(KeyCode::KeyD) {
-            movement.x += 1.0;
-        }
+    let mut movement = Vec3::ZERO;
 
-        transform.translation += movement * time.delta_seconds() * 300.0;
+    if keyboard_input.pressed(KeyCode::KeyW) {
+        movement.y += 1.0;
     }
+    if keyboard_input.pressed(KeyCode::KeyS) {
+        movement.y -= 1.0;
+    }
+    if keyboard_input.pressed(KeyCode::KeyA) {
+        movement.x -= 1.0;
+    }
+    if keyboard_input.pressed(KeyCode::KeyD) {
+        movement.x += 1.0;
+    }
+
+    transform.translation += movement * time.delta_seconds() * 300.0;
 }
 
 fn cursor_drag_system(
@@ -142,8 +164,12 @@ fn cursor_drag_system(
     mut last_cursor_pos: Local<Option<Vec2>>,
     input: Res<ButtonInput<MouseButton>>,
 ) {
-    let window = windows.single();
-    let (mut transform, camera, global_transform) = cameras.single_mut();
+    let Ok(window) = windows.get_single() else {
+        return;
+    };
+    let Ok((mut transform, camera, global_transform)) = cameras.get_single_mut() else {
+        return;
+    };
     if input.pressed(MouseButton::Left) {
         if let Some(world_position) = window
             .cursor_position()
@@ -189,21 +215,19 @@ fn zoom_camera_system(
 }
 
 #[derive(Resource)]
-struct Map(TileMap);
+struct MapGenerator(Task<TileMap>);
 
 #[derive(Resource)]
-struct MapSetting(MapParameters);
+struct MapSetting(Arc<MapParameters>);
 
 fn generate_tile_map(mut commands: Commands, map_setting: Res<MapSetting>) {
-    let ruleset = Ruleset::new();
-
-    let map_parameters = &map_setting.0;
-
-    dbg!(&map_parameters.seed);
-
-    let tile_map = generate_map(&map_parameters, &ruleset);
-
-    commands.insert_resource(Map(tile_map));
+    let map_parameters = Arc::clone(&map_setting.0);
+    let thread_pool = AsyncComputeTaskPool::get();
+    let task = thread_pool.spawn(async move {
+        let ruleset = Ruleset::new();
+        generate_map(&map_parameters, &ruleset)
+    });
+    commands.insert_resource(MapGenerator(task));
 }
 
 fn show_tile_map(
@@ -212,11 +236,22 @@ fn show_tile_map(
     mut meshes: ResMut<Assets<Mesh>>,
     mut color_materials: ResMut<Assets<ColorMaterial>>,
     map_setting: Res<MapSetting>,
-    map: Res<Map>,
+    task: Option<ResMut<MapGenerator>>,
 ) {
-    let tile_map = &map.0;
+    let grid = map_setting.0.world_grid.grid;
 
-    let map_parameters = &map_setting.0;
+    let tile_map;
+
+    let Some(mut task) = task else {
+        return;
+    };
+
+    if let Some(map) = block_on(future::poll_once(&mut task.0)) {
+        tile_map = map;
+        commands.remove_resource::<MapGenerator>();
+    } else {
+        return;
+    }
 
     let base_terrain_and_texture_name = enum_map! {
         BaseTerrain::Ocean => "sv_terrainhexocean",
@@ -246,7 +281,7 @@ fn show_tile_map(
             .iter()
             .enumerate()
             .for_each(|(_index, (tile, flow_direction))| {
-                let (first_point, second_point) = match map_parameters.hex_layout.orientation {
+                let (first_point, second_point) = match grid.layout.orientation {
                     HexOrientation::Pointy => match *flow_direction {
                         Direction::North => (Direction::SouthEast, Direction::NorthEast),
                         Direction::NorthEast => (Direction::South, Direction::SouthEast),
@@ -281,10 +316,10 @@ fn show_tile_map(
                         hex_position.corner_position(second_point, &map_parameters);
                     path_builder.line_to(second_point_position.as_vec2());
                 } */
-                let first_point_position = tile.corner_position(first_point, &map_parameters);
-                let second_point_position = tile.corner_position(second_point, &map_parameters);
-                path_builder.move_to(first_point_position.as_vec2());
-                path_builder.line_to(second_point_position.as_vec2());
+                let first_point_position = tile.corner_position(first_point, grid);
+                let second_point_position = tile.corner_position(second_point, grid);
+                path_builder.move_to(first_point_position);
+                path_builder.line_to(second_point_position);
             });
 
         let path = path_builder.build();
@@ -302,24 +337,24 @@ fn show_tile_map(
         ));
     });
 
-    let tile_pixel_size = map_parameters.hex_layout.size * DVec2::new(2.0, 2.0);
+    let tile_pixel_size = grid.layout.size * Vec2::new(2.0, 2.0);
 
-    let (sprite_rotation, text_rotation) = match map_parameters.hex_layout.orientation {
+    let (sprite_rotation, text_rotation) = match grid.layout.orientation {
         HexOrientation::Pointy => (Quat::default(), Quat::default()),
         HexOrientation::Flat => (
-            Quat::from_rotation_z(std::f32::consts::FRAC_PI_2 * 3.),
-            Quat::from_rotation_z(-std::f32::consts::FRAC_PI_2 * 3.),
+            Quat::from_rotation_z(FRAC_PI_2 * 3.),
+            Quat::from_rotation_z(-FRAC_PI_2 * 3.),
         ),
     };
 
     for tile in tile_map.iter_tiles() {
-        let pixel_position = tile.pixel_position(&map_parameters);
+        let pixel_position = tile.pixel_position(grid);
         // Spawn the tile with base terrain
         commands
             .spawn(MaterialMesh2dBundle {
-                mesh: Mesh2dHandle(meshes.add(RegularPolygon::new(16.0, 6))),
+                mesh: Mesh2dHandle(meshes.add(RegularPolygon::new(8.0, 6))),
                 transform: Transform {
-                    translation: Vec3::from((pixel_position.as_vec2(), 0.)),
+                    translation: Vec3::from((pixel_position, 0.)),
                     rotation: sprite_rotation,
                     ..Default::default()
                 },
@@ -334,7 +369,7 @@ fn show_tile_map(
                 {
                     parent.spawn(SpriteBundle {
                         sprite: Sprite {
-                            custom_size: Some(tile_pixel_size.as_vec2()),
+                            custom_size: Some(tile_pixel_size),
                             ..Default::default()
                         },
                         texture: materials.texture_handle("sv_mountains"),
@@ -348,7 +383,7 @@ fn show_tile_map(
                 } else if tile.terrain_type(&tile_map) == TerrainType::Hill {
                     parent.spawn(SpriteBundle {
                         sprite: Sprite {
-                            custom_size: Some(tile_pixel_size.as_vec2()),
+                            custom_size: Some(tile_pixel_size),
                             ..Default::default()
                         },
                         texture: materials.texture_handle("sv_hills"),
@@ -377,7 +412,7 @@ fn show_tile_map(
 
                     parent.spawn(SpriteBundle {
                         sprite: Sprite {
-                            custom_size: Some(tile_pixel_size.as_vec2()),
+                            custom_size: Some(tile_pixel_size),
                             ..Default::default()
                         },
                         texture: materials.texture_handle(feature_texture),
@@ -415,7 +450,7 @@ fn show_tile_map(
 
                     parent.spawn(SpriteBundle {
                         sprite: Sprite {
-                            custom_size: Some(tile_pixel_size.as_vec2()),
+                            custom_size: Some(tile_pixel_size),
                             ..Default::default()
                         },
                         texture: materials.texture_handle(natural_wonder_texture),
@@ -435,7 +470,7 @@ fn show_tile_map(
                             parent.spawn(SpriteBundle {
                                 sprite: Sprite {
                                     color: Color::BLACK,
-                                    custom_size: Some(tile_pixel_size.as_vec2()),
+                                    custom_size: Some(tile_pixel_size),
                                     ..Default::default()
                                 },
                                 texture: materials.texture_handle(civilization),
@@ -458,7 +493,7 @@ fn show_tile_map(
                         if starting_tile == tile {
                             parent.spawn(SpriteBundle {
                                 sprite: Sprite {
-                                    custom_size: Some(tile_pixel_size.as_vec2()),
+                                    custom_size: Some(tile_pixel_size),
                                     ..Default::default()
                                 },
                                 texture: materials.texture_handle("CityState"),
