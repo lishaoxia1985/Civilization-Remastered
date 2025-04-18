@@ -1,5 +1,7 @@
 mod assets;
 
+use std::sync::Arc;
+
 use bevy_asset_loader::loading_state::{
     config::ConfigureLoadingState, LoadingState, LoadingStateAppExt,
 };
@@ -7,13 +9,15 @@ use bevy_asset_loader::loading_state::{
 use enum_map::{enum_map, EnumMap};
 
 use civ_map_generator::{
-    base_terrain::BaseTerrain,
+    component::map_component::{base_terrain::BaseTerrain, terrain_type::TerrainType},
     generate_map,
-    hex::{HexLayout, HexOrientation, Offset},
+    grid::{
+        direction::Direction,
+        hex_grid::hex::{HexLayout, HexOrientation, Offset},
+    },
+    map_parameters::{MapParameters, MapSize},
     ruleset::Ruleset,
-    terrain_type::TerrainType,
-    tile_map::{MapParameters, MapSize, TileMap},
-    Direction,
+    tile_map::TileMap,
 };
 
 use assets::{AppState, MaterialResource};
@@ -27,6 +31,7 @@ use bevy::{
     math::DVec2,
     prelude::*,
     sprite::{MaterialMesh2dBundle, Mesh2dHandle},
+    tasks::{block_on, futures_lite::future, AsyncComputeTaskPool, Task},
 };
 
 // use crate::ruleset::Unique;
@@ -65,7 +70,7 @@ fn main() {
         )
         // .insert_resource(Ruleset::new())
         .insert_resource({
-            let mut map_parameters = MapParameters {
+            let map_parameters = MapParameters {
                 map_size: MapSize::new(128, 80),
                 hex_layout: HexLayout {
                     orientation: HexOrientation::Pointy,
@@ -75,19 +80,20 @@ fn main() {
                 offset: Offset::Odd,
                 ..Default::default()
             };
-            map_parameters.update_origin();
-            MapSetting(map_parameters)
+            MapSetting(Arc::new(map_parameters))
         })
         .add_plugins(ShapePlugin)
         .add_systems(OnEnter(AppState::AssetLoading), camera_setup)
         .add_systems(
             Update,
-            (camera_movement, cursor_drag_system, zoom_camera_system),
+            (
+                camera_movement,
+                cursor_drag_system,
+                zoom_camera_system,
+                show_tile_map.run_if(in_state(AppState::GameStart)),
+            ),
         )
-        .add_systems(
-            OnEnter(AppState::GameStart),
-            (generate_tile_map, show_tile_map).chain(),
-        )
+        .add_systems(OnEnter(AppState::GameStart), generate_tile_map)
         .run();
 }
 
@@ -107,8 +113,13 @@ pub fn close_on_esc(
     }
 }
 
-fn camera_setup(mut commands: Commands) {
-    commands.spawn(Camera2dBundle::default());
+fn camera_setup(mut commands: Commands, map_setting: Res<MapSetting>) {
+    let map_parameters = &map_setting.0;
+    let map_center = map_parameters.map_center().as_vec2();
+    commands.spawn(Camera2dBundle {
+        transform: Transform::from_xyz(map_center.x, map_center.y, 0.0),
+        ..Default::default()
+    });
 }
 
 fn camera_movement(
@@ -116,24 +127,24 @@ fn camera_movement(
     keyboard_input: Res<ButtonInput<KeyCode>>,
     mut query: Query<&mut Transform, With<Camera>>,
 ) {
-    for mut transform in query.iter_mut() {
-        let mut movement = Vec3::ZERO;
+    let mut transform = query.single_mut();
 
-        if keyboard_input.pressed(KeyCode::KeyW) {
-            movement.y += 1.0;
-        }
-        if keyboard_input.pressed(KeyCode::KeyS) {
-            movement.y -= 1.0;
-        }
-        if keyboard_input.pressed(KeyCode::KeyA) {
-            movement.x -= 1.0;
-        }
-        if keyboard_input.pressed(KeyCode::KeyD) {
-            movement.x += 1.0;
-        }
+    let mut movement = Vec3::ZERO;
 
-        transform.translation += movement * time.delta_seconds() * 300.0;
+    if keyboard_input.pressed(KeyCode::KeyW) {
+        movement.y += 1.0;
     }
+    if keyboard_input.pressed(KeyCode::KeyS) {
+        movement.y -= 1.0;
+    }
+    if keyboard_input.pressed(KeyCode::KeyA) {
+        movement.x -= 1.0;
+    }
+    if keyboard_input.pressed(KeyCode::KeyD) {
+        movement.x += 1.0;
+    }
+
+    transform.translation += movement * time.delta_seconds() * 300.0;
 }
 
 fn cursor_drag_system(
@@ -142,8 +153,12 @@ fn cursor_drag_system(
     mut last_cursor_pos: Local<Option<Vec2>>,
     input: Res<ButtonInput<MouseButton>>,
 ) {
-    let window = windows.single();
-    let (mut transform, camera, global_transform) = cameras.single_mut();
+    let Ok(window) = windows.get_single() else {
+        return;
+    };
+    let Ok((mut transform, camera, global_transform)) = cameras.get_single_mut() else {
+        return;
+    };
     if input.pressed(MouseButton::Left) {
         if let Some(world_position) = window
             .cursor_position()
@@ -189,21 +204,19 @@ fn zoom_camera_system(
 }
 
 #[derive(Resource)]
-struct Map(TileMap);
+struct MapGenerator(Task<TileMap>);
 
 #[derive(Resource)]
-struct MapSetting(MapParameters);
+struct MapSetting(Arc<MapParameters>);
 
 fn generate_tile_map(mut commands: Commands, map_setting: Res<MapSetting>) {
-    let ruleset = Ruleset::new();
-
-    let map_parameters = &map_setting.0;
-
-    dbg!(&map_parameters.seed);
-
-    let tile_map = generate_map(&map_parameters, &ruleset);
-
-    commands.insert_resource(Map(tile_map));
+    let map_parameters = Arc::clone(&map_setting.0);
+    let thread_pool = AsyncComputeTaskPool::get();
+    let task = thread_pool.spawn(async move {
+        let ruleset = Ruleset::new();
+        generate_map(&map_parameters, &ruleset)
+    });
+    commands.insert_resource(MapGenerator(task));
 }
 
 fn show_tile_map(
@@ -212,9 +225,20 @@ fn show_tile_map(
     mut meshes: ResMut<Assets<Mesh>>,
     mut color_materials: ResMut<Assets<ColorMaterial>>,
     map_setting: Res<MapSetting>,
-    map: Res<Map>,
+    task: Option<ResMut<MapGenerator>>,
 ) {
-    let tile_map = &map.0;
+    let tile_map;
+
+    let Some(mut task) = task else {
+        return;
+    };
+
+    if let Some(map) = block_on(future::poll_once(&mut task.0)) {
+        tile_map = map;
+        commands.remove_resource::<MapGenerator>();
+    } else {
+        return;
+    }
 
     let map_parameters = &map_setting.0;
 
