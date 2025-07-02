@@ -1424,7 +1424,7 @@ checksum = "613afe47fcd5fac7ccf1db93babcb082c5994d996f20b8b159f2ad1658eb5724"
 [[package]]
 name = "civ_map_generator"
 version = "0.1.0"
-source = "git+https://github.com/lishaoxia1985/civ-map-generator.git?branch=master#47317e4b1c9b9cb33a27055eec49830c53cfab8f"
+source = "git+https://github.com/lishaoxia1985/civ-map-generator.git?branch=master#847d49dc20e46a6ec0fba170b0ac2ca5575592ac"
 dependencies = [
  "bitflags 2.9.1",
  "enum-map",

@@ -12,14 +12,12 @@ use civ_map_generator::{
     component::map_component::{base_terrain::BaseTerrain, terrain_type::TerrainType},
     generate_map,
     grid::{
-        direction::Direction,
-        hex_grid::{
+        direction::Direction, hex_grid::{
             hex::{HexLayout, HexOrientation, Offset},
             HexGrid,
-        },
-        Grid, GridSize, WorldSizeType, WrapFlags,
+        }, Grid, GridSize, Size, WorldSizeType, WrapFlags
     },
-    map_parameters::{MapParameters, WorldGrid},
+    map_parameters::{MapParameters, MapType, WorldGrid},
     ruleset::Ruleset,
     tile_map::TileMap,
 };
@@ -73,9 +71,9 @@ fn main() {
         )
         // .insert_resource(Ruleset::new())
         .insert_resource({
-            let world_size = WorldSizeType::Huge;
+            let world_size_type = WorldSizeType::Huge;
             let grid = HexGrid {
-                size: HexGrid::default_size(world_size),
+                size: HexGrid::default_size(world_size_type),
                 layout: HexLayout {
                     orientation: HexOrientation::Pointy,
                     size: Vec2::new(8., 8.),
@@ -85,9 +83,12 @@ fn main() {
                 offset: Offset::Odd,
             };
 
-            let world_grid = WorldGrid::new(grid, world_size);
+            //let world_grid = WorldGrid::new(grid, world_size);
+            let world_grid = WorldGrid::from_grid(grid);
+            let map_type = MapType::Pangaea;
             let map_parameters = MapParameters {
                 world_grid,
+                map_type,
                 ..Default::default()
             };
             MapSetting(Arc::new(map_parameters))
