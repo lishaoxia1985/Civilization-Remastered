@@ -9,7 +9,6 @@ use bevy_asset_loader::loading_state::{
 use enum_map::{enum_map, EnumMap};
 
 use civ_map_generator::{
-    component::map_component::{base_terrain::BaseTerrain, terrain_type::TerrainType},
     generate_map,
     grid::{
         direction::Direction,
@@ -19,8 +18,9 @@ use civ_map_generator::{
         },
         Grid, GridSize, WorldSizeType, WrapFlags,
     },
-    map_parameters::{MapParameters, WorldGrid},
+    map_parameters::{MapParameters, MapType, WorldGrid},
     ruleset::Ruleset,
+    tile_component::{base_terrain::BaseTerrain, terrain_type::TerrainType},
     tile_map::TileMap,
 };
 
@@ -73,9 +73,9 @@ fn main() {
         )
         // .insert_resource(Ruleset::new())
         .insert_resource({
-            let world_size = WorldSizeType::Huge;
+            let world_size_type = WorldSizeType::Huge;
             let grid = HexGrid {
-                size: HexGrid::default_size(world_size),
+                size: HexGrid::default_size(world_size_type),
                 layout: HexLayout {
                     orientation: HexOrientation::Pointy,
                     size: Vec2::new(8., 8.),
@@ -85,9 +85,12 @@ fn main() {
                 offset: Offset::Odd,
             };
 
-            let world_grid = WorldGrid::new(grid, world_size);
+            //let world_grid = WorldGrid::new(grid, world_size);
+            let world_grid = WorldGrid::from_grid(grid);
+            let map_type = MapType::Pangaea;
             let map_parameters = MapParameters {
                 world_grid,
+                map_type,
                 ..Default::default()
             };
             MapSetting(Arc::new(map_parameters))
@@ -281,6 +284,7 @@ fn show_tile_map(
             .iter()
             .enumerate()
             .for_each(|(_index, (tile, flow_direction))| {
+                // Transform the river flow direction into the directions of the first and second points in the tile
                 let (first_point, second_point) = match grid.layout.orientation {
                     HexOrientation::Pointy => match *flow_direction {
                         Direction::North => (Direction::SouthEast, Direction::NorthEast),
@@ -347,7 +351,7 @@ fn show_tile_map(
         ),
     };
 
-    for tile in tile_map.iter_tiles() {
+    for tile in tile_map.all_tiles() {
         let pixel_position = tile.pixel_position(grid);
         // Spawn the tile with base terrain
         commands
@@ -464,8 +468,8 @@ fn show_tile_map(
                 }
 
                 // Draw the civilization
-                tile_map.civilization_and_starting_tile.iter().for_each(
-                    |(civilization, &starting_tile)| {
+                tile_map.starting_tile_and_civilization.iter().for_each(
+                    |(&starting_tile, civilization)| {
                         if starting_tile == tile {
                             parent.spawn(SpriteBundle {
                                 sprite: Sprite {
@@ -487,9 +491,9 @@ fn show_tile_map(
 
                 // Draw the city state
                 tile_map
-                    .city_state_and_starting_tile
+                    .starting_tile_and_city_state
                     .iter()
-                    .for_each(|(_, &starting_tile)| {
+                    .for_each(|(&starting_tile, _)| {
                         if starting_tile == tile {
                             parent.spawn(SpriteBundle {
                                 sprite: Sprite {
