@@ -7,7 +7,6 @@ edition = "2021"
 
 [dependencies]
 bevy = {version = "0.14", features = ["dds"]}
-bevy_prototype_lyon = "0.12"
 bevy_asset_loader = "0.21"
 serde = {version = "1.0", features = ["derive"]}
 serde_json = "1.0"

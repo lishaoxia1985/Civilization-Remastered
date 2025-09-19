@@ -19,22 +19,23 @@ use civ_map_generator::{
     },
     map_parameters::{MapParameters, MapType, WorldGrid},
     ruleset::Ruleset,
+    tile::Tile,
     tile_component::{
         base_terrain::BaseTerrain, feature::Feature, natural_wonder::NaturalWonder,
         terrain_type::TerrainType,
     },
-    tile_map::TileMap,
+    tile_map::{RiverEdge, TileMap},
 };
 
 use assets::{AppState, MaterialResource};
-use bevy_prototype_lyon::{
-    draw::Stroke, entity::ShapeBundle, path::PathBuilder, plugin::ShapePlugin,
-    prelude::GeometryBuilder,
-};
 
 use bevy::{
     input::mouse::MouseWheel,
     prelude::*,
+    render::{
+        mesh::{Indices, PrimitiveTopology},
+        render_asset::RenderAssetUsages,
+    },
     sprite::{MaterialMesh2dBundle, Mesh2dHandle},
     tasks::{block_on, futures_lite::future, AsyncComputeTaskPool, Task},
 };
@@ -81,7 +82,6 @@ fn main() {
             };
             MapSetting(Arc::new(map_parameters))
         })
-        .add_plugins(ShapePlugin)
         .add_systems(OnEnter(AppState::AssetLoading), camera_setup)
         .add_systems(
             Update,
@@ -263,32 +263,49 @@ fn show_tile_map(
         })
         .collect();
 
+    let all_possible_river_edge_mesh: Vec<_> = grid
+        .corner_direction_array()
+        .iter()
+        .map(|&direction| {
+            let river_edge = RiverEdge {
+                tile: Tile::new(0),
+                flow_direction: direction,
+            };
+            let edge_direction = river_edge.edge_direction(grid);
+
+            let [first_point, second_point] = river_edge.start_and_end_corner_directions(grid);
+            let first_point_position = river_edge.tile.corner_position(first_point, grid);
+            let second_point_position = river_edge.tile.corner_position(second_point, grid);
+
+            let start = [first_point_position[0], first_point_position[1], 0.0];
+            let end = [second_point_position[0], second_point_position[1], 0.0];
+            let line_mesh = create_line_mesh(start.into(), end.into(), 1.5);
+            (edge_direction, line_mesh)
+        })
+        .collect();
+
     // Draw rivers
-    tile_map.river_list.iter().for_each(|river| {
-        let mut path_builder = PathBuilder::new();
+    /* tile_map.river_list.iter().for_each(|river| {
         river.iter().enumerate().for_each(|(_index, river_edge)| {
             // Transform the river flow direction into the directions of the first and second points in the tile
             let [first_point, second_point] = river_edge.start_and_end_corner_directions(grid);
             let first_point_position = river_edge.tile.corner_position(first_point, grid);
             let second_point_position = river_edge.tile.corner_position(second_point, grid);
-            path_builder.move_to(first_point_position.into());
-            path_builder.line_to(second_point_position.into());
-        });
 
-        let path = path_builder.build();
+            let start = [first_point_position[0], first_point_position[1], 0.0];
+            let end = [second_point_position[0], second_point_position[1], 0.0];
 
-        commands.spawn((
-            ShapeBundle {
-                path: GeometryBuilder::build_as(&path),
-                spatial: SpatialBundle {
-                    transform: Transform::from_xyz(0., 0., 10.),
-                    ..default()
-                },
+            commands.spawn(MaterialMesh2dBundle {
+                mesh: meshes
+                    .add(create_line_mesh(start.into(), end.into(), 1.5))
+                    .into(),
+                material: color_materials
+                    .add(ColorMaterial::from_color(Color::srgb_u8(140, 215, 215))),
+                transform: Transform::from_translation(Vec3::new(0.0, 0.0, 5.0)),
                 ..default()
-            },
-            Stroke::new(Color::srgb_u8(140, 215, 215), 2.0),
-        ));
-    });
+            });
+        });
+    }); */
 
     let tile_pixel_size = Vec2::from(grid.layout.size) * Vec2::new(2.0, 2.0);
 
@@ -315,6 +332,28 @@ fn show_tile_map(
                 ..default()
             })
             .with_children(|parent| {
+                // Draw river edges
+                grid.edge_direction_array()[0..3]
+                    .iter()
+                    .for_each(|&direction| {
+                        if tile.has_river_in_direction(direction, &tile_map) {
+                            let (_, line_mesh) = all_possible_river_edge_mesh
+                                .iter()
+                                .find(|(d, _)| *d == direction)
+                                .unwrap();
+                            parent.spawn(MaterialMesh2dBundle {
+                                mesh: Mesh2dHandle(meshes.add(line_mesh.clone())),
+                                material: color_materials
+                                    .add(ColorMaterial::from_color(Color::srgb_u8(140, 215, 215))),
+                                transform: Transform {
+                                    translation: Vec3::new(0., 0., 5.),
+                                    ..Default::default()
+                                },
+                                ..default()
+                            });
+                        }
+                    });
+
                 // Draw terrain type Mountain with no natural wonder and Hill
                 // Notice terrain type Flatland and Water are not drawn in this moment because they only need to be drawn with base terrain
                 if tile.terrain_type(&tile_map) == TerrainType::Mountain
@@ -459,4 +498,35 @@ fn show_tile_map(
                     });
             });
     }
+}
+
+fn create_line_mesh(start: Vec3, end: Vec3, width: f32) -> Mesh {
+    // Calculate direction vector from start to end points
+    let direction = end - start;
+    let _length = direction.length();
+    let normalized_direction = direction.normalize();
+
+    // Compute perpendicular vector to create the line width
+    let perpendicular =
+        Vec3::new(-normalized_direction.y, normalized_direction.x, 0.0).normalize() * width / 2.0;
+
+    // Create four vertices for the rectangle representing the line
+    let vertices = vec![
+        start + perpendicular,
+        start - perpendicular,
+        end + perpendicular,
+        end - perpendicular,
+    ];
+
+    let uvs = vec![[0.0, 0.0], [1.0, 0.0], [0.0, 1.0], [1.0, 1.0]];
+
+    let indices = Indices::U32(vec![0, 1, 2, 2, 1, 3]);
+
+    let mut mesh = Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::default(),
+    );
+    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, vertices);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
+    mesh.with_inserted_indices(indices)
 }
