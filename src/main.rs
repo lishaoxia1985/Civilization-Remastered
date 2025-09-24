@@ -11,19 +11,13 @@ use enum_map::{enum_map, EnumMap};
 use civ_map_generator::{
     generate_map,
     grid::{
-        hex_grid::{
-            hex::{HexLayout, HexOrientation, Offset},
-            HexGrid,
-        },
+        hex_grid::{HexGrid, HexLayout, HexOrientation, Offset},
         Grid, GridSize, WorldSizeType, WrapFlags,
     },
     map_parameters::{MapParameters, MapType, WorldGrid},
     ruleset::Ruleset,
     tile::Tile,
-    tile_component::{
-        base_terrain::BaseTerrain, feature::Feature, natural_wonder::NaturalWonder,
-        terrain_type::TerrainType,
-    },
+    tile_component::{BaseTerrain, Feature, NaturalWonder, TerrainType},
     tile_map::{RiverEdge, TileMap},
 };
 
@@ -196,11 +190,7 @@ fn zoom_camera_system(
     }
 
     // Restrict zoom range
-    if projection.scale > 2.0 {
-        projection.scale = 2.0;
-    } else if projection.scale < 0.1 {
-        projection.scale = 0.1;
-    }
+    projection.scale = projection.scale.clamp(0.1, 2.0);
 }
 
 #[derive(Resource)]

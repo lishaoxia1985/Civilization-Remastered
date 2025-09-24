@@ -11,7 +11,7 @@ impl MaterialResource {
     pub fn texture_handle(&self, name: &str) -> Handle<Image> {
         self.textures
             .get(name)
-            .expect(&format!("Can't find Image: {}", name))
+            .unwrap_or_else(|| panic!("Can't find Image: {}", name))
             .clone()
     }
 }
