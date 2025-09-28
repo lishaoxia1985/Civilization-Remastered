@@ -16,9 +16,8 @@ use civ_map_generator::{
     },
     map_parameters::{MapParameters, MapType, WorldGrid},
     ruleset::Ruleset,
-    tile::Tile,
     tile_component::{BaseTerrain, Feature, NaturalWonder, TerrainType},
-    tile_map::{RiverEdge, TileMap},
+    tile_map::TileMap,
 };
 
 use assets::{AppState, MaterialResource};
@@ -68,10 +67,9 @@ fn main() {
 
             //let world_grid = WorldGrid::new(grid, world_size);
             let world_grid = WorldGrid::from_grid(grid);
-            let map_type = MapType::Pangaea;
             let map_parameters = MapParameters {
                 world_grid,
-                map_type,
+                map_type: MapType::Fractal,
                 ..Default::default()
             };
             MapSetting(Arc::new(map_parameters))
@@ -253,30 +251,30 @@ fn show_tile_map(
         })
         .collect();
 
-    let all_possible_river_edge_mesh: Vec<_> = grid
-        .corner_direction_array()
-        .iter()
-        .map(|&direction| {
-            let river_edge = RiverEdge {
-                tile: Tile::new(0),
-                flow_direction: direction,
-            };
-            let edge_direction = river_edge.edge_direction(grid);
+    /* let all_possible_river_edge_mesh: Vec<_> = grid
+    .corner_direction_array()
+    .iter()
+    .map(|&direction| {
+        let river_edge = RiverEdge {
+            tile: Tile::new(0),
+            flow_direction: direction,
+        };
+        let edge_direction = river_edge.edge_direction(grid);
 
-            let [first_point, second_point] = river_edge.start_and_end_corner_directions(grid);
-            let first_point_position = river_edge.tile.corner_position(first_point, grid);
-            let second_point_position = river_edge.tile.corner_position(second_point, grid);
+        let [first_point, second_point] = river_edge.start_and_end_corner_directions(grid);
+        let first_point_position = river_edge.tile.corner_position(first_point, grid);
+        let second_point_position = river_edge.tile.corner_position(second_point, grid);
 
-            let start = [first_point_position[0], first_point_position[1], 0.0];
-            let end = [second_point_position[0], second_point_position[1], 0.0];
-            let line_mesh = create_line_mesh(start.into(), end.into(), 1.5);
-            (edge_direction, line_mesh)
-        })
-        .collect();
+        let start = [first_point_position[0], first_point_position[1], 0.0];
+        let end = [second_point_position[0], second_point_position[1], 0.0];
+        let line_mesh = create_line_mesh(start.into(), end.into(), 1.5);
+        (edge_direction, line_mesh)
+    })
+    .collect(); */
 
     // Draw rivers
-    /* tile_map.river_list.iter().for_each(|river| {
-        river.iter().enumerate().for_each(|(_index, river_edge)| {
+    tile_map.river_list.iter().for_each(|river| {
+        river.iter().for_each(|river_edge| {
             // Transform the river flow direction into the directions of the first and second points in the tile
             let [first_point, second_point] = river_edge.start_and_end_corner_directions(grid);
             let first_point_position = river_edge.tile.corner_position(first_point, grid);
@@ -295,7 +293,7 @@ fn show_tile_map(
                 ..default()
             });
         });
-    }); */
+    });
 
     let tile_pixel_size = Vec2::from(grid.layout.size) * Vec2::new(2.0, 2.0);
 
@@ -323,26 +321,26 @@ fn show_tile_map(
             })
             .with_children(|parent| {
                 // Draw river edges
-                grid.edge_direction_array()[0..3]
-                    .iter()
-                    .for_each(|&direction| {
-                        if tile.has_river_in_direction(direction, &tile_map) {
-                            let (_, line_mesh) = all_possible_river_edge_mesh
-                                .iter()
-                                .find(|(d, _)| *d == direction)
-                                .unwrap();
-                            parent.spawn(MaterialMesh2dBundle {
-                                mesh: Mesh2dHandle(meshes.add(line_mesh.clone())),
-                                material: color_materials
-                                    .add(ColorMaterial::from_color(Color::srgb_u8(140, 215, 215))),
-                                transform: Transform {
-                                    translation: Vec3::new(0., 0., 5.),
-                                    ..Default::default()
-                                },
-                                ..default()
-                            });
-                        }
-                    });
+                /* grid.edge_direction_array()[0..3]
+                .iter()
+                .for_each(|&direction| {
+                    if tile.has_river_in_direction(direction, &tile_map) {
+                        let (_, line_mesh) = all_possible_river_edge_mesh
+                            .iter()
+                            .find(|(d, _)| *d == direction)
+                            .unwrap();
+                        parent.spawn(MaterialMesh2dBundle {
+                            mesh: Mesh2dHandle(meshes.add(line_mesh.clone())),
+                            material: color_materials
+                                .add(ColorMaterial::from_color(Color::srgb_u8(140, 215, 215))),
+                            transform: Transform {
+                                translation: Vec3::new(0., 0., 5.),
+                                ..Default::default()
+                            },
+                            ..default()
+                        });
+                    }
+                }); */
 
                 // Draw terrain type Mountain with no natural wonder and Hill
                 // Notice terrain type Flatland and Water are not drawn in this moment because they only need to be drawn with base terrain
