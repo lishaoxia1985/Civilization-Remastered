@@ -1,6 +1,6 @@
 mod assets;
 
-use std::{f32::consts::FRAC_PI_2, sync::Arc};
+use std::{collections::HashMap, f32::consts::FRAC_PI_2, sync::Arc};
 
 use bevy_asset_loader::loading_state::{
     config::ConfigureLoadingState, LoadingState, LoadingStateAppExt,
@@ -251,15 +251,23 @@ fn show_tile_map(
         })
         .collect();
 
+    let mut tile_and_river_flow_direction = HashMap::new();
+
+    tile_map.river_list.iter().flatten().for_each(|river_edge| {
+        tile_and_river_flow_direction
+            .entry(river_edge.tile)
+            .or_insert_with(Vec::new)
+            .push(river_edge.flow_direction);
+    });
+
     /* let all_possible_river_edge_mesh: Vec<_> = grid
     .corner_direction_array()
     .iter()
-    .map(|&direction| {
+    .map(|&flow_direction| {
         let river_edge = RiverEdge {
             tile: Tile::new(0),
-            flow_direction: direction,
+            flow_direction,
         };
-        let edge_direction = river_edge.edge_direction(grid);
 
         let [first_point, second_point] = river_edge.start_and_end_corner_directions(grid);
         let first_point_position = river_edge.tile.corner_position(first_point, grid);
@@ -268,7 +276,7 @@ fn show_tile_map(
         let start = [first_point_position[0], first_point_position[1], 0.0];
         let end = [second_point_position[0], second_point_position[1], 0.0];
         let line_mesh = create_line_mesh(start.into(), end.into(), 1.5);
-        (edge_direction, line_mesh)
+        (flow_direction, line_mesh)
     })
     .collect(); */
 
@@ -321,13 +329,11 @@ fn show_tile_map(
             })
             .with_children(|parent| {
                 // Draw river edges
-                /* grid.edge_direction_array()[0..3]
-                .iter()
-                .for_each(|&direction| {
-                    if tile.has_river_in_direction(direction, &tile_map) {
+                /* if let Some(flow_direction_list) = tile_and_river_flow_direction.get(&tile) {
+                    flow_direction_list.iter().for_each(|direction| {
                         let (_, line_mesh) = all_possible_river_edge_mesh
                             .iter()
-                            .find(|(d, _)| *d == direction)
+                            .find(|(d, _)| d == direction)
                             .unwrap();
                         parent.spawn(MaterialMesh2dBundle {
                             mesh: Mesh2dHandle(meshes.add(line_mesh.clone())),
@@ -339,8 +345,8 @@ fn show_tile_map(
                             },
                             ..default()
                         });
-                    }
-                }); */
+                    })
+                }; */
 
                 // Draw terrain type Mountain with no natural wonder and Hill
                 // Notice terrain type Flatland and Water are not drawn in this moment because they only need to be drawn with base terrain
