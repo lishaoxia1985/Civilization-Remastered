@@ -11,13 +11,14 @@ use enum_map::{enum_map, EnumMap};
 use civ_map_generator::{
     generate_map,
     grid::{
-        hex_grid::{HexGrid, HexLayout, HexOrientation, Offset},
+        hex_grid::{Hex, HexGrid, HexLayout, HexOrientation, Offset},
         Grid, GridSize, WorldSizeType, WrapFlags,
     },
     map_parameters::{MapParameters, MapType, WorldGrid},
     ruleset::Ruleset,
+    tile::Tile,
     tile_component::{BaseTerrain, Feature, NaturalWonder, TerrainType},
-    tile_map::TileMap,
+    tile_map::{RiverEdge, TileMap},
 };
 
 use assets::{AppState, MaterialResource};
@@ -57,7 +58,7 @@ fn main() {
             let grid = HexGrid {
                 size: HexGrid::default_size(world_size_type),
                 layout: HexLayout {
-                    orientation: HexOrientation::Pointy,
+                    orientation: HexOrientation::Flat,
                     size: [8., 8.],
                     origin: [0., 0.],
                 },
@@ -260,57 +261,33 @@ fn show_tile_map(
             .push(river_edge.flow_direction);
     });
 
-    /* let all_possible_river_edge_mesh: Vec<_> = grid
-    .corner_direction_array()
-    .iter()
-    .map(|&flow_direction| {
-        let river_edge = RiverEdge {
-            tile: Tile::new(0),
-            flow_direction,
-        };
+    let all_possible_river_edge_mesh: Vec<_> = grid
+        .corner_direction_array()
+        .iter()
+        .map(|&flow_direction| {
+            let river_edge = RiverEdge {
+                tile: Tile::new(0),
+                flow_direction,
+            };
 
-        let [first_point, second_point] = river_edge.start_and_end_corner_directions(grid);
-        let first_point_position = river_edge.tile.corner_position(first_point, grid);
-        let second_point_position = river_edge.tile.corner_position(second_point, grid);
-
-        let start = [first_point_position[0], first_point_position[1], 0.0];
-        let end = [second_point_position[0], second_point_position[1], 0.0];
-        let line_mesh = create_line_mesh(start.into(), end.into(), 1.5);
-        (flow_direction, line_mesh)
-    })
-    .collect(); */
-
-    // Draw rivers
-    tile_map.river_list.iter().for_each(|river| {
-        river.iter().for_each(|river_edge| {
-            // Transform the river flow direction into the directions of the first and second points in the tile
             let [first_point, second_point] = river_edge.start_and_end_corner_directions(grid);
             let first_point_position = river_edge.tile.corner_position(first_point, grid);
             let second_point_position = river_edge.tile.corner_position(second_point, grid);
 
             let start = [first_point_position[0], first_point_position[1], 0.0];
             let end = [second_point_position[0], second_point_position[1], 0.0];
-
-            commands.spawn(MaterialMesh2dBundle {
-                mesh: meshes
-                    .add(create_line_mesh(start.into(), end.into(), 1.5))
-                    .into(),
-                material: color_materials
-                    .add(ColorMaterial::from_color(Color::srgb_u8(140, 215, 215))),
-                transform: Transform::from_translation(Vec3::new(0.0, 0.0, 5.0)),
-                ..default()
-            });
-        });
-    });
+            let line_mesh = line_mesh(start.into(), end.into(), 1.5);
+            (flow_direction, line_mesh)
+        })
+        .collect();
 
     let tile_pixel_size = Vec2::from(grid.layout.size) * Vec2::new(2.0, 2.0);
 
-    let (sprite_rotation, text_rotation) = match grid.layout.orientation {
-        HexOrientation::Pointy => (Quat::default(), Quat::default()),
-        HexOrientation::Flat => (
-            Quat::from_rotation_z(FRAC_PI_2 * 3.),
-            Quat::from_rotation_z(-FRAC_PI_2 * 3.),
-        ),
+    // We only need to rotate the sprite for `Feature::Ice` because it was originally designed exclusively for Pointy-oriented hexagons.
+    // Other terrain sprites were created to work seamlessly with both Pointy and Flat hexagon orientations.
+    let sprite_rotation = match grid.layout.orientation {
+        HexOrientation::Pointy => Quat::default(),
+        HexOrientation::Flat => Quat::from_rotation_z(FRAC_PI_2 * 3.),
     };
 
     for tile in tile_map.all_tiles() {
@@ -318,10 +295,9 @@ fn show_tile_map(
         // Spawn the tile with base terrain
         commands
             .spawn(MaterialMesh2dBundle {
-                mesh: Mesh2dHandle(meshes.add(RegularPolygon::new(8.0, 6))),
+                mesh: Mesh2dHandle(meshes.add(hex_mesh(&grid))),
                 transform: Transform {
                     translation: Vec3::from((pixel_position[0], pixel_position[1], 0.)),
-                    rotation: sprite_rotation,
                     ..Default::default()
                 },
                 material: base_terrain_and_material[tile.base_terrain(&tile_map)].clone(),
@@ -329,7 +305,7 @@ fn show_tile_map(
             })
             .with_children(|parent| {
                 // Draw river edges
-                /* if let Some(flow_direction_list) = tile_and_river_flow_direction.get(&tile) {
+                if let Some(flow_direction_list) = tile_and_river_flow_direction.get(&tile) {
                     flow_direction_list.iter().for_each(|direction| {
                         let (_, line_mesh) = all_possible_river_edge_mesh
                             .iter()
@@ -346,7 +322,7 @@ fn show_tile_map(
                             ..default()
                         });
                     })
-                }; */
+                };
 
                 // Draw terrain type Mountain with no natural wonder and Hill
                 // Notice terrain type Flatland and Water are not drawn in this moment because they only need to be drawn with base terrain
@@ -361,7 +337,6 @@ fn show_tile_map(
                         texture: materials.texture_handle("sv_mountains"),
                         transform: Transform {
                             translation: Vec3::new(0., 0., 3.),
-                            rotation: text_rotation,
                             ..Default::default()
                         },
                         ..Default::default()
@@ -375,7 +350,6 @@ fn show_tile_map(
                         texture: materials.texture_handle("sv_hills"),
                         transform: Transform {
                             translation: Vec3::new(0., 0., 3.),
-                            rotation: text_rotation,
                             ..Default::default()
                         },
                         ..Default::default()
@@ -403,7 +377,11 @@ fn show_tile_map(
                         texture: materials.texture_handle(feature_texture),
                         transform: Transform {
                             translation: Vec3::new(0., 0., 2.),
-                            rotation: text_rotation,
+                            rotation: if feature == Feature::Ice {
+                                sprite_rotation
+                            } else {
+                                Quat::default()
+                            },
                             ..Default::default()
                         },
                         ..Default::default()
@@ -440,7 +418,6 @@ fn show_tile_map(
                         texture: materials.texture_handle(natural_wonder_texture),
                         transform: Transform {
                             translation: Vec3::new(0., 0., 2.),
-                            rotation: text_rotation,
                             ..Default::default()
                         },
                         ..Default::default()
@@ -460,7 +437,6 @@ fn show_tile_map(
                                 texture: materials.texture_handle(civilization.as_str()),
                                 transform: Transform {
                                     translation: Vec3::new(0., 0., 3.),
-                                    rotation: text_rotation,
                                     ..Default::default()
                                 },
                                 ..Default::default()
@@ -483,7 +459,6 @@ fn show_tile_map(
                                 texture: materials.texture_handle("CityState"),
                                 transform: Transform {
                                     translation: Vec3::new(0., 0., 3.),
-                                    rotation: text_rotation,
                                     ..Default::default()
                                 },
                                 ..Default::default()
@@ -494,7 +469,7 @@ fn show_tile_map(
     }
 }
 
-fn create_line_mesh(start: Vec3, end: Vec3, width: f32) -> Mesh {
+fn line_mesh(start: Vec3, end: Vec3, width: f32) -> Mesh {
     // Calculate direction vector from start to end points
     let direction = end - start;
     let _length = direction.length();
@@ -522,5 +497,26 @@ fn create_line_mesh(start: Vec3, end: Vec3, width: f32) -> Mesh {
     );
     mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, vertices);
     mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
+    mesh.with_inserted_indices(indices)
+}
+
+fn hex_mesh(grid: &HexGrid) -> Mesh {
+    let hex_layout = &grid.layout;
+    let hex = Hex::new(0, 0);
+    let corners = hex_layout.all_corners(hex);
+    let vertices: Vec<[f32; 3]> = corners
+        .iter()
+        .map(|&corner| [corner[0], corner[1], 0.0])
+        .collect();
+    // let uvs = vec![[0.0, 0.0], [1.0, 0.0], [0.0, 1.0], [1.0, 1.0]];
+
+    let indices = Indices::U32(vec![0, 1, 2, 0, 2, 3, 0, 3, 4, 0, 4, 5]);
+
+    let mut mesh = Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::default(),
+    );
+    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, vertices);
+    // mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
     mesh.with_inserted_indices(indices)
 }
