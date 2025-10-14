@@ -12,6 +12,7 @@ use civ_map_generator::{
     generate_map,
     grid::{
         hex_grid::{Hex, HexGrid, HexLayout, HexOrientation, Offset},
+        offset_coordinate::OffsetCoordinate,
         Grid, GridSize, WorldSizeType, WrapFlags,
     },
     map_parameters::{MapParameters, MapType, WorldGrid},
@@ -32,6 +33,7 @@ use bevy::{
     },
     sprite::{MaterialMesh2dBundle, Mesh2dHandle},
     tasks::{block_on, futures_lite::future, AsyncComputeTaskPool, Task},
+    utils::HashSet,
 };
 
 fn main() {
@@ -58,15 +60,13 @@ fn main() {
             let grid = HexGrid {
                 size: HexGrid::default_size(world_size_type),
                 layout: HexLayout {
-                    orientation: HexOrientation::Flat,
-                    size: [8., 8.],
+                    orientation: HexOrientation::Pointy,
+                    size: [50., 50.],
                     origin: [0., 0.],
                 },
                 wrap_flags: WrapFlags::WrapX,
                 offset: Offset::Odd,
             };
-
-            //let world_grid = WorldGrid::new(grid, world_size);
             let world_grid = WorldGrid::from_grid(grid);
             let map_parameters = MapParameters {
                 world_grid,
@@ -82,7 +82,8 @@ fn main() {
                 camera_movement,
                 cursor_drag_system,
                 zoom_camera_system,
-                show_tile_map.run_if(in_state(AppState::GameStart)),
+                wrap_tile_map.run_if(in_state(AppState::GameStart)),
+                check_map_generate_status.run_if(in_state(AppState::GameStart)),
             ),
         )
         .add_systems(OnEnter(AppState::GameStart), generate_tile_map)
@@ -119,6 +120,7 @@ fn camera_movement(
     time: Res<Time>,
     keyboard_input: Res<ButtonInput<KeyCode>>,
     mut query: Query<&mut Transform, With<Camera>>,
+    map_setting: Res<MapSetting>,
 ) {
     let mut transform = query.single_mut();
 
@@ -138,6 +140,20 @@ fn camera_movement(
     }
 
     transform.translation += movement * time.delta_seconds() * 300.0;
+
+    // limit the camera movement within the map boundary
+    let map_parameters = &map_setting.0;
+    let grid = &map_parameters.world_grid.grid;
+    let left_bottom = grid.left_bottom();
+    let right_top = grid.right_top();
+
+    if !grid.wrap_flags.contains(WrapFlags::WrapX) {
+        transform.translation.x = transform.translation.x.clamp(left_bottom[0], right_top[0]);
+    }
+
+    if !grid.wrap_flags.contains(WrapFlags::WrapY) {
+        transform.translation.y = transform.translation.y.clamp(left_bottom[1], right_top[1]);
+    }
 }
 
 fn cursor_drag_system(
@@ -145,6 +161,7 @@ fn cursor_drag_system(
     mut cameras: Query<(&mut Transform, &Camera, &GlobalTransform)>,
     mut last_cursor_pos: Local<Option<Vec2>>,
     input: Res<ButtonInput<MouseButton>>,
+    map_setting: Res<MapSetting>,
 ) {
     let Ok(window) = windows.get_single() else {
         return;
@@ -167,6 +184,20 @@ fn cursor_drag_system(
     } else {
         *last_cursor_pos = None;
     };
+
+    // limit the camera movement within the map boundary
+    let map_parameters = &map_setting.0;
+    let grid = &map_parameters.world_grid.grid;
+    let left_bottom = grid.left_bottom();
+    let right_top = grid.right_top();
+
+    if !grid.wrap_flags.contains(WrapFlags::WrapX) {
+        transform.translation.x = transform.translation.x.clamp(left_bottom[0], right_top[0]);
+    }
+
+    if !grid.wrap_flags.contains(WrapFlags::WrapY) {
+        transform.translation.y = transform.translation.y.clamp(left_bottom[1], right_top[1]);
+    }
 }
 
 fn zoom_camera_system(
@@ -189,11 +220,17 @@ fn zoom_camera_system(
     }
 
     // Restrict zoom range
-    projection.scale = projection.scale.clamp(0.1, 2.0);
+    projection.scale = projection.scale.clamp(0.3, 1.67);
 }
 
 #[derive(Resource)]
 struct MapGenerator(Task<TileMap>);
+
+#[derive(Resource)]
+struct TileMapResource(TileMap);
+
+#[derive(Component)]
+struct MapOffsetCoordinate(OffsetCoordinate);
 
 #[derive(Resource)]
 struct MapSetting(Arc<MapParameters>);
@@ -208,28 +245,36 @@ fn generate_tile_map(mut commands: Commands, map_setting: Res<MapSetting>) {
     commands.insert_resource(MapGenerator(task));
 }
 
-fn show_tile_map(
-    mut commands: Commands,
-    materials: Res<MaterialResource>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut color_materials: ResMut<Assets<ColorMaterial>>,
-    map_setting: Res<MapSetting>,
-    task: Option<ResMut<MapGenerator>>,
-) {
-    let grid = map_setting.0.world_grid.grid;
-
-    let tile_map;
-
+fn check_map_generate_status(mut commands: Commands, task: Option<ResMut<MapGenerator>>) {
     let Some(mut task) = task else {
         return;
     };
 
-    if let Some(map) = block_on(future::poll_once(&mut task.0)) {
-        tile_map = map;
+    if let Some(tile_map) = block_on(future::poll_once(&mut task.0)) {
+        let map = TileMapResource(tile_map);
+        commands.insert_resource(map);
         commands.remove_resource::<MapGenerator>();
     } else {
         return;
     }
+}
+
+fn wrap_tile_map(
+    mut commands: Commands,
+    mut query: Query<&mut Transform, With<Camera>>,
+    map: Option<Res<TileMapResource>>,
+    materials: Res<MaterialResource>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut color_materials: ResMut<Assets<ColorMaterial>>,
+    exist_offset_coordinates_query: Query<(Entity, &MapOffsetCoordinate)>,
+) {
+    if map.is_none() {
+        return;
+    };
+
+    let tile_map = &map.unwrap().0;
+
+    let grid = tile_map.world_grid.grid;
 
     let base_terrain_and_texture_name = enum_map! {
         BaseTerrain::Ocean => "sv_terrainhexocean",
@@ -270,12 +315,13 @@ fn show_tile_map(
                 flow_direction,
             };
 
-            let [first_point, second_point] = river_edge.start_and_end_corner_directions(grid);
-            let first_point_position = river_edge.tile.corner_position(first_point, grid);
-            let second_point_position = river_edge.tile.corner_position(second_point, grid);
+            let [start_corner_direction, end_corner_direction] =
+                river_edge.start_and_end_corner_directions(grid);
+            let start_corner_position = grid.layout.corner(Hex::new(0, 0), start_corner_direction);
+            let end_corner_position = grid.layout.corner(Hex::new(0, 0), end_corner_direction);
 
-            let start = [first_point_position[0], first_point_position[1], 0.0];
-            let end = [second_point_position[0], second_point_position[1], 0.0];
+            let start = [start_corner_position[0], start_corner_position[1], 0.0];
+            let end = [end_corner_position[0], end_corner_position[1], 0.0];
             let line_mesh = line_mesh(start.into(), end.into(), 1.5);
             (flow_direction, line_mesh)
         })
@@ -290,8 +336,60 @@ fn show_tile_map(
         HexOrientation::Flat => Quat::from_rotation_z(FRAC_PI_2 * 3.),
     };
 
-    for tile in tile_map.all_tiles() {
-        let pixel_position = tile.pixel_position(grid);
+    let layout = &grid.layout;
+    let orientation = layout.orientation;
+    let offset = grid.offset;
+
+    // (1 + offset_x * 2) should < grid's width
+    // Because if it's not, the same tile will be drawn twice due to the grid's wrapping behavior.
+    let offset_x = 15;
+    assert!(1 + offset_x * 2 < grid.width() as i32);
+    // (1 + offset_y * 2) should < grid's height
+    // Because if it's not, the same tile will be drawn twice due to the grid's wrapping behavior.
+    let offset_y = 8;
+    assert!(1 + offset_y * 2 < grid.height() as i32);
+
+    let transform = query.single_mut();
+    let camera_position = transform.translation.truncate().to_array();
+    let offset_coordinate = layout
+        .pixel_to_hex(camera_position)
+        .to_offset(orientation, offset)
+        .to_array();
+    let mut left_x = offset_coordinate[0] - offset_x;
+    let mut right_x = offset_coordinate[0] + offset_x;
+    if !grid.wrap_x() {
+        left_x = left_x.max(0);
+        right_x = right_x.min(grid.width() as i32 - 1);
+    }
+    let mut bottom_y = offset_coordinate[1] - offset_y;
+    let mut top_y = offset_coordinate[1] + offset_y;
+    if !grid.wrap_y() {
+        bottom_y = bottom_y.max(0);
+        top_y = top_y.min(grid.height() as i32 - 1);
+    }
+
+    let mut offset_list = (left_x..=right_x)
+        .flat_map(move |x| (bottom_y..=top_y).map(move |y| OffsetCoordinate::new(x, y)))
+        .collect::<HashSet<_>>();
+
+    // Despawn the tiles that are out of the current viewport
+    // And remove the tiles that are still in the current viewport from offset_list,
+    // we only need to spawn the tiles that can't be found in the current viewport later.
+    exist_offset_coordinates_query
+        .iter()
+        .for_each(|(entity, map_offset)| {
+            let exist_offset = &map_offset.0;
+            if !offset_list.contains(exist_offset) {
+                commands.entity(entity).despawn_recursive();
+            } else {
+                offset_list.remove(exist_offset);
+            }
+        });
+
+    for &offset_coordinate in offset_list.iter() {
+        let hex = Hex::from_offset(offset_coordinate, orientation, offset);
+        let pixel_position = layout.hex_to_pixel(hex);
+        let tile = Tile::from_offset(offset_coordinate, grid);
         // Spawn the tile with base terrain
         commands
             .spawn(MaterialMesh2dBundle {
@@ -303,6 +401,7 @@ fn show_tile_map(
                 material: base_terrain_and_material[tile.base_terrain(&tile_map)].clone(),
                 ..default()
             })
+            .insert(MapOffsetCoordinate(offset_coordinate))
             .with_children(|parent| {
                 // Draw river edges
                 if let Some(flow_direction_list) = tile_and_river_flow_direction.get(&tile) {
@@ -502,13 +601,10 @@ fn line_mesh(start: Vec3, end: Vec3, width: f32) -> Mesh {
 
 fn hex_mesh(grid: &HexGrid) -> Mesh {
     let hex_layout = &grid.layout;
-    let hex = Hex::new(0, 0);
-    let corners = hex_layout.all_corners(hex);
-    let vertices: Vec<[f32; 3]> = corners
-        .iter()
-        .map(|&corner| [corner[0], corner[1], 0.0])
-        .collect();
-    // let uvs = vec![[0.0, 0.0], [1.0, 0.0], [0.0, 1.0], [1.0, 1.0]];
+    let vertices: Vec<[f32; 3]> = hex_layout
+        .all_corners(Hex::new(0, 0))
+        .map(|corner| [corner[0], corner[1], 0.0])
+        .to_vec();
 
     let indices = Indices::U32(vec![0, 1, 2, 0, 2, 3, 0, 3, 4, 0, 4, 5]);
 
@@ -517,6 +613,5 @@ fn hex_mesh(grid: &HexGrid) -> Mesh {
         RenderAssetUsages::default(),
     );
     mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, vertices);
-    // mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
     mesh.with_inserted_indices(indices)
 }
