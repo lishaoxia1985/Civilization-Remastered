@@ -26,8 +26,11 @@ use bevy::{
     input::mouse::MouseWheel,
     prelude::*,
     render::{
+        camera::RenderTarget,
         mesh::{Indices, PrimitiveTopology},
         render_asset::RenderAssetUsages,
+        render_resource::{Extent3d, TextureDimension, TextureFormat, TextureUsages},
+        view::RenderLayers,
     },
     sprite::{MaterialMesh2dBundle, Mesh2dHandle},
     tasks::{block_on, futures_lite::future, AsyncComputeTaskPool, Task},
@@ -82,6 +85,7 @@ fn main() {
                 camera_movement,
                 cursor_drag_system,
                 zoom_camera_system,
+                setup_minimap.run_if(in_state(AppState::GameStart)),
                 wrap_tile_map.run_if(in_state(AppState::GameStart)),
                 check_map_generate_status.run_if(in_state(AppState::GameStart)),
             ),
@@ -106,20 +110,27 @@ pub fn close_on_esc(
     }
 }
 
+#[derive(Component)]
+struct MainCamera;
+
 fn camera_setup(mut commands: Commands, map_setting: Res<MapSetting>) {
     let map_parameters = &map_setting.0;
     let grid = map_parameters.world_grid.grid;
     let map_center = grid.center();
-    commands.spawn(Camera2dBundle {
-        transform: Transform::from_xyz(map_center[0], map_center[1], 0.0),
-        ..Default::default()
-    });
+    commands.spawn((
+        Camera2dBundle {
+            transform: Transform::from_xyz(map_center[0], map_center[1], 0.0),
+            ..Default::default()
+        },
+        RenderLayers::layer(0),
+        MainCamera,
+    ));
 }
 
 fn camera_movement(
     time: Res<Time>,
     keyboard_input: Res<ButtonInput<KeyCode>>,
-    mut query: Query<&mut Transform, With<Camera>>,
+    mut query: Query<&mut Transform, With<MainCamera>>,
     map_setting: Res<MapSetting>,
 ) {
     let mut transform = query.single_mut();
@@ -158,7 +169,7 @@ fn camera_movement(
 
 fn cursor_drag_system(
     windows: Query<&Window>,
-    mut cameras: Query<(&mut Transform, &Camera, &GlobalTransform)>,
+    mut cameras: Query<(&mut Transform, &Camera, &GlobalTransform), With<MainCamera>>,
     mut last_cursor_pos: Local<Option<Vec2>>,
     input: Res<ButtonInput<MouseButton>>,
     map_setting: Res<MapSetting>,
@@ -203,7 +214,7 @@ fn cursor_drag_system(
 fn zoom_camera_system(
     mut scroll_evr: EventReader<MouseWheel>,
     keyboard_input: Res<ButtonInput<KeyCode>>,
-    mut projection: Query<&mut OrthographicProjection, With<Camera>>,
+    mut projection: Query<&mut OrthographicProjection, With<MainCamera>>,
 ) {
     let mut projection = projection.single_mut();
     for event in scroll_evr.read() {
@@ -262,7 +273,7 @@ fn check_map_generate_status(mut commands: Commands, task: Option<ResMut<MapGene
 
 fn wrap_tile_map(
     mut commands: Commands,
-    mut query: Query<&mut Transform, With<Camera>>,
+    mut query: Query<&mut Transform, With<MainCamera>>,
     map: Option<Res<TileMapResource>>,
     materials: Res<MaterialResource>,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -570,6 +581,153 @@ fn wrap_tile_map(
                 });
         });
     }
+}
+
+fn setup_minimap(
+    mut commands: Commands,
+    map: Option<Res<TileMapResource>>,
+    materials: Res<MaterialResource>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut images: ResMut<Assets<Image>>,
+    mut color_materials: ResMut<Assets<ColorMaterial>>,
+    mut enable_minimap: Local<bool>,
+) {
+    if map.is_none() {
+        return;
+    };
+
+    if *enable_minimap {
+        return;
+    }
+
+    let tile_map = &map.unwrap().0;
+    let grid = tile_map.world_grid.grid;
+
+    let hex_layout = HexLayout {
+        size: [10., 10.],
+        ..grid.layout
+    };
+
+    let minimap_grid = HexGrid {
+        layout: hex_layout,
+        ..grid
+    };
+
+    let base_terrain_and_texture_name = enum_map! {
+        BaseTerrain::Ocean => "sv_terrainhexocean",
+        BaseTerrain::Lake => "sv_terrainhexcoast",
+        BaseTerrain::Coast => "sv_terrainhexcoast",
+        BaseTerrain::Grassland => "sv_terrainhexgrasslands",
+        BaseTerrain::Desert => "sv_terrainhexdesert",
+        BaseTerrain::Plain => "sv_terrainhexplains",
+        BaseTerrain::Tundra => "sv_terrainhextundra",
+        BaseTerrain::Snow => "sv_terrainhexsnow",
+    };
+
+    let base_terrain_and_material: EnumMap<_, _> = base_terrain_and_texture_name
+        .into_iter()
+        .map(|(base_terrain, base_terrain_texture)| {
+            (
+                base_terrain,
+                color_materials.add(materials.texture_handle(base_terrain_texture)),
+            )
+        })
+        .collect();
+
+    for tile in tile_map.all_tiles() {
+        let offset_coordinate = tile.to_offset(minimap_grid);
+        let hex = Hex::from_offset(
+            offset_coordinate,
+            minimap_grid.layout.orientation,
+            minimap_grid.offset,
+        );
+        let pixel_position = minimap_grid.layout.hex_to_pixel(hex);
+        commands.spawn((
+            MaterialMesh2dBundle {
+                mesh: Mesh2dHandle(meshes.add(hex_mesh(&minimap_grid))),
+                transform: Transform {
+                    translation: Vec3::from((pixel_position[0], pixel_position[1], 9.)),
+                    ..Default::default()
+                },
+                material: base_terrain_and_material[tile.base_terrain(&tile_map)].clone(),
+                ..default()
+            },
+            RenderLayers::layer(1),
+        ));
+    }
+
+    let minimap_center = minimap_grid.center();
+    let width = minimap_center[0] * 2.0;
+    let height = minimap_center[1] * 2.0;
+
+    let size = Extent3d {
+        width: width as u32,
+        height: height as u32,
+        ..default()
+    };
+
+    let mut image = Image::new_fill(
+        size,
+        TextureDimension::D2,
+        &[0, 0, 0, 0],
+        TextureFormat::Bgra8UnormSrgb,
+        RenderAssetUsages::default(),
+    );
+
+    image.texture_descriptor.usage =
+        TextureUsages::TEXTURE_BINDING | TextureUsages::RENDER_ATTACHMENT;
+
+    let image_handle = images.add(image);
+
+    let minimap_center = minimap_grid.center();
+    commands.spawn((
+        Camera2dBundle {
+            camera: Camera {
+                target: RenderTarget::Image(image_handle.clone()),
+                order: 0,
+                ..default()
+            },
+            projection: OrthographicProjection {
+                far: 1000.,
+                near: -1000.,
+                area: Rect {
+                    min: Vec2::new(0., 0.),
+                    max: Vec2::new(width, height),
+                },
+                ..Default::default()
+            },
+            transform: Transform::from_xyz(minimap_center[0], minimap_center[1], 0.0),
+            ..Default::default()
+        },
+        RenderLayers::layer(1),
+    ));
+
+    commands
+        .spawn((NodeBundle {
+            style: Style {
+                position_type: PositionType::Absolute,
+                right: Val::Px(20.0),
+                top: Val::Px(20.0),
+                border: UiRect::all(Val::Px(1.0)),
+                ..Default::default()
+            },
+            background_color: Color::NONE.into(),
+            border_color: Color::BLACK.into(),
+            ..Default::default()
+        },))
+        .with_children(|builder| {
+            builder.spawn(ImageBundle {
+                style: Style {
+                    width: Val::Px(200.0),
+                    height: Val::Px(150.0),
+                    ..Default::default()
+                },
+                image: UiImage::new(image_handle.clone()),
+                ..default()
+            });
+        });
+
+    *enable_minimap = true;
 }
 
 fn line_mesh(start: Vec3, end: Vec3, width: f32) -> Mesh {
