@@ -1,5 +1,3 @@
-mod assets;
-
 use std::{collections::HashMap, f32::consts::FRAC_PI_2, sync::Arc};
 
 use bevy_asset_loader::loading_state::{
@@ -35,6 +33,8 @@ use bevy::{
     tasks::{block_on, futures_lite::future, AsyncComputeTaskPool, Task},
     utils::HashSet,
 };
+
+mod assets;
 
 fn main() {
     App::new()
@@ -229,8 +229,9 @@ struct MapGenerator(Task<TileMap>);
 #[derive(Resource)]
 struct TileMapResource(TileMap);
 
+#[allow(dead_code)]
 #[derive(Component)]
-struct MapOffsetCoordinate(OffsetCoordinate);
+struct MapTile(Tile);
 
 #[derive(Resource)]
 struct MapSetting(Arc<MapParameters>);
@@ -266,7 +267,7 @@ fn wrap_tile_map(
     materials: Res<MaterialResource>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut color_materials: ResMut<Assets<ColorMaterial>>,
-    exist_offset_coordinates_query: Query<(Entity, &MapOffsetCoordinate)>,
+    mut exist_entity_and_offset_coordinates: Local<Vec<(Entity, OffsetCoordinate)>>,
 ) {
     if map.is_none() {
         return;
@@ -342,11 +343,11 @@ fn wrap_tile_map(
 
     // (1 + offset_x * 2) should < grid's width
     // Because if it's not, the same tile will be drawn twice due to the grid's wrapping behavior.
-    let offset_x = 15;
+    let offset_x = 18;
     assert!(1 + offset_x * 2 < grid.width() as i32);
     // (1 + offset_y * 2) should < grid's height
     // Because if it's not, the same tile will be drawn twice due to the grid's wrapping behavior.
-    let offset_y = 8;
+    let offset_y = 10;
     assert!(1 + offset_y * 2 < grid.height() as i32);
 
     let transform = query.single_mut();
@@ -375,23 +376,22 @@ fn wrap_tile_map(
     // Despawn the tiles that are out of the current viewport
     // And remove the tiles that are still in the current viewport from offset_list,
     // we only need to spawn the tiles that can't be found in the current viewport later.
-    exist_offset_coordinates_query
-        .iter()
-        .for_each(|(entity, map_offset)| {
-            let exist_offset = &map_offset.0;
-            if !offset_list.contains(exist_offset) {
-                commands.entity(entity).despawn_recursive();
-            } else {
-                offset_list.remove(exist_offset);
-            }
-        });
+    exist_entity_and_offset_coordinates.retain(|(entity, map_offset)| {
+        if !offset_list.contains(map_offset) {
+            commands.entity(*entity).despawn_recursive();
+            false
+        } else {
+            offset_list.remove(map_offset);
+            true
+        }
+    });
 
     for &offset_coordinate in offset_list.iter() {
         let hex = Hex::from_offset(offset_coordinate, orientation, offset);
         let pixel_position = layout.hex_to_pixel(hex);
         let tile = Tile::from_offset(offset_coordinate, grid);
         // Spawn the tile with base terrain
-        commands
+        let parent = commands
             .spawn(MaterialMesh2dBundle {
                 mesh: Mesh2dHandle(meshes.add(hex_mesh(&grid))),
                 transform: Transform {
@@ -401,170 +401,174 @@ fn wrap_tile_map(
                 material: base_terrain_and_material[tile.base_terrain(&tile_map)].clone(),
                 ..default()
             })
-            .insert(MapOffsetCoordinate(offset_coordinate))
-            .with_children(|parent| {
-                // Draw river edges
-                if let Some(flow_direction_list) = tile_and_river_flow_direction.get(&tile) {
-                    flow_direction_list.iter().for_each(|direction| {
-                        let (_, line_mesh) = all_possible_river_edge_mesh
-                            .iter()
-                            .find(|(d, _)| d == direction)
-                            .unwrap();
-                        parent.spawn(MaterialMesh2dBundle {
-                            mesh: Mesh2dHandle(meshes.add(line_mesh.clone())),
-                            material: color_materials
-                                .add(ColorMaterial::from_color(Color::srgb_u8(140, 215, 215))),
-                            transform: Transform {
-                                translation: Vec3::new(0., 0., 5.),
-                                ..Default::default()
-                            },
-                            ..default()
-                        });
-                    })
+            .insert(MapTile(tile))
+            .id();
+
+        exist_entity_and_offset_coordinates.push((parent, offset_coordinate));
+
+        commands.entity(parent).with_children(|parent| {
+            // Draw river edges
+            if let Some(flow_direction_list) = tile_and_river_flow_direction.get(&tile) {
+                flow_direction_list.iter().for_each(|direction| {
+                    let (_, line_mesh) = all_possible_river_edge_mesh
+                        .iter()
+                        .find(|(d, _)| d == direction)
+                        .unwrap();
+                    parent.spawn(MaterialMesh2dBundle {
+                        mesh: Mesh2dHandle(meshes.add(line_mesh.clone())),
+                        material: color_materials
+                            .add(ColorMaterial::from_color(Color::srgb_u8(140, 215, 215))),
+                        transform: Transform {
+                            translation: Vec3::new(0., 0., 5.),
+                            ..Default::default()
+                        },
+                        ..default()
+                    });
+                })
+            };
+
+            // Draw terrain type Mountain with no natural wonder and Hill
+            // Notice terrain type Flatland and Water are not drawn in this moment because they only need to be drawn with base terrain
+            if tile.terrain_type(&tile_map) == TerrainType::Mountain
+                && tile.natural_wonder(&tile_map).is_none()
+            {
+                parent.spawn(SpriteBundle {
+                    sprite: Sprite {
+                        custom_size: Some(tile_pixel_size),
+                        ..Default::default()
+                    },
+                    texture: materials.texture_handle("sv_mountains"),
+                    transform: Transform {
+                        translation: Vec3::new(0., 0., 3.),
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                });
+            } else if tile.terrain_type(&tile_map) == TerrainType::Hill {
+                parent.spawn(SpriteBundle {
+                    sprite: Sprite {
+                        custom_size: Some(tile_pixel_size),
+                        ..Default::default()
+                    },
+                    texture: materials.texture_handle("sv_hills"),
+                    transform: Transform {
+                        translation: Vec3::new(0., 0., 3.),
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                });
+            }
+
+            // Draw the feature
+            if let Some(feature) = tile.feature(&tile_map) {
+                let feature_texture = match feature {
+                    Feature::Forest => "sv_forest",
+                    Feature::Jungle => "sv_jungle",
+                    Feature::Marsh => "sv_marsh",
+                    Feature::Floodplain => "sv_floodplains",
+                    Feature::Ice => "sv_ice",
+                    Feature::Oasis => "sv_oasis",
+                    Feature::Atoll => "sv_atoll",
+                    Feature::Fallout => "sv_fallout",
                 };
 
-                // Draw terrain type Mountain with no natural wonder and Hill
-                // Notice terrain type Flatland and Water are not drawn in this moment because they only need to be drawn with base terrain
-                if tile.terrain_type(&tile_map) == TerrainType::Mountain
-                    && tile.natural_wonder(&tile_map).is_none()
-                {
-                    parent.spawn(SpriteBundle {
-                        sprite: Sprite {
-                            custom_size: Some(tile_pixel_size),
-                            ..Default::default()
-                        },
-                        texture: materials.texture_handle("sv_mountains"),
-                        transform: Transform {
-                            translation: Vec3::new(0., 0., 3.),
-                            ..Default::default()
+                parent.spawn(SpriteBundle {
+                    sprite: Sprite {
+                        custom_size: Some(tile_pixel_size),
+                        ..Default::default()
+                    },
+                    texture: materials.texture_handle(feature_texture),
+                    transform: Transform {
+                        translation: Vec3::new(0., 0., 2.),
+                        rotation: if feature == Feature::Ice {
+                            sprite_rotation
+                        } else {
+                            Quat::default()
                         },
                         ..Default::default()
-                    });
-                } else if tile.terrain_type(&tile_map) == TerrainType::Hill {
-                    parent.spawn(SpriteBundle {
-                        sprite: Sprite {
-                            custom_size: Some(tile_pixel_size),
-                            ..Default::default()
-                        },
-                        texture: materials.texture_handle("sv_hills"),
-                        transform: Transform {
-                            translation: Vec3::new(0., 0., 3.),
-                            ..Default::default()
-                        },
+                    },
+                    ..Default::default()
+                });
+            }
+
+            // Draw the natural wonder
+            if let Some(natural_wonder) = tile.natural_wonder(&tile_map) {
+                let natural_wonder_texture = match natural_wonder {
+                    NaturalWonder::GreatBarrierReef => "sv_coralreef",
+                    NaturalWonder::OldFaithful => "sv_geyser",
+                    NaturalWonder::ElDorado => "sv_el_dorado",
+                    NaturalWonder::FountainOfYouth => "sv_fountain_of_youth",
+                    NaturalWonder::GrandMesa => "sv_mesa",
+                    NaturalWonder::MountFuji => "sv_fuji",
+                    NaturalWonder::Krakatoa => "sv_krakatoa",
+                    NaturalWonder::RockOfGibraltar => "sv_gibraltar",
+                    NaturalWonder::CerroDePotosi => "sv_cerro_de_patosi",
+                    NaturalWonder::BarringerCrater => "sv_crater",
+                    NaturalWonder::MountKailash => "sv_mount_kailash",
+                    NaturalWonder::MountSinai => "sv_mount_sinai",
+                    NaturalWonder::SriPada => "sv_sri_pada",
+                    NaturalWonder::Uluru => "sv_uluru",
+                    NaturalWonder::KingSolomonsMines => "sv_kingsolomonsmine",
+                    NaturalWonder::LakeVictoria => "sv_lakevictoria",
+                    NaturalWonder::MountKilimanjaro => "sv_mountkilimanjaro",
+                };
+
+                parent.spawn(SpriteBundle {
+                    sprite: Sprite {
+                        custom_size: Some(tile_pixel_size),
                         ..Default::default()
-                    });
-                }
+                    },
+                    texture: materials.texture_handle(natural_wonder_texture),
+                    transform: Transform {
+                        translation: Vec3::new(0., 0., 2.),
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                });
+            }
 
-                // Draw the feature
-                if let Some(feature) = tile.feature(&tile_map) {
-                    let feature_texture = match feature {
-                        Feature::Forest => "sv_forest",
-                        Feature::Jungle => "sv_jungle",
-                        Feature::Marsh => "sv_marsh",
-                        Feature::Floodplain => "sv_floodplains",
-                        Feature::Ice => "sv_ice",
-                        Feature::Oasis => "sv_oasis",
-                        Feature::Atoll => "sv_atoll",
-                        Feature::Fallout => "sv_fallout",
-                    };
-
-                    parent.spawn(SpriteBundle {
-                        sprite: Sprite {
-                            custom_size: Some(tile_pixel_size),
-                            ..Default::default()
-                        },
-                        texture: materials.texture_handle(feature_texture),
-                        transform: Transform {
-                            translation: Vec3::new(0., 0., 2.),
-                            rotation: if feature == Feature::Ice {
-                                sprite_rotation
-                            } else {
-                                Quat::default()
+            // Draw the civilization
+            tile_map.starting_tile_and_civilization.iter().for_each(
+                |(&starting_tile, civilization)| {
+                    if starting_tile == tile {
+                        parent.spawn(SpriteBundle {
+                            sprite: Sprite {
+                                color: Color::BLACK,
+                                custom_size: Some(tile_pixel_size),
+                                ..Default::default()
+                            },
+                            texture: materials.texture_handle(civilization.as_str()),
+                            transform: Transform {
+                                translation: Vec3::new(0., 0., 3.),
+                                ..Default::default()
                             },
                             ..Default::default()
-                        },
-                        ..Default::default()
-                    });
-                }
+                        });
+                    }
+                },
+            );
 
-                // Draw the natural wonder
-                if let Some(natural_wonder) = tile.natural_wonder(&tile_map) {
-                    let natural_wonder_texture = match natural_wonder {
-                        NaturalWonder::GreatBarrierReef => "sv_coralreef",
-                        NaturalWonder::OldFaithful => "sv_geyser",
-                        NaturalWonder::ElDorado => "sv_el_dorado",
-                        NaturalWonder::FountainOfYouth => "sv_fountain_of_youth",
-                        NaturalWonder::GrandMesa => "sv_mesa",
-                        NaturalWonder::MountFuji => "sv_fuji",
-                        NaturalWonder::Krakatoa => "sv_krakatoa",
-                        NaturalWonder::RockOfGibraltar => "sv_gibraltar",
-                        NaturalWonder::CerroDePotosi => "sv_cerro_de_patosi",
-                        NaturalWonder::BarringerCrater => "sv_crater",
-                        NaturalWonder::MountKailash => "sv_mount_kailash",
-                        NaturalWonder::MountSinai => "sv_mount_sinai",
-                        NaturalWonder::SriPada => "sv_sri_pada",
-                        NaturalWonder::Uluru => "sv_uluru",
-                        NaturalWonder::KingSolomonsMines => "sv_kingsolomonsmine",
-                        NaturalWonder::LakeVictoria => "sv_lakevictoria",
-                        NaturalWonder::MountKilimanjaro => "sv_mountkilimanjaro",
-                    };
-
-                    parent.spawn(SpriteBundle {
-                        sprite: Sprite {
-                            custom_size: Some(tile_pixel_size),
-                            ..Default::default()
-                        },
-                        texture: materials.texture_handle(natural_wonder_texture),
-                        transform: Transform {
-                            translation: Vec3::new(0., 0., 2.),
-                            ..Default::default()
-                        },
-                        ..Default::default()
-                    });
-                }
-
-                // Draw the civilization
-                tile_map.starting_tile_and_civilization.iter().for_each(
-                    |(&starting_tile, civilization)| {
-                        if starting_tile == tile {
-                            parent.spawn(SpriteBundle {
-                                sprite: Sprite {
-                                    color: Color::BLACK,
-                                    custom_size: Some(tile_pixel_size),
-                                    ..Default::default()
-                                },
-                                texture: materials.texture_handle(civilization.as_str()),
-                                transform: Transform {
-                                    translation: Vec3::new(0., 0., 3.),
-                                    ..Default::default()
-                                },
+            // Draw the city state
+            tile_map
+                .starting_tile_and_city_state
+                .iter()
+                .for_each(|(&starting_tile, _)| {
+                    if starting_tile == tile {
+                        parent.spawn(SpriteBundle {
+                            sprite: Sprite {
+                                custom_size: Some(tile_pixel_size),
                                 ..Default::default()
-                            });
-                        }
-                    },
-                );
-
-                // Draw the city state
-                tile_map
-                    .starting_tile_and_city_state
-                    .iter()
-                    .for_each(|(&starting_tile, _)| {
-                        if starting_tile == tile {
-                            parent.spawn(SpriteBundle {
-                                sprite: Sprite {
-                                    custom_size: Some(tile_pixel_size),
-                                    ..Default::default()
-                                },
-                                texture: materials.texture_handle("CityState"),
-                                transform: Transform {
-                                    translation: Vec3::new(0., 0., 3.),
-                                    ..Default::default()
-                                },
+                            },
+                            texture: materials.texture_handle("CityState"),
+                            transform: Transform {
+                                translation: Vec3::new(0., 0., 3.),
                                 ..Default::default()
-                            });
-                        }
-                    });
-            });
+                            },
+                            ..Default::default()
+                        });
+                    }
+                });
+        });
     }
 }
 
