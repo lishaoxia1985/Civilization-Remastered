@@ -20,5 +20,6 @@ impl MaterialResource {
 pub enum AppState {
     #[default]
     AssetLoading,
+    MapGenerator,
     GameStart,
 }

@@ -27,7 +27,6 @@ use bevy::{
     prelude::*,
     render::{
         camera::RenderTarget,
-        mesh::{Indices, PrimitiveTopology},
         render_asset::RenderAssetUsages,
         render_resource::{Extent3d, TextureDimension, TextureFormat, TextureUsages},
         view::RenderLayers,
@@ -37,7 +36,10 @@ use bevy::{
     utils::HashSet,
 };
 
+use crate::custom_mesh::{hex_mesh, line_mesh};
+
 mod assets;
+mod custom_mesh;
 
 fn main() {
     App::new()
@@ -54,7 +56,7 @@ fn main() {
         .init_state::<AppState>()
         .add_loading_state(
             LoadingState::new(AppState::AssetLoading)
-                .continue_to_state(AppState::GameStart)
+                .continue_to_state(AppState::MapGenerator)
                 .load_collection::<MaterialResource>(),
         )
         // .insert_resource(Ruleset::new())
@@ -78,19 +80,19 @@ fn main() {
             };
             MapSetting(Arc::new(map_parameters))
         })
-        .add_systems(OnEnter(AppState::AssetLoading), camera_setup)
+        .add_systems(OnEnter(AppState::AssetLoading), main_camera_setup)
         .add_systems(
             Update,
             (
-                camera_movement,
+                main_camera_movement,
                 cursor_drag_system,
-                zoom_camera_system,
+                zoom_main_camera_system,
                 setup_minimap.run_if(in_state(AppState::GameStart)),
                 wrap_tile_map.run_if(in_state(AppState::GameStart)),
-                check_map_generate_status.run_if(in_state(AppState::GameStart)),
+                check_map_generate_status.run_if(in_state(AppState::MapGenerator)),
             ),
         )
-        .add_systems(OnEnter(AppState::GameStart), generate_tile_map)
+        .add_systems(OnEnter(AppState::MapGenerator), generate_tile_map)
         .run();
 }
 
@@ -113,7 +115,7 @@ pub fn close_on_esc(
 #[derive(Component)]
 struct MainCamera;
 
-fn camera_setup(mut commands: Commands, map_setting: Res<MapSetting>) {
+fn main_camera_setup(mut commands: Commands, map_setting: Res<MapSetting>) {
     let map_parameters = &map_setting.0;
     let grid = map_parameters.world_grid.grid;
     let map_center = grid.center();
@@ -127,7 +129,7 @@ fn camera_setup(mut commands: Commands, map_setting: Res<MapSetting>) {
     ));
 }
 
-fn camera_movement(
+fn main_camera_movement(
     time: Res<Time>,
     keyboard_input: Res<ButtonInput<KeyCode>>,
     mut query: Query<&mut Transform, With<MainCamera>>,
@@ -211,7 +213,7 @@ fn cursor_drag_system(
     }
 }
 
-fn zoom_camera_system(
+fn zoom_main_camera_system(
     mut scroll_evr: EventReader<MouseWheel>,
     keyboard_input: Res<ButtonInput<KeyCode>>,
     mut projection: Query<&mut OrthographicProjection, With<MainCamera>>,
@@ -257,17 +259,19 @@ fn generate_tile_map(mut commands: Commands, map_setting: Res<MapSetting>) {
     commands.insert_resource(MapGenerator(task));
 }
 
-fn check_map_generate_status(mut commands: Commands, task: Option<ResMut<MapGenerator>>) {
+fn check_map_generate_status(
+    mut commands: Commands,
+    task: Option<ResMut<MapGenerator>>,
+    mut next_state: ResMut<NextState<AppState>>,
+) {
     let Some(mut task) = task else {
         return;
     };
 
     if let Some(tile_map) = block_on(future::poll_once(&mut task.0)) {
-        let map = TileMapResource(tile_map);
-        commands.insert_resource(map);
+        commands.insert_resource(TileMapResource(tile_map));
         commands.remove_resource::<MapGenerator>();
-    } else {
-        return;
+        next_state.set(AppState::GameStart);
     }
 }
 
@@ -331,33 +335,25 @@ fn wrap_tile_map(
         HexOrientation::Flat => Quat::from_rotation_z(FRAC_PI_2 * 3.),
     };
 
-    let layout = &grid.layout;
-    let orientation = layout.orientation;
-    let offset = grid.offset;
-
     // (1 + offset_x * 2) should < grid's width
     // Because if it's not, the same tile will be drawn twice due to the grid's wrapping behavior.
-    let offset_x = 18;
-    assert!(1 + offset_x * 2 < grid.width() as i32);
+    const OFFSET_X: i32 = 18;
+    assert!(1 + OFFSET_X * 2 < grid.width() as i32);
     // (1 + offset_y * 2) should < grid's height
     // Because if it's not, the same tile will be drawn twice due to the grid's wrapping behavior.
-    let offset_y = 10;
-    assert!(1 + offset_y * 2 < grid.height() as i32);
+    const OFFSET_Y: i32 = 10;
+    assert!(1 + OFFSET_Y * 2 < grid.height() as i32);
 
-    let transform = query.single_mut();
-    let camera_position = transform.translation.truncate().to_array();
-    let offset_coordinate = layout
-        .pixel_to_hex(camera_position)
-        .to_offset(orientation, offset)
-        .to_array();
-    let mut left_x = offset_coordinate[0] - offset_x;
-    let mut right_x = offset_coordinate[0] + offset_x;
+    let camera_position = query.single_mut().translation.truncate().to_array();
+    let camera_offset_coordinate = grid.pixel_to_offset(camera_position).to_array();
+    let mut left_x = camera_offset_coordinate[0] - OFFSET_X;
+    let mut right_x = camera_offset_coordinate[0] + OFFSET_X;
     if !grid.wrap_x() {
         left_x = left_x.max(0);
         right_x = right_x.min(grid.width() as i32 - 1);
     }
-    let mut bottom_y = offset_coordinate[1] - offset_y;
-    let mut top_y = offset_coordinate[1] + offset_y;
+    let mut bottom_y = camera_offset_coordinate[1] - OFFSET_Y;
+    let mut top_y = camera_offset_coordinate[1] + OFFSET_Y;
     if !grid.wrap_y() {
         bottom_y = bottom_y.max(0);
         top_y = top_y.min(grid.height() as i32 - 1);
@@ -380,19 +376,20 @@ fn wrap_tile_map(
         }
     });
 
+    let hex_mesh = meshes.add(hex_mesh(&grid));
+
     for &offset_coordinate in offset_list.iter() {
-        let hex = Hex::from_offset(offset_coordinate, orientation, offset);
-        let pixel_position = layout.hex_to_pixel(hex);
+        let pixel_position = grid.offset_to_pixel(offset_coordinate);
         let tile = Tile::from_offset(offset_coordinate, grid);
         // Spawn the tile with base terrain
         let parent = commands
             .spawn(MaterialMesh2dBundle {
-                mesh: Mesh2dHandle(meshes.add(hex_mesh(&grid))),
+                mesh: Mesh2dHandle(hex_mesh.clone()),
                 transform: Transform {
                     translation: Vec3::from((pixel_position[0], pixel_position[1], 0.)),
                     ..Default::default()
                 },
-                material: base_terrain_and_material[tile.base_terrain(&tile_map)].clone(),
+                material: base_terrain_and_material[tile.base_terrain(tile_map)].clone(),
                 ..default()
             })
             .insert(MapTile(tile))
@@ -423,28 +420,17 @@ fn wrap_tile_map(
 
             // Draw terrain type Mountain with no natural wonder and Hill
             // Notice terrain type Flatland and Water are not drawn in this moment because they only need to be drawn with base terrain
-            if tile.terrain_type(&tile_map) == TerrainType::Mountain
-                && tile.natural_wonder(&tile_map).is_none()
-            {
+            let terrain_type = tile.terrain_type(tile_map);
+            let is_mountain_without_wonder =
+                terrain_type == TerrainType::Mountain && tile.natural_wonder(tile_map).is_none();
+
+            if is_mountain_without_wonder || terrain_type == TerrainType::Hill {
                 parent.spawn(SpriteBundle {
                     sprite: Sprite {
                         custom_size: Some(tile_pixel_size),
                         ..Default::default()
                     },
-                    texture: materials.texture_handle("Mountain"),
-                    transform: Transform {
-                        translation: Vec3::new(0., 0., 3.),
-                        ..Default::default()
-                    },
-                    ..Default::default()
-                });
-            } else if tile.terrain_type(&tile_map) == TerrainType::Hill {
-                parent.spawn(SpriteBundle {
-                    sprite: Sprite {
-                        custom_size: Some(tile_pixel_size),
-                        ..Default::default()
-                    },
-                    texture: materials.texture_handle("Hill"),
+                    texture: materials.texture_handle(terrain_type.as_str()),
                     transform: Transform {
                         translation: Vec3::new(0., 0., 3.),
                         ..Default::default()
@@ -454,7 +440,7 @@ fn wrap_tile_map(
             }
 
             // Draw the feature
-            if let Some(feature) = tile.feature(&tile_map) {
+            if let Some(feature) = tile.feature(tile_map) {
                 parent.spawn(SpriteBundle {
                     sprite: Sprite {
                         custom_size: Some(tile_pixel_size),
@@ -475,7 +461,7 @@ fn wrap_tile_map(
             }
 
             // Draw the natural wonder
-            if let Some(natural_wonder) = tile.natural_wonder(&tile_map) {
+            if let Some(natural_wonder) = tile.natural_wonder(tile_map) {
                 parent.spawn(SpriteBundle {
                     sprite: Sprite {
                         custom_size: Some(tile_pixel_size),
@@ -555,36 +541,25 @@ fn setup_minimap(
     let tile_map = &map.unwrap().0;
     let grid = tile_map.world_grid.grid;
 
-    let hex_layout = HexLayout {
-        size: [10., 10.],
-        ..grid.layout
-    };
-
-    let minimap_grid = HexGrid {
-        layout: hex_layout,
-        ..grid
-    };
+    let minimap_grid = grid.with_resized_layout([10., 10.]);
 
     let base_terrain_and_material: EnumMap<BaseTerrain, Handle<ColorMaterial>> = enum_map! {
         base_terrain => color_materials.add(materials.texture_handle(base_terrain.as_str())),
     };
 
+    let hex_mesh = meshes.add(hex_mesh(&minimap_grid));
+
     for tile in tile_map.all_tiles() {
         let offset_coordinate = tile.to_offset(minimap_grid);
-        let hex = Hex::from_offset(
-            offset_coordinate,
-            minimap_grid.layout.orientation,
-            minimap_grid.offset,
-        );
-        let pixel_position = minimap_grid.layout.hex_to_pixel(hex);
+        let pixel_position = minimap_grid.offset_to_pixel(offset_coordinate);
         commands.spawn((
             MaterialMesh2dBundle {
-                mesh: Mesh2dHandle(meshes.add(hex_mesh(&minimap_grid))),
+                mesh: Mesh2dHandle(hex_mesh.clone()),
                 transform: Transform {
                     translation: Vec3::from((pixel_position[0], pixel_position[1], 9.)),
                     ..Default::default()
                 },
-                material: base_terrain_and_material[tile.base_terrain(&tile_map)].clone(),
+                material: base_terrain_and_material[tile.base_terrain(tile_map)].clone(),
                 ..default()
             },
             RenderLayers::layer(1),
@@ -663,52 +638,4 @@ fn setup_minimap(
         });
 
     *enable_minimap = true;
-}
-
-fn line_mesh(start: Vec3, end: Vec3, width: f32) -> Mesh {
-    // Calculate direction vector from start to end points
-    let direction = end - start;
-    let _length = direction.length();
-    let normalized_direction = direction.normalize();
-
-    // Compute perpendicular vector to create the line width
-    let perpendicular =
-        Vec3::new(-normalized_direction.y, normalized_direction.x, 0.0).normalize() * width / 2.0;
-
-    // Create four vertices for the rectangle representing the line
-    let vertices = vec![
-        start + perpendicular,
-        start - perpendicular,
-        end + perpendicular,
-        end - perpendicular,
-    ];
-
-    let uvs = vec![[0.0, 0.0], [1.0, 0.0], [0.0, 1.0], [1.0, 1.0]];
-
-    let indices = Indices::U32(vec![0, 1, 2, 2, 1, 3]);
-
-    let mut mesh = Mesh::new(
-        PrimitiveTopology::TriangleList,
-        RenderAssetUsages::default(),
-    );
-    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, vertices);
-    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
-    mesh.with_inserted_indices(indices)
-}
-
-fn hex_mesh(grid: &HexGrid) -> Mesh {
-    let hex_layout = &grid.layout;
-    let vertices: Vec<[f32; 3]> = hex_layout
-        .all_corners(Hex::new(0, 0))
-        .map(|corner| [corner[0], corner[1], 0.0])
-        .to_vec();
-
-    let indices = Indices::U32(vec![0, 1, 2, 0, 2, 3, 0, 3, 4, 0, 4, 5]);
-
-    let mut mesh = Mesh::new(
-        PrimitiveTopology::TriangleList,
-        RenderAssetUsages::default(),
-    );
-    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, vertices);
-    mesh.with_inserted_indices(indices)
 }
