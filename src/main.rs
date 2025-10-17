@@ -16,7 +16,7 @@ use civ_map_generator::{
     map_parameters::{MapParameters, MapType, WorldGrid},
     ruleset::Ruleset,
     tile::Tile,
-    tile_component::{BaseTerrain, Feature, NaturalWonder, TerrainType},
+    tile_component::{BaseTerrain, Feature, TerrainType},
     tile_map::{RiverEdge, TileMap},
 };
 
@@ -288,26 +288,9 @@ fn wrap_tile_map(
 
     let grid = tile_map.world_grid.grid;
 
-    let base_terrain_and_texture_name = enum_map! {
-        BaseTerrain::Ocean => "sv_terrainhexocean",
-        BaseTerrain::Lake => "sv_terrainhexcoast",
-        BaseTerrain::Coast => "sv_terrainhexcoast",
-        BaseTerrain::Grassland => "sv_terrainhexgrasslands",
-        BaseTerrain::Desert => "sv_terrainhexdesert",
-        BaseTerrain::Plain => "sv_terrainhexplains",
-        BaseTerrain::Tundra => "sv_terrainhextundra",
-        BaseTerrain::Snow => "sv_terrainhexsnow",
+    let base_terrain_and_material: EnumMap<BaseTerrain, Handle<ColorMaterial>> = enum_map! {
+        base_terrain => color_materials.add(materials.texture_handle(base_terrain.as_str())),
     };
-
-    let base_terrain_and_material: EnumMap<_, _> = base_terrain_and_texture_name
-        .into_iter()
-        .map(|(base_terrain, base_terrain_texture)| {
-            (
-                base_terrain,
-                color_materials.add(materials.texture_handle(base_terrain_texture)),
-            )
-        })
-        .collect();
 
     let mut tile_and_river_flow_direction = HashMap::new();
 
@@ -448,7 +431,7 @@ fn wrap_tile_map(
                         custom_size: Some(tile_pixel_size),
                         ..Default::default()
                     },
-                    texture: materials.texture_handle("sv_mountains"),
+                    texture: materials.texture_handle("Mountain"),
                     transform: Transform {
                         translation: Vec3::new(0., 0., 3.),
                         ..Default::default()
@@ -461,7 +444,7 @@ fn wrap_tile_map(
                         custom_size: Some(tile_pixel_size),
                         ..Default::default()
                     },
-                    texture: materials.texture_handle("sv_hills"),
+                    texture: materials.texture_handle("Hill"),
                     transform: Transform {
                         translation: Vec3::new(0., 0., 3.),
                         ..Default::default()
@@ -472,23 +455,12 @@ fn wrap_tile_map(
 
             // Draw the feature
             if let Some(feature) = tile.feature(&tile_map) {
-                let feature_texture = match feature {
-                    Feature::Forest => "sv_forest",
-                    Feature::Jungle => "sv_jungle",
-                    Feature::Marsh => "sv_marsh",
-                    Feature::Floodplain => "sv_floodplains",
-                    Feature::Ice => "sv_ice",
-                    Feature::Oasis => "sv_oasis",
-                    Feature::Atoll => "sv_atoll",
-                    Feature::Fallout => "sv_fallout",
-                };
-
                 parent.spawn(SpriteBundle {
                     sprite: Sprite {
                         custom_size: Some(tile_pixel_size),
                         ..Default::default()
                     },
-                    texture: materials.texture_handle(feature_texture),
+                    texture: materials.texture_handle(feature.as_str()),
                     transform: Transform {
                         translation: Vec3::new(0., 0., 2.),
                         rotation: if feature == Feature::Ice {
@@ -504,32 +476,12 @@ fn wrap_tile_map(
 
             // Draw the natural wonder
             if let Some(natural_wonder) = tile.natural_wonder(&tile_map) {
-                let natural_wonder_texture = match natural_wonder {
-                    NaturalWonder::GreatBarrierReef => "sv_coralreef",
-                    NaturalWonder::OldFaithful => "sv_geyser",
-                    NaturalWonder::ElDorado => "sv_el_dorado",
-                    NaturalWonder::FountainOfYouth => "sv_fountain_of_youth",
-                    NaturalWonder::GrandMesa => "sv_mesa",
-                    NaturalWonder::MountFuji => "sv_fuji",
-                    NaturalWonder::Krakatoa => "sv_krakatoa",
-                    NaturalWonder::RockOfGibraltar => "sv_gibraltar",
-                    NaturalWonder::CerroDePotosi => "sv_cerro_de_patosi",
-                    NaturalWonder::BarringerCrater => "sv_crater",
-                    NaturalWonder::MountKailash => "sv_mount_kailash",
-                    NaturalWonder::MountSinai => "sv_mount_sinai",
-                    NaturalWonder::SriPada => "sv_sri_pada",
-                    NaturalWonder::Uluru => "sv_uluru",
-                    NaturalWonder::KingSolomonsMines => "sv_kingsolomonsmine",
-                    NaturalWonder::LakeVictoria => "sv_lakevictoria",
-                    NaturalWonder::MountKilimanjaro => "sv_mountkilimanjaro",
-                };
-
                 parent.spawn(SpriteBundle {
                     sprite: Sprite {
                         custom_size: Some(tile_pixel_size),
                         ..Default::default()
                     },
-                    texture: materials.texture_handle(natural_wonder_texture),
+                    texture: materials.texture_handle(natural_wonder.as_str()),
                     transform: Transform {
                         translation: Vec3::new(0., 0., 2.),
                         ..Default::default()
@@ -613,26 +565,9 @@ fn setup_minimap(
         ..grid
     };
 
-    let base_terrain_and_texture_name = enum_map! {
-        BaseTerrain::Ocean => "sv_terrainhexocean",
-        BaseTerrain::Lake => "sv_terrainhexcoast",
-        BaseTerrain::Coast => "sv_terrainhexcoast",
-        BaseTerrain::Grassland => "sv_terrainhexgrasslands",
-        BaseTerrain::Desert => "sv_terrainhexdesert",
-        BaseTerrain::Plain => "sv_terrainhexplains",
-        BaseTerrain::Tundra => "sv_terrainhextundra",
-        BaseTerrain::Snow => "sv_terrainhexsnow",
+    let base_terrain_and_material: EnumMap<BaseTerrain, Handle<ColorMaterial>> = enum_map! {
+        base_terrain => color_materials.add(materials.texture_handle(base_terrain.as_str())),
     };
-
-    let base_terrain_and_material: EnumMap<_, _> = base_terrain_and_texture_name
-        .into_iter()
-        .map(|(base_terrain, base_terrain_texture)| {
-            (
-                base_terrain,
-                color_materials.add(materials.texture_handle(base_terrain_texture)),
-            )
-        })
-        .collect();
 
     for tile in tile_map.all_tiles() {
         let offset_coordinate = tile.to_offset(minimap_grid);
