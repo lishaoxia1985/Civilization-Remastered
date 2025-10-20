@@ -1,4 +1,4 @@
-use bevy::{prelude::*, utils::HashMap};
+use bevy::{platform::collections::HashMap, prelude::*};
 use bevy_asset_loader::{asset_collection::AssetCollection, mapped::AssetFileStem};
 
 #[derive(AssetCollection, Resource)]

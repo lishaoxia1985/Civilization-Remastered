@@ -1,9 +1,7 @@
 use bevy::{
+    asset::RenderAssetUsages,
     math::Vec3,
-    render::{
-        mesh::{Indices, Mesh, PrimitiveTopology},
-        render_asset::RenderAssetUsages,
-    },
+    mesh::{Indices, Mesh, PrimitiveTopology},
 };
 use civ_map_generator::grid::hex_grid::{Hex, HexGrid};
 

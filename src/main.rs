@@ -1,17 +1,17 @@
-use std::{collections::HashMap, f32::consts::FRAC_PI_2, sync::Arc};
+use std::{collections::HashSet, f32::consts::FRAC_PI_2, sync::Arc};
 
 use bevy_asset_loader::loading_state::{
-    config::ConfigureLoadingState, LoadingState, LoadingStateAppExt,
+    LoadingState, LoadingStateAppExt, config::ConfigureLoadingState,
 };
 
-use enum_map::{enum_map, EnumMap};
+use enum_map::{EnumMap, enum_map};
 
 use civ_map_generator::{
     generate_map,
     grid::{
+        Grid, GridSize, WorldSizeType, WrapFlags,
         hex_grid::{Hex, HexGrid, HexLayout, HexOrientation, Offset},
         offset_coordinate::OffsetCoordinate,
-        Grid, GridSize, WorldSizeType, WrapFlags,
     },
     map_parameters::{MapParameters, MapType, WorldGrid},
     ruleset::Ruleset,
@@ -23,17 +23,14 @@ use civ_map_generator::{
 use assets::{AppState, MaterialResource};
 
 use bevy::{
+    asset::RenderAssetUsages,
+    camera::{RenderTarget, visibility::RenderLayers},
     input::mouse::MouseWheel,
+    platform::collections::HashMap,
     prelude::*,
-    render::{
-        camera::RenderTarget,
-        render_asset::RenderAssetUsages,
-        render_resource::{Extent3d, TextureDimension, TextureFormat, TextureUsages},
-        view::RenderLayers,
-    },
-    sprite::{MaterialMesh2dBundle, Mesh2dHandle},
-    tasks::{block_on, futures_lite::future, AsyncComputeTaskPool, Task},
-    utils::HashSet,
+    render::render_resource::{Extent3d, TextureDimension, TextureFormat, TextureUsages},
+    tasks::{AsyncComputeTaskPool, Task, block_on, futures_lite::future},
+    window::WindowResolution,
 };
 
 use crate::custom_mesh::{hex_mesh, line_mesh};
@@ -43,11 +40,10 @@ mod custom_mesh;
 
 fn main() {
     App::new()
-        .insert_resource(Msaa::Sample4)
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
                 title: "Civilization-Remastered".to_owned(),
-                resolution: (800., 600.).into(),
+                resolution: WindowResolution::new(1280, 720),
                 window_level: bevy::window::WindowLevel::AlwaysOnTop,
                 ..default()
             }),
@@ -61,7 +57,7 @@ fn main() {
         )
         // .insert_resource(Ruleset::new())
         .insert_resource({
-            let world_size_type = WorldSizeType::Huge;
+            let world_size_type = WorldSizeType::Standard;
             let grid = HexGrid {
                 size: HexGrid::default_size(world_size_type),
                 layout: HexLayout {
@@ -120,10 +116,9 @@ fn main_camera_setup(mut commands: Commands, map_setting: Res<MapSetting>) {
     let grid = map_parameters.world_grid.grid;
     let map_center = grid.center();
     commands.spawn((
-        Camera2dBundle {
-            transform: Transform::from_xyz(map_center[0], map_center[1], 0.0),
-            ..Default::default()
-        },
+        Camera2d,
+        Transform::from_xyz(map_center[0], map_center[1], 0.0),
+        Msaa::Sample8,
         RenderLayers::layer(0),
         MainCamera,
     ));
@@ -132,10 +127,10 @@ fn main_camera_setup(mut commands: Commands, map_setting: Res<MapSetting>) {
 fn main_camera_movement(
     time: Res<Time>,
     keyboard_input: Res<ButtonInput<KeyCode>>,
-    mut query: Query<&mut Transform, With<MainCamera>>,
+    query: Single<&mut Transform, With<MainCamera>>,
     map_setting: Res<MapSetting>,
 ) {
-    let mut transform = query.single_mut();
+    let mut transform = query.into_inner();
 
     let mut movement = Vec3::ZERO;
 
@@ -152,7 +147,7 @@ fn main_camera_movement(
         movement.x += 1.0;
     }
 
-    transform.translation += movement * time.delta_seconds() * 300.0;
+    transform.translation += movement * time.delta_secs() * 300.0;
 
     // limit the camera movement within the map boundary
     let map_parameters = &map_setting.0;
@@ -170,28 +165,22 @@ fn main_camera_movement(
 }
 
 fn cursor_drag_system(
-    windows: Query<&Window>,
-    mut cameras: Query<(&mut Transform, &Camera, &GlobalTransform), With<MainCamera>>,
+    window: Single<&Window>,
+    cameras: Single<(&mut Transform, &Camera, &GlobalTransform), With<MainCamera>>,
     mut last_cursor_pos: Local<Option<Vec2>>,
     input: Res<ButtonInput<MouseButton>>,
     map_setting: Res<MapSetting>,
 ) {
-    let Ok(window) = windows.get_single() else {
-        return;
-    };
-    let Ok((mut transform, camera, global_transform)) = cameras.get_single_mut() else {
-        return;
-    };
+    let (mut transform, camera, camera_transform) = cameras.into_inner();
     if input.pressed(MouseButton::Left) {
-        if let Some(world_position) = window
-            .cursor_position()
-            .and_then(|cursor| camera.viewport_to_world_2d(global_transform, cursor))
+        if let Some(cursor_position) = window.cursor_position()
+            && let Ok(world_pos) = camera.viewport_to_world_2d(camera_transform, cursor_position)
         {
             if let Some(last_pos) = *last_cursor_pos {
-                let delta = world_position - last_pos;
+                let delta = world_pos - last_pos;
                 transform.translation -= delta.extend(0.);
             } else {
-                *last_cursor_pos = Some(world_position);
+                *last_cursor_pos = Some(world_pos);
             }
         };
     } else {
@@ -214,26 +203,28 @@ fn cursor_drag_system(
 }
 
 fn zoom_main_camera_system(
-    mut scroll_evr: EventReader<MouseWheel>,
+    mut scroll_evr: MessageReader<MouseWheel>,
     keyboard_input: Res<ButtonInput<KeyCode>>,
-    mut projection: Query<&mut OrthographicProjection, With<MainCamera>>,
+    projection: Single<&mut Projection, With<MainCamera>>,
 ) {
-    let mut projection = projection.single_mut();
-    for event in scroll_evr.read() {
-        let zoom_factor = 1.0 + event.y * 0.1; // Zoom speed
-        projection.scale *= zoom_factor;
-    }
+    let mut projection = projection.into_inner();
+    if let Projection::Orthographic(ref mut orthographic) = *projection {
+        for event in scroll_evr.read() {
+            let zoom_factor = 1.0 + event.y * 0.1; // Zoom speed
+            orthographic.scale *= zoom_factor;
+        }
 
-    // Handle keyboard zoom
-    if keyboard_input.pressed(KeyCode::KeyQ) {
-        projection.scale *= 1.01;
-    }
-    if keyboard_input.pressed(KeyCode::KeyE) {
-        projection.scale *= 0.99;
-    }
+        // Handle keyboard zoom
+        if keyboard_input.pressed(KeyCode::KeyQ) {
+            orthographic.scale *= 1.01;
+        }
+        if keyboard_input.pressed(KeyCode::KeyE) {
+            orthographic.scale *= 0.99;
+        }
 
-    // Restrict zoom range
-    projection.scale = projection.scale.clamp(0.3, 1.67);
+        // Restrict zoom range
+        orthographic.scale = orthographic.scale.clamp(0.3, 1.67);
+    }
 }
 
 #[derive(Resource)]
@@ -277,7 +268,7 @@ fn check_map_generate_status(
 
 fn wrap_tile_map(
     mut commands: Commands,
-    mut query: Query<&mut Transform, With<MainCamera>>,
+    query: Single<&mut Transform, With<MainCamera>>,
     map: Option<Res<TileMapResource>>,
     materials: Res<MaterialResource>,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -344,7 +335,7 @@ fn wrap_tile_map(
     const OFFSET_Y: i32 = 10;
     assert!(1 + OFFSET_Y * 2 < grid.height() as i32);
 
-    let camera_position = query.single_mut().translation.truncate().to_array();
+    let camera_position = query.into_inner().translation.truncate().to_array();
     let camera_offset_coordinate = grid.pixel_to_offset(camera_position).to_array();
     let mut left_x = camera_offset_coordinate[0] - OFFSET_X;
     let mut right_x = camera_offset_coordinate[0] + OFFSET_X;
@@ -368,7 +359,7 @@ fn wrap_tile_map(
     // we only need to spawn the tiles that can't be found in the current viewport later.
     exist_entity_and_offset_coordinates.retain(|(entity, map_offset)| {
         if !offset_list.contains(map_offset) {
-            commands.entity(*entity).despawn_recursive();
+            commands.entity(*entity).despawn();
             false
         } else {
             offset_list.remove(map_offset);
@@ -383,15 +374,14 @@ fn wrap_tile_map(
         let tile = Tile::from_offset(offset_coordinate, grid);
         // Spawn the tile with base terrain
         let parent = commands
-            .spawn(MaterialMesh2dBundle {
-                mesh: Mesh2dHandle(hex_mesh.clone()),
-                transform: Transform {
+            .spawn((
+                Mesh2d(hex_mesh.clone()),
+                Transform {
                     translation: Vec3::from((pixel_position[0], pixel_position[1], 0.)),
                     ..Default::default()
                 },
-                material: base_terrain_and_material[tile.base_terrain(tile_map)].clone(),
-                ..default()
-            })
+                MeshMaterial2d(base_terrain_and_material[tile.base_terrain(tile_map)].clone()),
+            ))
             .insert(MapTile(tile))
             .id();
 
@@ -405,16 +395,17 @@ fn wrap_tile_map(
                         .iter()
                         .find(|(d, _)| d == direction)
                         .unwrap();
-                    parent.spawn(MaterialMesh2dBundle {
-                        mesh: Mesh2dHandle(meshes.add(line_mesh.clone())),
-                        material: color_materials
-                            .add(ColorMaterial::from_color(Color::srgb_u8(140, 215, 215))),
-                        transform: Transform {
+                    parent.spawn((
+                        Mesh2d(meshes.add(line_mesh.clone())),
+                        MeshMaterial2d(
+                            color_materials
+                                .add(ColorMaterial::from_color(Color::srgb_u8(140, 215, 215))),
+                        ),
+                        Transform {
                             translation: Vec3::new(0., 0., 5.),
                             ..Default::default()
                         },
-                        ..default()
-                    });
+                    ));
                 })
             };
 
@@ -425,29 +416,28 @@ fn wrap_tile_map(
                 terrain_type == TerrainType::Mountain && tile.natural_wonder(tile_map).is_none();
 
             if is_mountain_without_wonder || terrain_type == TerrainType::Hill {
-                parent.spawn(SpriteBundle {
-                    sprite: Sprite {
+                parent.spawn((
+                    Sprite {
                         custom_size: Some(tile_pixel_size),
+                        image: materials.texture_handle(terrain_type.as_str()),
                         ..Default::default()
                     },
-                    texture: materials.texture_handle(terrain_type.as_str()),
-                    transform: Transform {
+                    Transform {
                         translation: Vec3::new(0., 0., 3.),
                         ..Default::default()
                     },
-                    ..Default::default()
-                });
+                ));
             }
 
             // Draw the feature
             if let Some(feature) = tile.feature(tile_map) {
-                parent.spawn(SpriteBundle {
-                    sprite: Sprite {
+                parent.spawn((
+                    Sprite {
                         custom_size: Some(tile_pixel_size),
+                        image: materials.texture_handle(feature.as_str()),
                         ..Default::default()
                     },
-                    texture: materials.texture_handle(feature.as_str()),
-                    transform: Transform {
+                    Transform {
                         translation: Vec3::new(0., 0., 2.),
                         rotation: if feature == Feature::Ice {
                             sprite_rotation
@@ -456,43 +446,40 @@ fn wrap_tile_map(
                         },
                         ..Default::default()
                     },
-                    ..Default::default()
-                });
+                ));
             }
 
             // Draw the natural wonder
             if let Some(natural_wonder) = tile.natural_wonder(tile_map) {
-                parent.spawn(SpriteBundle {
-                    sprite: Sprite {
+                parent.spawn((
+                    Sprite {
                         custom_size: Some(tile_pixel_size),
+                        image: materials.texture_handle(natural_wonder.as_str()),
                         ..Default::default()
                     },
-                    texture: materials.texture_handle(natural_wonder.as_str()),
-                    transform: Transform {
+                    Transform {
                         translation: Vec3::new(0., 0., 2.),
                         ..Default::default()
                     },
-                    ..Default::default()
-                });
+                ));
             }
 
             // Draw the civilization
             tile_map.starting_tile_and_civilization.iter().for_each(
                 |(&starting_tile, civilization)| {
                     if starting_tile == tile {
-                        parent.spawn(SpriteBundle {
-                            sprite: Sprite {
+                        parent.spawn((
+                            Sprite {
                                 color: Color::BLACK,
+                                image: materials.texture_handle(civilization.as_str()),
                                 custom_size: Some(tile_pixel_size),
                                 ..Default::default()
                             },
-                            texture: materials.texture_handle(civilization.as_str()),
-                            transform: Transform {
+                            Transform {
                                 translation: Vec3::new(0., 0., 3.),
                                 ..Default::default()
                             },
-                            ..Default::default()
-                        });
+                        ));
                     }
                 },
             );
@@ -503,18 +490,17 @@ fn wrap_tile_map(
                 .iter()
                 .for_each(|(&starting_tile, _)| {
                     if starting_tile == tile {
-                        parent.spawn(SpriteBundle {
-                            sprite: Sprite {
+                        parent.spawn((
+                            Sprite {
                                 custom_size: Some(tile_pixel_size),
+                                image: materials.texture_handle("CityState"),
                                 ..Default::default()
                             },
-                            texture: materials.texture_handle("CityState"),
-                            transform: Transform {
+                            Transform {
                                 translation: Vec3::new(0., 0., 3.),
                                 ..Default::default()
                             },
-                            ..Default::default()
-                        });
+                        ));
                     }
                 });
         });
@@ -553,14 +539,11 @@ fn setup_minimap(
         let offset_coordinate = tile.to_offset(minimap_grid);
         let pixel_position = minimap_grid.offset_to_pixel(offset_coordinate);
         commands.spawn((
-            MaterialMesh2dBundle {
-                mesh: Mesh2dHandle(hex_mesh.clone()),
-                transform: Transform {
-                    translation: Vec3::from((pixel_position[0], pixel_position[1], 9.)),
-                    ..Default::default()
-                },
-                material: base_terrain_and_material[tile.base_terrain(tile_map)].clone(),
-                ..default()
+            Mesh2d(hex_mesh.clone()),
+            MeshMaterial2d(base_terrain_and_material[tile.base_terrain(tile_map)].clone()),
+            Transform {
+                translation: Vec3::from((pixel_position[0], pixel_position[1], 9.)),
+                ..Default::default()
             },
             RenderLayers::layer(1),
         ));
@@ -576,66 +559,49 @@ fn setup_minimap(
         ..default()
     };
 
-    let mut image = Image::new_fill(
+    let mut image = Image::new_uninit(
         size,
         TextureDimension::D2,
-        &[0, 0, 0, 0],
         TextureFormat::Bgra8UnormSrgb,
-        RenderAssetUsages::default(),
+        RenderAssetUsages::all(),
     );
 
     image.texture_descriptor.usage =
-        TextureUsages::TEXTURE_BINDING | TextureUsages::RENDER_ATTACHMENT;
+        TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST | TextureUsages::RENDER_ATTACHMENT;
 
     let image_handle = images.add(image);
 
-    let minimap_center = minimap_grid.center();
     commands.spawn((
-        Camera2dBundle {
-            camera: Camera {
-                target: RenderTarget::Image(image_handle.clone()),
-                order: 0,
-                ..default()
-            },
-            projection: OrthographicProjection {
-                far: 1000.,
-                near: -1000.,
-                area: Rect {
-                    min: Vec2::new(0., 0.),
-                    max: Vec2::new(width, height),
-                },
-                ..Default::default()
-            },
-            transform: Transform::from_xyz(minimap_center[0], minimap_center[1], 0.0),
-            ..Default::default()
+        Camera2d,
+        Camera {
+            target: RenderTarget::Image(image_handle.clone().into()),
+            order: -1,
+            ..default()
         },
+        Projection::Orthographic(OrthographicProjection {
+            area: Rect {
+                min: Vec2::new(0., 0.),
+                max: Vec2::new(width, height),
+            },
+            ..OrthographicProjection::default_2d()
+        }),
+        Transform::from_xyz(minimap_center[0], minimap_center[1], 0.0),
         RenderLayers::layer(1),
     ));
 
-    commands
-        .spawn((NodeBundle {
-            style: Style {
-                position_type: PositionType::Absolute,
-                right: Val::Px(20.0),
-                top: Val::Px(20.0),
-                border: UiRect::all(Val::Px(1.0)),
-                ..Default::default()
-            },
-            background_color: Color::NONE.into(),
-            border_color: Color::BLACK.into(),
+    commands.spawn((
+        Node {
+            position_type: PositionType::Absolute,
+            right: Val::Px(20.0),
+            top: Val::Px(20.0),
+            width: Val::Px(300.0),
+            height: Val::Px(200.0),
+            border: UiRect::all(Val::Px(2.0)),
             ..Default::default()
-        },))
-        .with_children(|builder| {
-            builder.spawn(ImageBundle {
-                style: Style {
-                    width: Val::Px(200.0),
-                    height: Val::Px(150.0),
-                    ..Default::default()
-                },
-                image: UiImage::new(image_handle.clone()),
-                ..default()
-            });
-        });
+        },
+        BorderColor::all(Color::BLACK),
+        ImageNode::new(image_handle).with_mode(NodeImageMode::Stretch),
+    ));
 
     *enable_minimap = true;
 }
