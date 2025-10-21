@@ -49,6 +49,7 @@ fn main() {
             }),
             ..default()
         }))
+        .add_plugins(MeshPickingPlugin)
         .init_state::<AppState>()
         .add_loading_state(
             LoadingState::new(AppState::AssetLoading)
@@ -550,12 +551,12 @@ fn setup_minimap(
     }
 
     let minimap_center = minimap_grid.center();
-    let width = minimap_center[0] * 2.0;
-    let height = minimap_center[1] * 2.0;
+    let minimap_width = minimap_center[0] * 2.0;
+    let minimap_height = minimap_center[1] * 2.0;
 
     let size = Extent3d {
-        width: width as u32,
-        height: height as u32,
+        width: minimap_width as u32,
+        height: minimap_height as u32,
         ..default()
     };
 
@@ -581,7 +582,7 @@ fn setup_minimap(
         Projection::Orthographic(OrthographicProjection {
             area: Rect {
                 min: Vec2::new(0., 0.),
-                max: Vec2::new(width, height),
+                max: Vec2::new(minimap_width, minimap_height),
             },
             ..OrthographicProjection::default_2d()
         }),
@@ -589,19 +590,47 @@ fn setup_minimap(
         RenderLayers::layer(1),
     ));
 
-    commands.spawn((
-        Node {
-            position_type: PositionType::Absolute,
-            right: Val::Px(20.0),
-            top: Val::Px(20.0),
-            width: Val::Px(300.0),
-            height: Val::Px(200.0),
-            border: UiRect::all(Val::Px(2.0)),
-            ..Default::default()
-        },
-        BorderColor::all(Color::BLACK),
-        ImageNode::new(image_handle).with_mode(NodeImageMode::Stretch),
-    ));
+    commands
+        .spawn((
+            Node {
+                position_type: PositionType::Absolute,
+                right: Val::Px(20.0),
+                top: Val::Px(20.0),
+                width: Val::Px(300.0),
+                height: Val::Px(200.0),
+                border: UiRect::all(Val::Px(2.0)),
+                ..Default::default()
+            },
+            BorderColor::all(Color::BLACK),
+            ImageNode::new(image_handle).with_mode(NodeImageMode::Stretch),
+        ))
+        .observe(minimap_click_handler);
 
     *enable_minimap = true;
+}
+
+fn minimap_click_handler(
+    drag: On<Pointer<Click>>,
+    query: Single<&mut Transform, With<MainCamera>>,
+    map: Option<Res<TileMapResource>>,
+) {
+    if map.is_none() {
+        return;
+    };
+
+    let tile_map = &map.unwrap().0;
+    let grid = tile_map.world_grid.grid;
+    let width = grid.center()[0] * 2.0;
+    let height = grid.center()[1] * 2.0;
+
+    if matches!(drag.button, PointerButton::Primary) {
+        let mut camera_transform = query.into_inner();
+
+        let drag_position = drag.hit.position.unwrap().truncate();
+        // Invert the y-axis to match the world coordinate system
+        let normalized_drag_position = Vec2::new(drag_position[0] + 0.5, -drag_position[1] + 0.5);
+
+        camera_transform.translation.x = normalized_drag_position[0] * width;
+        camera_transform.translation.y = normalized_drag_position[1] * height;
+    }
 }
