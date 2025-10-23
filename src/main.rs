@@ -84,6 +84,7 @@ fn main() {
                 main_camera_movement,
                 cursor_drag_system,
                 zoom_main_camera_system,
+                minimap_fov_update.run_if(in_state(AppState::GameStart)),
                 setup_minimap.run_if(in_state(AppState::GameStart)),
                 wrap_tile_map.run_if(in_state(AppState::GameStart)),
                 check_map_generate_status.run_if(in_state(AppState::MapGenerator)),
@@ -508,6 +509,21 @@ fn wrap_tile_map(
     }
 }
 
+#[derive(Component)]
+pub struct FieldOfViewIndicator;
+
+#[derive(Component)]
+pub struct AuxiliaryFOVIndicator;
+
+const MINIMAP_WIDTH: f32 = 300.;
+const MINIMAP_HEIGHT: f32 = 200.;
+
+#[derive(Resource)]
+pub struct DefaultFovIndicatorSize {
+    pub width: f32,
+    pub height: f32,
+}
+
 fn setup_minimap(
     mut commands: Commands,
     map: Option<Res<TileMapResource>>,
@@ -516,6 +532,7 @@ fn setup_minimap(
     mut images: ResMut<Assets<Image>>,
     mut color_materials: ResMut<Assets<ColorMaterial>>,
     mut enable_minimap: Local<bool>,
+    query_main_camera: Single<&Camera, With<MainCamera>>,
 ) {
     if map.is_none() {
         return;
@@ -590,19 +607,81 @@ fn setup_minimap(
         RenderLayers::layer(1),
     ));
 
+    let world_grid_center = tile_map.world_grid.grid.center();
+
+    let [world_grid_width, world_grid_height] =
+        [world_grid_center[0] * 2.0, world_grid_center[1] * 2.0];
+
+    let logical_viewport_size = query_main_camera
+        .into_inner()
+        .logical_viewport_size()
+        .unwrap();
+
+    let fov_indicator_width = logical_viewport_size.x / world_grid_width * MINIMAP_WIDTH;
+    let fov_indicator_height = logical_viewport_size.y / world_grid_height * MINIMAP_HEIGHT;
+
+    commands.insert_resource(DefaultFovIndicatorSize {
+        width: fov_indicator_width,
+        height: fov_indicator_height,
+    });
+
     commands
         .spawn((
             Node {
                 position_type: PositionType::Absolute,
                 right: Val::Px(20.0),
                 top: Val::Px(20.0),
-                width: Val::Px(300.0),
-                height: Val::Px(200.0),
+                width: Val::Px(MINIMAP_WIDTH),
+                height: Val::Px(MINIMAP_HEIGHT),
                 border: UiRect::all(Val::Px(2.0)),
+                overflow: Overflow {
+                    x: OverflowAxis::Clip,
+                    y: OverflowAxis::Clip,
+                },
                 ..Default::default()
             },
             BorderColor::all(Color::BLACK),
             ImageNode::new(image_handle).with_mode(NodeImageMode::Stretch),
+            children![(
+                Node {
+                    position_type: PositionType::Absolute,
+                    left: Val::Px(MINIMAP_WIDTH / 2.0 - fov_indicator_width / 2.0),
+                    bottom: Val::Px(MINIMAP_HEIGHT / 2.0 - fov_indicator_height / 2.0),
+                    width: Val::Px(fov_indicator_width),
+                    height: Val::Px(fov_indicator_height),
+                    border: UiRect::all(Val::Px(2.0)),
+                    ..Default::default()
+                },
+                BorderColor::all(Color::WHITE),
+                Pickable::IGNORE,
+                FieldOfViewIndicator,
+                children![
+                    (
+                        Node {
+                            position_type: PositionType::Absolute,
+                            right: Val::Px(MINIMAP_WIDTH),
+                            width: Val::Px(fov_indicator_width),
+                            height: Val::Px(fov_indicator_height),
+                            border: UiRect::all(Val::Px(2.0)),
+                            ..Default::default()
+                        },
+                        BorderColor::all(Color::WHITE),
+                        AuxiliaryFOVIndicator,
+                    ),
+                    (
+                        Node {
+                            position_type: PositionType::Absolute,
+                            right: Val::Px(-MINIMAP_WIDTH),
+                            width: Val::Px(fov_indicator_width),
+                            height: Val::Px(fov_indicator_height),
+                            border: UiRect::all(Val::Px(2.0)),
+                            ..Default::default()
+                        },
+                        BorderColor::all(Color::WHITE),
+                        AuxiliaryFOVIndicator,
+                    )
+                ]
+            )],
         ))
         .observe(minimap_click_handler);
 
@@ -611,20 +690,33 @@ fn setup_minimap(
 
 fn minimap_click_handler(
     drag: On<Pointer<Click>>,
-    query: Single<&mut Transform, With<MainCamera>>,
+    query_main_camera: Single<(&mut Transform, &Projection), With<MainCamera>>,
+    query_minimap_indicator: Single<&mut Node, With<FieldOfViewIndicator>>,
+    mut query_auxiliary_fov_indicators: Query<
+        &mut Node,
+        (With<AuxiliaryFOVIndicator>, Without<FieldOfViewIndicator>),
+    >,
     map: Option<Res<TileMapResource>>,
+    fov_size: Res<DefaultFovIndicatorSize>,
 ) {
     if map.is_none() {
         return;
     };
+
+    let fov_width = fov_size.width;
+    let fov_height = fov_size.height;
 
     let tile_map = &map.unwrap().0;
     let grid = tile_map.world_grid.grid;
     let width = grid.center()[0] * 2.0;
     let height = grid.center()[1] * 2.0;
 
-    if matches!(drag.button, PointerButton::Primary) {
-        let mut camera_transform = query.into_inner();
+    let (mut camera_transform, projection) = query_main_camera.into_inner();
+
+    if matches!(drag.button, PointerButton::Primary)
+        && let Projection::Orthographic(orthographic) = projection
+    {
+        let scale = orthographic.scale;
 
         let drag_position = drag.hit.position.unwrap().truncate();
         // Invert the y-axis to match the world coordinate system
@@ -632,5 +724,73 @@ fn minimap_click_handler(
 
         camera_transform.translation.x = normalized_drag_position[0] * width;
         camera_transform.translation.y = normalized_drag_position[1] * height;
+
+        let mut minimap_indicator_node = query_minimap_indicator.into_inner();
+        minimap_indicator_node.left =
+            Val::Px(normalized_drag_position[0] * MINIMAP_WIDTH - fov_width / 2.0 * scale);
+        minimap_indicator_node.bottom =
+            Val::Px(normalized_drag_position[1] * MINIMAP_HEIGHT - fov_height / 2.0 * scale);
+        minimap_indicator_node.width = Val::Px(fov_width * scale);
+        minimap_indicator_node.height = Val::Px(fov_height * scale);
+
+        query_auxiliary_fov_indicators
+            .iter_mut()
+            .for_each(|mut node| {
+                node.width = Val::Px(fov_width * scale);
+                node.height = Val::Px(fov_height * scale);
+            });
     }
+}
+
+fn minimap_fov_update(
+    query: Single<(&Transform, &Projection), (Changed<Camera>, With<MainCamera>)>,
+    map: Option<Res<TileMapResource>>,
+    query_minimap_indicator: Single<&mut Node, With<FieldOfViewIndicator>>,
+    mut query_auxiliary_fov_indicators: Query<
+        &mut Node,
+        (With<AuxiliaryFOVIndicator>, Without<FieldOfViewIndicator>),
+    >,
+    fov_size: Res<DefaultFovIndicatorSize>,
+) {
+    if map.is_none() {
+        return;
+    }
+
+    let tile_map = &map.unwrap().0;
+    let grid = tile_map.world_grid.grid;
+    let width = grid.center()[0] * 2.0;
+    let height = grid.center()[1] * 2.0;
+
+    let (camera_transform, projection) = query.into_inner();
+
+    let scale = if let Projection::Orthographic(orthographic) = projection {
+        orthographic.scale
+    } else {
+        1.0
+    };
+
+    let fov_width = fov_size.width;
+    let fov_height = fov_size.height;
+
+    let camera_position = camera_transform.translation.truncate().to_array();
+    let camera_offset_coordinate = grid.pixel_to_offset(camera_position);
+    let tile = Tile::from_offset(camera_offset_coordinate, grid);
+    let offset_coordinate = tile.to_offset(grid);
+    let pixel_position = grid.offset_to_pixel(offset_coordinate);
+    let normalized_drag_position = Vec2::new(pixel_position[0] / width, pixel_position[1] / height);
+
+    let mut minimap_indicator_node = query_minimap_indicator.into_inner();
+    minimap_indicator_node.left =
+        Val::Px(normalized_drag_position[0] * MINIMAP_WIDTH - fov_width / 2.0 * scale);
+    minimap_indicator_node.bottom =
+        Val::Px(normalized_drag_position[1] * MINIMAP_HEIGHT - fov_height / 2.0 * scale);
+    minimap_indicator_node.width = Val::Px(fov_width * scale);
+    minimap_indicator_node.height = Val::Px(fov_height * scale);
+
+    query_auxiliary_fov_indicators
+        .iter_mut()
+        .for_each(|mut node| {
+            node.width = Val::Px(fov_width * scale);
+            node.height = Val::Px(fov_height * scale);
+        });
 }
