@@ -625,7 +625,7 @@ fn setup_minimap(
         height: fov_indicator_height,
     });
 
-    commands
+    let minimap = commands
         .spawn((
             Node {
                 position_type: PositionType::Absolute,
@@ -642,7 +642,15 @@ fn setup_minimap(
             },
             BorderColor::all(Color::BLACK),
             ImageNode::new(image_handle).with_mode(NodeImageMode::Stretch),
-            children![(
+        ))
+        .observe(minimap_click_handler)
+        .id();
+
+    let mut field_of_view_indicator = Entity::PLACEHOLDER;
+
+    commands.entity(minimap).with_children(|parent| {
+        field_of_view_indicator = parent
+            .spawn((
                 Node {
                     position_type: PositionType::Absolute,
                     left: Val::Px(MINIMAP_WIDTH / 2.0 - fov_indicator_width / 2.0),
@@ -655,35 +663,67 @@ fn setup_minimap(
                 BorderColor::all(Color::WHITE),
                 Pickable::IGNORE,
                 FieldOfViewIndicator,
-                children![
-                    (
-                        Node {
-                            position_type: PositionType::Absolute,
-                            right: Val::Px(MINIMAP_WIDTH),
-                            width: Val::Px(fov_indicator_width),
-                            height: Val::Px(fov_indicator_height),
-                            border: UiRect::all(Val::Px(2.0)),
-                            ..Default::default()
-                        },
-                        BorderColor::all(Color::WHITE),
-                        AuxiliaryFOVIndicator,
-                    ),
-                    (
-                        Node {
-                            position_type: PositionType::Absolute,
-                            right: Val::Px(-MINIMAP_WIDTH),
-                            width: Val::Px(fov_indicator_width),
-                            height: Val::Px(fov_indicator_height),
-                            border: UiRect::all(Val::Px(2.0)),
-                            ..Default::default()
-                        },
-                        BorderColor::all(Color::WHITE),
-                        AuxiliaryFOVIndicator,
-                    )
-                ]
-            )],
-        ))
-        .observe(minimap_click_handler);
+            ))
+            .id();
+    });
+
+    commands
+        .entity(field_of_view_indicator)
+        .with_children(|parent| {
+            if grid.wrap_x() {
+                parent.spawn((
+                    Node {
+                        position_type: PositionType::Absolute,
+                        right: Val::Px(MINIMAP_WIDTH),
+                        width: Val::Px(fov_indicator_width),
+                        height: Val::Px(fov_indicator_height),
+                        border: UiRect::all(Val::Px(2.0)),
+                        ..Default::default()
+                    },
+                    BorderColor::all(Color::WHITE),
+                    AuxiliaryFOVIndicator,
+                ));
+                parent.spawn((
+                    Node {
+                        position_type: PositionType::Absolute,
+                        right: Val::Px(-MINIMAP_WIDTH),
+                        width: Val::Px(fov_indicator_width),
+                        height: Val::Px(fov_indicator_height),
+                        border: UiRect::all(Val::Px(2.0)),
+                        ..Default::default()
+                    },
+                    BorderColor::all(Color::WHITE),
+                    AuxiliaryFOVIndicator,
+                ));
+            }
+
+            if grid.wrap_y() {
+                parent.spawn((
+                    Node {
+                        position_type: PositionType::Absolute,
+                        bottom: Val::Px(MINIMAP_HEIGHT),
+                        width: Val::Px(fov_indicator_width),
+                        height: Val::Px(fov_indicator_height),
+                        border: UiRect::all(Val::Px(2.0)),
+                        ..Default::default()
+                    },
+                    BorderColor::all(Color::WHITE),
+                    AuxiliaryFOVIndicator,
+                ));
+                parent.spawn((
+                    Node {
+                        position_type: PositionType::Absolute,
+                        bottom: Val::Px(-MINIMAP_HEIGHT),
+                        width: Val::Px(fov_indicator_width),
+                        height: Val::Px(fov_indicator_height),
+                        border: UiRect::all(Val::Px(2.0)),
+                        ..Default::default()
+                    },
+                    BorderColor::all(Color::WHITE),
+                    AuxiliaryFOVIndicator,
+                ));
+            }
+        });
 
     *enable_minimap = true;
 }
