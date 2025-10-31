@@ -29,13 +29,22 @@ use bevy::{
 use crate::{
     custom_mesh::{hex_mesh, line_mesh},
     generating_map::{check_map_generate_status, generate_tile_map},
-    minimap::{minimap_fov_update, setup_minimap},
+    minimap::{DefaultFovIndicatorSize, minimap_fov_update, setup_minimap},
 };
 
 mod assets;
 mod custom_mesh;
 mod generating_map;
 mod minimap;
+
+#[derive(Resource)]
+pub struct RulesetResource(Arc<Ruleset>);
+
+#[derive(Resource)]
+struct MapSetting(Arc<MapParameters>);
+
+#[derive(Resource)]
+struct TileMapResource(TileMap);
 
 fn main() {
     // Create ruleset resource
@@ -62,6 +71,9 @@ fn main() {
     };
     let map_setting = MapSetting(Arc::new(map_parameters));
 
+    // Create default fov indicator size resource
+    let default_fov_indicator_size = DefaultFovIndicatorSize::default();
+
     // App setup
     App::new()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
@@ -76,10 +88,11 @@ fn main() {
         .init_resource::<InputFocus>()
         .insert_resource(ruleset_resource)
         .insert_resource(map_setting)
+        .insert_resource(default_fov_indicator_size)
         .init_state::<AppState>()
         .add_loading_state(
             LoadingState::new(AppState::AssetLoading)
-                .continue_to_state(AppState::GeneratingMap)
+                .continue_to_state(AppState::MapGenerating)
                 .load_collection::<MaterialResource>(),
         )
         .add_systems(OnEnter(AppState::AssetLoading), main_camera_setup)
@@ -92,10 +105,10 @@ fn main() {
                 minimap_fov_update.run_if(in_state(AppState::GameStart)),
                 setup_minimap.run_if(in_state(AppState::GameStart)),
                 wrap_tile_map.run_if(in_state(AppState::GameStart)),
-                check_map_generate_status.run_if(in_state(AppState::GeneratingMap)),
+                check_map_generate_status.run_if(in_state(AppState::MapGenerating)),
             ),
         )
-        .add_systems(OnEnter(AppState::GeneratingMap), generate_tile_map)
+        .add_systems(OnEnter(AppState::MapGenerating), generate_tile_map)
         .add_systems(OnEnter(AppState::GameStart), setup_tech_button)
         .run();
 }
@@ -115,9 +128,6 @@ pub fn close_on_esc(
         }
     }
 }
-
-#[derive(Resource)]
-pub struct RulesetResource(Arc<Ruleset>);
 
 #[derive(Component)]
 struct MainCamera;
@@ -238,15 +248,9 @@ fn zoom_main_camera_system(
     }
 }
 
-#[derive(Resource)]
-struct TileMapResource(TileMap);
-
 #[allow(dead_code)]
 #[derive(Component)]
 struct MapTile(Tile);
-
-#[derive(Resource)]
-struct MapSetting(Arc<MapParameters>);
 
 fn wrap_tile_map(
     mut commands: Commands,

@@ -44,7 +44,7 @@ pub struct AuxiliaryFOVIndicator;
 const MINIMAP_WIDTH: f32 = 300.;
 const MINIMAP_HEIGHT: f32 = 200.;
 
-#[derive(Resource)]
+#[derive(Resource, Default)]
 pub struct DefaultFovIndicatorSize {
     pub width: f32,
     pub height: f32,
@@ -53,6 +53,7 @@ pub struct DefaultFovIndicatorSize {
 pub fn setup_minimap(
     mut commands: Commands,
     map: Option<Res<TileMapResource>>,
+    mut default_fov_indicator_size: ResMut<DefaultFovIndicatorSize>,
     materials: Res<MaterialResource>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut images: ResMut<Assets<Image>>,
@@ -146,10 +147,10 @@ pub fn setup_minimap(
     let fov_indicator_width = logical_viewport_size.x / world_grid_width * MINIMAP_WIDTH;
     let fov_indicator_height = logical_viewport_size.y / world_grid_height * MINIMAP_HEIGHT;
 
-    commands.insert_resource(DefaultFovIndicatorSize {
+    *default_fov_indicator_size = DefaultFovIndicatorSize {
         width: fov_indicator_width,
         height: fov_indicator_height,
-    });
+    };
 
     let minimap = commands
         .spawn((
@@ -263,14 +264,14 @@ fn minimap_click_handler(
         (With<AuxiliaryFOVIndicator>, Without<FieldOfViewIndicator>),
     >,
     map: Option<Res<TileMapResource>>,
-    fov_size: Res<DefaultFovIndicatorSize>,
+    default_fov_indicator_size: Res<DefaultFovIndicatorSize>,
 ) {
     if map.is_none() {
         return;
     };
 
-    let fov_width = fov_size.width;
-    let fov_height = fov_size.height;
+    let fov_width = default_fov_indicator_size.width;
+    let fov_height = default_fov_indicator_size.height;
 
     let tile_map = &map.unwrap().0;
     let grid = tile_map.world_grid.grid;
@@ -316,7 +317,7 @@ pub fn minimap_fov_update(
         &mut Node,
         (With<AuxiliaryFOVIndicator>, Without<FieldOfViewIndicator>),
     >,
-    fov_size: Res<DefaultFovIndicatorSize>,
+    default_fov_indicator_size: Res<DefaultFovIndicatorSize>,
 ) {
     if map.is_none() {
         return;
@@ -335,8 +336,8 @@ pub fn minimap_fov_update(
         1.0
     };
 
-    let fov_width = fov_size.width;
-    let fov_height = fov_size.height;
+    let fov_width = default_fov_indicator_size.width;
+    let fov_height = default_fov_indicator_size.height;
 
     let camera_position = camera_transform.translation.truncate().to_array();
     let camera_offset_coordinate = grid.pixel_to_offset(camera_position);
