@@ -22,8 +22,13 @@ use civ_map_generator::{
 use assets::{AppState, MaterialResource};
 
 use bevy::{
-    camera::visibility::RenderLayers, color::palettes::css::RED, input::mouse::MouseWheel,
-    input_focus::InputFocus, platform::collections::HashMap, prelude::*, window::WindowResolution,
+    camera::visibility::RenderLayers,
+    color::palettes::css::{BLACK, RED, WHITE},
+    input::mouse::MouseWheel,
+    input_focus::InputFocus,
+    platform::collections::HashMap,
+    prelude::*,
+    window::WindowResolution,
 };
 
 use crate::{
@@ -598,7 +603,7 @@ fn open_tech_tree(
                 builder
                     .spawn(Node {
                         display: Display::Grid,
-                        grid_template_rows: RepeatedGridTrack::px(row_count as i32, 65.),
+                        grid_template_rows: RepeatedGridTrack::fr(row_count as u16, 1.),
                         grid_template_columns: RepeatedGridTrack::px(column_count as i32, 400.),
                         ..default()
                     })
@@ -730,38 +735,50 @@ fn technology_button(
     )
 }
 
+/// This function creates a list of tech unlock items for a given technology.
+///
+/// TODO: In original game, every civ has some unique buildings, units, improvements, etc.
+/// And they will replace the default ones when unlocked. This is not implemented yet.
 fn tech_unlock_item_list(
     technology_name: String,
     ruleset: &Ruleset,
     materials: &MaterialResource,
 ) -> impl Bundle {
-    let buildings = &ruleset.buildings;
-    let unlock_buildings: Vec<_> = buildings
-        .values()
-        .filter(|building| building.required_tech == technology_name)
-        .map(|building| building.name.clone())
-        .collect();
-    let tile_improvements = &ruleset.tile_improvements;
-    let unlock_tile_improvements = tile_improvements
-        .values()
-        .filter(|tile_improvement| tile_improvement.required_tech == technology_name);
     let units = &ruleset.units;
     let unlock_units = units
         .values()
-        .filter(|unit| unit.required_tech == technology_name);
+        .filter(|unit| unit.required_tech == technology_name && unit.unique_to.is_empty());
 
-    let unlock_uniques = ruleset
-        .technologies
+    let buildings = &ruleset.buildings;
+    let unlock_buildings: Vec<_> = buildings
         .values()
-        .map(|technology| &technology.uniques);
+        .filter(|building| {
+            building.required_tech == technology_name && building.unique_to.is_empty()
+        })
+        .map(|building| building.name.clone())
+        .collect();
+
+    let tile_improvements = &ruleset.tile_improvements;
+    let unlock_tile_improvements = tile_improvements.values().filter(|tile_improvement| {
+        tile_improvement.required_tech == technology_name && tile_improvement.unique_to.is_empty()
+    });
+
+    let unlock_uniques = ruleset.technologies[&technology_name].uniques.clone();
+
+    let unit_materials: Vec<_> = unlock_units
+        .map(|unit| materials.texture_handle(&unit.name))
+        .collect();
 
     let building_materials: Vec<_> = unlock_buildings
         .iter()
-        .map(|building_name| {
-            let materials = materials.texture_handle(&building_name);
-            materials
-        })
+        .map(|building_name| materials.texture_handle(&building_name))
         .collect();
+
+    let tile_improvement_materials: Vec<_> = unlock_tile_improvements
+        .map(|tile_improvement| materials.texture_handle(&tile_improvement.name))
+        .collect();
+
+    let unique_material = materials.texture_handle("Fallback");
 
     (
         Node {
@@ -771,23 +788,38 @@ fn tech_unlock_item_list(
             grid_template_columns: RepeatedGridTrack::fr(5, 1.),
             ..default()
         },
-        Children::spawn(SpawnIter(building_materials.into_iter().enumerate().map(
-            |(i, building_name)| {
+        Children::spawn((
+            SpawnIter(
+                unit_materials
+                    .into_iter()
+                    .chain(building_materials.into_iter())
+                    .chain(tile_improvement_materials.into_iter())
+                    .map(|building_name| {
+                        (
+                            Node {
+                                align_items: AlignItems::Center,
+                                justify_content: JustifyContent::Center,
+                                ..default()
+                            },
+                            children![unit_or_building_or_tile_improvement_item(building_name)],
+                        )
+                    }),
+            ),
+            SpawnIter(unlock_uniques.into_iter().map(move |_| {
                 (
                     Node {
-                        grid_column: GridPlacement::start(i as i16 + 1),
                         align_items: AlignItems::Center,
                         justify_content: JustifyContent::Center,
                         ..default()
                     },
-                    children![building_item(building_name)],
+                    children![unique_item(unique_material.clone())],
                 )
-            },
-        ))),
+            })),
+        )),
     )
 }
 
-fn building_item(building_texture: Handle<Image>) -> impl Bundle {
+fn unit_or_building_or_tile_improvement_item(building_texture: Handle<Image>) -> impl Bundle {
     (
         Node {
             width: px(25),
@@ -797,8 +829,29 @@ fn building_item(building_texture: Handle<Image>) -> impl Bundle {
             justify_content: JustifyContent::Center,
             ..default()
         },
-        ImageNode::new(building_texture).with_color(RED.into()),
-        BackgroundColor(RED.into()),
+        ImageNode::new(building_texture).with_color(BLACK.into()),
+        BackgroundColor(WHITE.into()),
+        BorderRadius::all(px(f32::MAX)),
+        Outline {
+            width: px(1),
+            offset: px(3),
+            color: Color::WHITE,
+        },
+    )
+}
+
+fn unique_item(texture: Handle<Image>) -> impl Bundle {
+    (
+        Node {
+            width: px(25),
+            height: px(25),
+            border: UiRect::all(Val::Px(10.0)),
+            align_items: AlignItems::Center,
+            justify_content: JustifyContent::Center,
+            ..default()
+        },
+        ImageNode::new(texture).with_color(BLACK.into()),
+        BackgroundColor(WHITE.into()),
         BorderRadius::all(px(f32::MAX)),
         Outline {
             width: px(1),
