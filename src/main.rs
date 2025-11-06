@@ -1,4 +1,8 @@
-use std::{collections::HashSet, f32::consts::FRAC_PI_2, sync::Arc};
+use std::{
+    collections::HashSet,
+    f32::consts::{FRAC_PI_2, SQRT_2},
+    sync::Arc,
+};
 
 use bevy_asset_loader::loading_state::{
     LoadingState, LoadingStateAppExt, config::ConfigureLoadingState,
@@ -79,7 +83,7 @@ fn main() {
     let grid = HexGrid {
         size: HexGrid::default_size(world_size_type),
         layout: HexLayout {
-            orientation: HexOrientation::Pointy,
+            orientation: HexOrientation::Flat,
             size: [50., 50.],
             origin: [0., 0.],
         },
@@ -517,8 +521,29 @@ fn wrap_tile_map(
 
         // Place settler and warriors at the starting tile of the civilization
         let ruleset = &ruleset.0;
-        let radius = tile_pixel_size.min_element() / 5.0;
-        let circle = meshes.add(Circle::new(radius));
+        let radius = tile_pixel_size.min_element() / 6.0;
+        let inner_circle = meshes.add(Circle::new(radius - 1.6));
+        let outer_circle = meshes.add(Circle::new(radius));
+
+        let unit_icon_size = Vec2::splat(radius * SQRT_2);
+
+        let half_base_side = radius;
+
+        let inner_triangle = meshes.add(Triangle2d {
+            vertices: [
+                Vec2::new(-(half_base_side - 1.6), half_base_side - 1.6),
+                Vec2::new(half_base_side - 1.6, half_base_side - 1.6),
+                Vec2::new(0., -(half_base_side - 1.6)),
+            ],
+        });
+
+        let outer_triangle = meshes.add(Triangle2d {
+            vertices: [
+                Vec2::new(-half_base_side, half_base_side),
+                Vec2::new(half_base_side, half_base_side),
+                Vec2::new(0., -half_base_side),
+            ],
+        });
 
         tile_map.starting_tile_and_civilization.iter().for_each(
             |(&starting_tile, civilization)| {
@@ -527,52 +552,92 @@ fn wrap_tile_map(
                 if starting_tile == tile {
                     commands.entity(parent).with_children(|parent| {
                         // Place settler
-                        parent.spawn((
-                            Sprite {
-                                custom_size: Some(tile_pixel_size / 5.),
-                                image: materials.texture_handle("Settler"),
-                                color: Color::srgb_u8(
-                                    inner_color[0],
-                                    inner_color[1],
-                                    inner_color[2],
-                                ),
-                                ..Default::default()
-                            },
-                            Transform {
-                                translation: Vec3::new(0., -tile_pixel_size.y / 4., 5.),
-                                ..Default::default()
-                            },
-                            children![(
-                                Mesh2d(circle.clone()),
-                                MeshMaterial2d(color_materials.add(ColorMaterial::from_color(
-                                    Color::srgb_u8(outer_color[0], outer_color[1], outer_color[2]),
-                                ))),
-                            )],
-                        ));
+                        parent
+                            .spawn((
+                                Sprite {
+                                    custom_size: Some(unit_icon_size),
+                                    image: materials.texture_handle("Settler"),
+                                    color: Color::srgb_u8(
+                                        inner_color[0],
+                                        inner_color[1],
+                                        inner_color[2],
+                                    ),
+                                    ..Default::default()
+                                },
+                                Transform {
+                                    translation: Vec3::new(0., -tile_pixel_size.y / 4., 6.),
+                                    ..Default::default()
+                                },
+                            ))
+                            .with_children(|parent| {
+                                parent.spawn((
+                                    Mesh2d(inner_triangle.clone()),
+                                    MeshMaterial2d(color_materials.add(ColorMaterial::from_color(
+                                        Color::srgb_u8(
+                                            outer_color[0],
+                                            outer_color[1],
+                                            outer_color[2],
+                                        ),
+                                    ))),
+                                    Transform::from_xyz(0., 0., -1.),
+                                ));
+
+                                parent.spawn((
+                                    Mesh2d(outer_triangle.clone()),
+                                    MeshMaterial2d(color_materials.add(ColorMaterial::from_color(
+                                        Color::srgb_u8(
+                                            inner_color[0],
+                                            inner_color[1],
+                                            inner_color[2],
+                                        ),
+                                    ))),
+                                    Transform::from_xyz(0., 0., -2.),
+                                ));
+                            });
 
                         // Place warrior
-                        parent.spawn((
-                            Sprite {
-                                custom_size: Some(tile_pixel_size / 5.),
-                                image: materials.texture_handle("Warrior"),
-                                color: Color::srgb_u8(
-                                    inner_color[0],
-                                    inner_color[1],
-                                    inner_color[2],
-                                ),
-                                ..Default::default()
-                            },
-                            Transform {
-                                translation: Vec3::new(0., tile_pixel_size.y / 4., 5.),
-                                ..Default::default()
-                            },
-                            children![(
-                                Mesh2d(circle.clone()),
-                                MeshMaterial2d(color_materials.add(ColorMaterial::from_color(
-                                    Color::srgb_u8(outer_color[0], outer_color[1], outer_color[2]),
-                                ))),
-                            )],
-                        ));
+                        parent
+                            .spawn((
+                                Sprite {
+                                    custom_size: Some(unit_icon_size),
+                                    image: materials.texture_handle("Warrior"),
+                                    color: Color::srgb_u8(
+                                        inner_color[0],
+                                        inner_color[1],
+                                        inner_color[2],
+                                    ),
+                                    ..Default::default()
+                                },
+                                Transform {
+                                    translation: Vec3::new(0., tile_pixel_size.y / 4., 6.),
+                                    ..Default::default()
+                                },
+                            ))
+                            .with_children(|parent| {
+                                parent.spawn((
+                                    Mesh2d(inner_circle.clone()),
+                                    MeshMaterial2d(color_materials.add(ColorMaterial::from_color(
+                                        Color::srgb_u8(
+                                            outer_color[0],
+                                            outer_color[1],
+                                            outer_color[2],
+                                        ),
+                                    ))),
+                                    Transform::from_xyz(0., 0., -1.),
+                                ));
+
+                                parent.spawn((
+                                    Mesh2d(outer_circle.clone()),
+                                    MeshMaterial2d(color_materials.add(ColorMaterial::from_color(
+                                        Color::srgb_u8(
+                                            inner_color[0],
+                                            inner_color[1],
+                                            inner_color[2],
+                                        ),
+                                    ))),
+                                    Transform::from_xyz(0., 0., -2.),
+                                ));
+                            });
                     });
                 }
             },
@@ -587,28 +652,48 @@ fn wrap_tile_map(
                 let inner_color = ruleset.nations[city_state.as_str()].inner_color;
                 if starting_tile == tile {
                     commands.entity(parent).with_children(|parent| {
-                        parent.spawn((
-                            Sprite {
-                                custom_size: Some(tile_pixel_size / 5.),
-                                image: materials.texture_handle("Settler"),
-                                color: Color::srgb_u8(
-                                    inner_color[0],
-                                    inner_color[1],
-                                    inner_color[2],
-                                ),
-                                ..Default::default()
-                            },
-                            Transform {
-                                translation: Vec3::new(0., -tile_pixel_size.y / 4., 5.),
-                                ..Default::default()
-                            },
-                            children![(
-                                Mesh2d(circle.clone()),
-                                MeshMaterial2d(color_materials.add(ColorMaterial::from_color(
-                                    Color::srgb_u8(outer_color[0], outer_color[1], outer_color[2]),
-                                ))),
-                            )],
-                        ));
+                        parent
+                            .spawn((
+                                Sprite {
+                                    custom_size: Some(unit_icon_size),
+                                    image: materials.texture_handle("Settler"),
+                                    color: Color::srgb_u8(
+                                        inner_color[0],
+                                        inner_color[1],
+                                        inner_color[2],
+                                    ),
+                                    ..Default::default()
+                                },
+                                Transform {
+                                    translation: Vec3::new(0., -tile_pixel_size.y / 4., 6.),
+                                    ..Default::default()
+                                },
+                            ))
+                            .with_children(|parent| {
+                                parent.spawn((
+                                    Mesh2d(inner_triangle.clone()),
+                                    MeshMaterial2d(color_materials.add(ColorMaterial::from_color(
+                                        Color::srgb_u8(
+                                            outer_color[0],
+                                            outer_color[1],
+                                            outer_color[2],
+                                        ),
+                                    ))),
+                                    Transform::from_xyz(0., 0., -1.),
+                                ));
+
+                                parent.spawn((
+                                    Mesh2d(outer_triangle.clone()),
+                                    MeshMaterial2d(color_materials.add(ColorMaterial::from_color(
+                                        Color::srgb_u8(
+                                            inner_color[0],
+                                            inner_color[1],
+                                            inner_color[2],
+                                        ),
+                                    ))),
+                                    Transform::from_xyz(0., 0., -2.),
+                                ));
+                            });
                     });
                 }
             });
