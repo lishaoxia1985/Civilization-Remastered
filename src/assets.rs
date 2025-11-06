@@ -3,7 +3,7 @@ use bevy_asset_loader::{asset_collection::AssetCollection, mapped::AssetFileStem
 
 #[derive(AssetCollection, Resource)]
 pub struct MaterialResource {
-    #[asset(path = "./", collection(typed, mapped))]
+    #[asset(path = "Images", collection(typed, mapped))]
     textures: HashMap<AssetFileStem, Handle<Image>>,
 }
 
