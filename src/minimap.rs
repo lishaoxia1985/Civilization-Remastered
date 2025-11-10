@@ -340,7 +340,23 @@ pub fn minimap_fov_update(
     let fov_height = default_fov_indicator_size.height;
 
     let camera_position = camera_transform.translation.truncate().to_array();
-    let camera_offset_coordinate = grid.pixel_to_offset(camera_position);
+    let mut camera_offset_coordinate = grid.pixel_to_offset(camera_position);
+
+    // clamp camera position to map bounds if map is not wrapping
+    if !grid.wrap_x() {
+        camera_offset_coordinate.0.x = camera_offset_coordinate
+            .0
+            .x
+            .clamp(0, grid.width() as i32 - 1);
+    }
+
+    if !grid.wrap_y() {
+        camera_offset_coordinate.0.y = camera_offset_coordinate
+            .0
+            .y
+            .clamp(0, grid.height() as i32 - 1);
+    }
+
     let tile = Tile::from_offset(camera_offset_coordinate, grid);
     let offset_coordinate = tile.to_offset(grid);
     let pixel_position = grid.offset_to_pixel(offset_coordinate);
