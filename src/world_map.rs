@@ -19,6 +19,7 @@ use crate::{
     ColorReplaceMaterial, MainCamera, RulesetResource, TileMapResource,
     assets::MaterialResource,
     custom_mesh::{hex_mesh, line_mesh},
+    game_initialization::UnitListResource,
 };
 
 use enum_map::{EnumMap, enum_map};
@@ -31,6 +32,7 @@ pub fn setup_tile_map(
     mut commands: Commands,
     query: Single<&mut Transform, With<MainCamera>>,
     map: Option<Res<TileMapResource>>,
+    unit_list: Option<Res<UnitListResource>>,
     ruleset: Res<RulesetResource>,
     materials: Res<MaterialResource>,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -40,6 +42,15 @@ pub fn setup_tile_map(
 ) {
     if map.is_none() {
         return;
+    };
+
+    // If unit list is empty, skip
+    let has_units = unit_list.is_some();
+
+    let tile_and_units = if has_units {
+        &unit_list.unwrap().0
+    } else {
+        &HashMap::new()
     };
 
     let tile_map = &map.unwrap().0;
@@ -228,6 +239,10 @@ pub fn setup_tile_map(
             }
         });
 
+        if !has_units {
+            continue;
+        }
+
         // Place settler and warriors at the starting tile of the civilization
         let ruleset = &ruleset.0;
         let radius = tile_pixel_size.min_element() / 3.0;
@@ -235,13 +250,16 @@ pub fn setup_tile_map(
         let inner_rectangle = meshes.add(Rectangle::new(radius / 2., radius / 2.));
         let outer_rectangle = meshes.add(Rectangle::new(radius, radius));
 
-        tile_map.starting_tile_and_civilization.iter().for_each(
-            |(&starting_tile, civilization)| {
-                let outer_color = ruleset.nations[civilization.as_str()].outer_color;
-                let inner_color = ruleset.nations[civilization.as_str()].inner_color;
-                if starting_tile == tile {
+        if let Some(units) = tile_and_units.get(&tile)
+            && let Some(civilization) = tile_map.starting_tile_and_civilization.get(&tile)
+        {
+            let outer_color = ruleset.nations[civilization.as_str()].outer_color;
+            let inner_color = ruleset.nations[civilization.as_str()].inner_color;
+
+            units.iter().for_each(|unit| {
+                if unit == "Settler" {
+                    // Place settler
                     commands.entity(parent).with_children(|parent| {
-                        // Place settler
                         parent
                             .spawn((
                                 Mesh2d(inner_rectangle.clone()),
@@ -270,15 +288,17 @@ pub fn setup_tile_map(
                                     Transform::from_xyz(0., 0., -1.),
                                 ));
                             });
-
-                        // Place warrior
+                    });
+                } else {
+                    // Place warrior
+                    commands.entity(parent).with_children(|parent| {
                         parent
                             .spawn((
                                 Mesh2d(inner_rectangle.clone()),
                                 MeshMaterial2d(custom_materials.add(ColorReplaceMaterial {
                                     inner_color: LinearRgba::from_u8_array_no_alpha(inner_color),
                                     outer_color: LinearRgba::from_u8_array_no_alpha(outer_color),
-                                    texture: materials.texture_handle("Warrior"),
+                                    texture: materials.texture_handle(unit),
                                 })),
                                 Transform {
                                     translation: Vec3::new(0., tile_pixel_size.y / 4., 6.),
@@ -302,48 +322,44 @@ pub fn setup_tile_map(
                             });
                     });
                 }
-            },
-        );
+            })
+        }
 
-        // Place settlers on starting tiles of city states
-        tile_map
-            .starting_tile_and_city_state
-            .iter()
-            .for_each(|(&starting_tile, city_state)| {
-                let outer_color = ruleset.nations[city_state.as_str()].outer_color;
-                let inner_color = ruleset.nations[city_state.as_str()].inner_color;
-                if starting_tile == tile {
-                    commands.entity(parent).with_children(|parent| {
-                        parent
-                            .spawn((
-                                Mesh2d(inner_rectangle.clone()),
+        if let Some(units) = tile_and_units.get(&tile)
+            && let Some(city_state) = tile_map.starting_tile_and_city_state.get(&tile)
+        {
+            let outer_color = ruleset.nations[city_state.as_str()].outer_color;
+            let inner_color = ruleset.nations[city_state.as_str()].inner_color;
+
+            units.iter().for_each(|unit| {
+                // Place settler
+                commands.entity(parent).with_children(|parent| {
+                    parent
+                        .spawn((
+                            Mesh2d(inner_rectangle.clone()),
+                            MeshMaterial2d(custom_materials.add(ColorReplaceMaterial {
+                                inner_color: LinearRgba::from_u8_array_no_alpha(inner_color),
+                                outer_color: LinearRgba::from_u8_array_no_alpha(outer_color),
+                                texture: materials.texture_handle(unit),
+                            })),
+                            Transform {
+                                translation: Vec3::new(0., -tile_pixel_size.y / 4., 6.),
+                                ..Default::default()
+                            },
+                        ))
+                        .with_children(|parent| {
+                            parent.spawn((
+                                Mesh2d(outer_rectangle.clone()),
                                 MeshMaterial2d(custom_materials.add(ColorReplaceMaterial {
                                     inner_color: LinearRgba::from_u8_array_no_alpha(inner_color),
                                     outer_color: LinearRgba::from_u8_array_no_alpha(outer_color),
-                                    texture: materials.texture_handle("Settler"),
+                                    texture: materials.texture_handle("sv_unitcitizen"),
                                 })),
-                                Transform {
-                                    translation: Vec3::new(0., -tile_pixel_size.y / 4., 6.),
-                                    ..Default::default()
-                                },
-                            ))
-                            .with_children(|parent| {
-                                parent.spawn((
-                                    Mesh2d(outer_rectangle.clone()),
-                                    MeshMaterial2d(custom_materials.add(ColorReplaceMaterial {
-                                        inner_color: LinearRgba::from_u8_array_no_alpha(
-                                            inner_color,
-                                        ),
-                                        outer_color: LinearRgba::from_u8_array_no_alpha(
-                                            outer_color,
-                                        ),
-                                        texture: materials.texture_handle("sv_unitcitizen"),
-                                    })),
-                                    Transform::from_xyz(0., 0., -1.),
-                                ));
-                            });
-                    });
-                }
-            });
+                                Transform::from_xyz(0., 0., -1.),
+                            ));
+                        });
+                });
+            })
+        }
     }
 }

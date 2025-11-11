@@ -27,6 +27,8 @@ pub fn generate_tile_map(
     commands.insert_resource(MapGenerator(task));
 }
 
+/// This system checks if the map generation task is done and if so,
+/// it inserts the generated map into the resource and transitions to the next state.
 pub fn check_map_generate_status(
     mut commands: Commands,
     task: Option<ResMut<MapGenerator>>,
@@ -39,6 +41,6 @@ pub fn check_map_generate_status(
     if let Some(tile_map) = block_on(future::poll_once(&mut task.0)) {
         commands.insert_resource(TileMapResource(tile_map));
         commands.remove_resource::<MapGenerator>();
-        next_state.set(AppState::GameStart);
+        next_state.set(AppState::GameInitialization);
     }
 }

@@ -10,9 +10,7 @@ use civ_map_generator::{
         hex_grid::{HexGrid, HexLayout, HexOrientation, Offset},
     },
     map_parameters::{MapParameters, MapType, WorldGrid},
-    nation::Nation,
     ruleset::Ruleset,
-    tile::Tile,
     tile_map::TileMap,
 };
 
@@ -25,6 +23,7 @@ use bevy::{
 
 use crate::{
     custom_material::ColorReplaceMaterial,
+    game_initialization::game_initialization,
     generating_map::{check_map_generate_status, generate_tile_map},
     minimap::{DefaultFovIndicatorSize, minimap_fov_update, setup_minimap},
     technology::setup_tech_button,
@@ -34,6 +33,7 @@ use crate::{
 mod assets;
 mod custom_material;
 mod custom_mesh;
+mod game_initialization;
 mod generating_map;
 mod minimap;
 mod technology;
@@ -48,25 +48,9 @@ struct MapSetting(Arc<MapParameters>);
 #[derive(Resource)]
 struct TileMapResource(TileMap);
 
-struct MapUnit {
-    name: String,
-    owner: Nation,
-    position: Tile,
-    Attack: u32,
-    Defense: u32,
-    Movement: u32,
-    Hp: u32,
-    promotion: Vec<String>,
-}
-struct NationUnit {
-    unit_list: Vec<MapUnit>,
-}
-
-const START_UNITS: [&str; 2] = ["Settler", "Warrior"];
-
 fn main() {
     // Create ruleset resource
-    let ruleset = Ruleset::new();
+    let ruleset = Ruleset::default();
     let ruleset_resource = RulesetResource(Arc::new(ruleset));
 
     // Create map parameters resource
@@ -128,6 +112,7 @@ fn main() {
             ),
         )
         .add_systems(OnEnter(AppState::MapGenerating), generate_tile_map)
+        .add_systems(OnEnter(AppState::GameInitialization), game_initialization)
         .add_systems(OnEnter(AppState::GameStart), setup_tech_button)
         .run();
 }
