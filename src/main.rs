@@ -27,7 +27,7 @@ use crate::{
     generating_map::{check_map_generate_status, generate_tile_map},
     minimap::{DefaultFovIndicatorSize, minimap_fov_update, setup_minimap},
     technology::setup_tech_button,
-    world_map::setup_tile_map,
+    world_map::{setup_tile_map, show_main_camera_area},
 };
 
 mod assets;
@@ -107,13 +107,14 @@ fn main() {
                 zoom_main_camera_system,
                 minimap_fov_update.run_if(in_state(AppState::GameStart)),
                 setup_minimap.run_if(in_state(AppState::GameStart)),
-                setup_tile_map.run_if(in_state(AppState::GameStart)),
+                show_main_camera_area.run_if(in_state(AppState::GameStart)),
                 check_map_generate_status.run_if(in_state(AppState::MapGenerating)),
             ),
         )
         .add_systems(OnEnter(AppState::MapGenerating), generate_tile_map)
         .add_systems(OnEnter(AppState::GameInitialization), game_initialization)
         .add_systems(OnEnter(AppState::GameStart), setup_tech_button)
+        .add_systems(OnEnter(AppState::GameStart), setup_tile_map)
         .run();
 }
 

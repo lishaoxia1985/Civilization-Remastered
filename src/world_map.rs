@@ -1,7 +1,4 @@
-use std::{
-    collections::{HashMap, HashSet},
-    f32::consts::FRAC_PI_2,
-};
+use std::{collections::HashMap, f32::consts::FRAC_PI_2};
 
 use bevy::prelude::*;
 use civ_map_generator::{
@@ -19,38 +16,26 @@ use crate::{
     ColorReplaceMaterial, MainCamera, RulesetResource, TileMapResource,
     assets::MaterialResource,
     custom_mesh::{hex_mesh, line_mesh},
-    game_initialization::UnitListResource,
+    game_initialization::{Owner, Unit},
 };
 
 use enum_map::{EnumMap, enum_map};
 
-#[allow(dead_code)]
 #[derive(Component)]
-struct MapTile(Tile);
+pub struct WorldTile(pub Tile);
 
 pub fn setup_tile_map(
     mut commands: Commands,
-    query: Single<&mut Transform, With<MainCamera>>,
+    query_unit: Query<(&Unit, &Owner, &WorldTile)>,
     map: Option<Res<TileMapResource>>,
-    unit_list: Option<Res<UnitListResource>>,
     ruleset: Res<RulesetResource>,
     materials: Res<MaterialResource>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut color_materials: ResMut<Assets<ColorMaterial>>,
     mut custom_materials: ResMut<Assets<ColorReplaceMaterial>>,
-    mut exist_entity_and_offset_coordinates: Local<Vec<(Entity, OffsetCoordinate)>>,
 ) {
     if map.is_none() {
         return;
-    };
-
-    // If unit list is empty, skip
-    let has_units = unit_list.is_some();
-
-    let tile_and_units = if has_units {
-        &unit_list.unwrap().0
-    } else {
-        &HashMap::new()
     };
 
     let tile_map = &map.unwrap().0;
@@ -95,57 +80,18 @@ pub fn setup_tile_map(
 
     // We only need to rotate the sprite for `Feature::Ice` because it was originally designed exclusively for Pointy-oriented hexagons.
     // Other terrain sprites were created to work seamlessly with both Pointy and Flat hexagon orientations.
-    let sprite_rotation = match grid.layout.orientation {
+    let feature_ice_sprite_rotation = match grid.layout.orientation {
         HexOrientation::Pointy => Quat::default(),
         HexOrientation::Flat => Quat::from_rotation_z(FRAC_PI_2 * 3.),
     };
 
-    // (1 + offset_x * 2) should < grid's width
-    // Because if it's not, the same tile will be drawn twice due to the grid's wrapping behavior.
-    const OFFSET_X: i32 = 18;
-    assert!(1 + OFFSET_X * 2 < grid.width() as i32);
-    // (1 + offset_y * 2) should < grid's height
-    // Because if it's not, the same tile will be drawn twice due to the grid's wrapping behavior.
-    const OFFSET_Y: i32 = 10;
-    assert!(1 + OFFSET_Y * 2 < grid.height() as i32);
-
-    let camera_position = query.into_inner().translation.truncate().to_array();
-    let camera_offset_coordinate = grid.pixel_to_offset(camera_position).to_array();
-    let mut left_x = camera_offset_coordinate[0] - OFFSET_X;
-    let mut right_x = camera_offset_coordinate[0] + OFFSET_X;
-    if !grid.wrap_x() {
-        left_x = left_x.max(0);
-        right_x = right_x.min(grid.width() as i32 - 1);
-    }
-    let mut bottom_y = camera_offset_coordinate[1] - OFFSET_Y;
-    let mut top_y = camera_offset_coordinate[1] + OFFSET_Y;
-    if !grid.wrap_y() {
-        bottom_y = bottom_y.max(0);
-        top_y = top_y.min(grid.height() as i32 - 1);
-    }
-
-    let mut offset_list = (left_x..=right_x)
-        .flat_map(move |x| (bottom_y..=top_y).map(move |y| OffsetCoordinate::new(x, y)))
-        .collect::<HashSet<_>>();
-
-    // Despawn the tiles that are out of the current viewport
-    // And remove the tiles that are still in the current viewport from offset_list,
-    // we only need to spawn the tiles that can't be found in the current viewport later.
-    exist_entity_and_offset_coordinates.retain(|(entity, map_offset)| {
-        if !offset_list.contains(map_offset) {
-            commands.entity(*entity).despawn();
-            false
-        } else {
-            offset_list.remove(map_offset);
-            true
-        }
-    });
-
     let hex_mesh = meshes.add(hex_mesh(&grid));
 
-    for &offset_coordinate in offset_list.iter() {
+    for tile in tile_map.all_tiles() {
+        // let pixel_position = grid.offset_to_pixel(offset_coordinate);
+        // let tile = Tile::from_offset(offset_coordinate, grid);
+        let offset_coordinate = tile.to_offset(grid);
         let pixel_position = grid.offset_to_pixel(offset_coordinate);
-        let tile = Tile::from_offset(offset_coordinate, grid);
         // Spawn the tile with base terrain
         let parent = commands
             .spawn((
@@ -155,11 +101,10 @@ pub fn setup_tile_map(
                     ..Default::default()
                 },
                 MeshMaterial2d(base_terrain_and_material[tile.base_terrain(tile_map)].clone()),
+                // Visibility::Hidden,
             ))
-            .insert(MapTile(tile))
+            .insert(WorldTile(tile))
             .id();
-
-        exist_entity_and_offset_coordinates.push((parent, offset_coordinate));
 
         commands.entity(parent).with_children(|parent| {
             // Draw river edges
@@ -214,7 +159,7 @@ pub fn setup_tile_map(
                     Transform {
                         translation: Vec3::new(0., 0., 2.),
                         rotation: if feature == Feature::Ice {
-                            sprite_rotation
+                            feature_ice_sprite_rotation
                         } else {
                             Quat::default()
                         },
@@ -239,10 +184,6 @@ pub fn setup_tile_map(
             }
         });
 
-        if !has_units {
-            continue;
-        }
-
         // Place settler and warriors at the starting tile of the civilization
         let ruleset = &ruleset.0;
         let radius = tile_pixel_size.min_element() / 3.0;
@@ -250,31 +191,31 @@ pub fn setup_tile_map(
         let inner_rectangle = meshes.add(Rectangle::new(radius / 2., radius / 2.));
         let outer_rectangle = meshes.add(Rectangle::new(radius, radius));
 
-        if let Some(units) = tile_and_units.get(&tile)
-            && let Some(civilization) = tile_map.starting_tile_and_civilization.get(&tile)
-        {
-            let outer_color = ruleset.nations[civilization.as_str()].outer_color;
-            let inner_color = ruleset.nations[civilization.as_str()].inner_color;
+        for (unit, owner, world_tile) in query_unit.iter() {
+            let owner = match owner {
+                Owner::Civilization(nation) => nation,
+                Owner::CityState(nation) => nation,
+            };
 
-            units.iter().for_each(|unit| {
-                if unit == "Settler" {
-                    // Place settler
-                    commands.entity(parent).with_children(|parent| {
-                        parent
-                            .spawn((
+            let outer_color = ruleset.nations[owner.as_str()].outer_color;
+            let inner_color = ruleset.nations[owner.as_str()].inner_color;
+
+            if world_tile.0 == tile {
+                match unit {
+                    Unit::Civilian(unit) => {
+                        commands.entity(parent).with_children(|parent| {
+                            parent.spawn((
                                 Mesh2d(inner_rectangle.clone()),
                                 MeshMaterial2d(custom_materials.add(ColorReplaceMaterial {
                                     inner_color: LinearRgba::from_u8_array_no_alpha(inner_color),
                                     outer_color: LinearRgba::from_u8_array_no_alpha(outer_color),
-                                    texture: materials.texture_handle("Settler"),
+                                    texture: materials.texture_handle(unit),
                                 })),
                                 Transform {
                                     translation: Vec3::new(0., -tile_pixel_size.y / 4., 6.),
                                     ..Default::default()
                                 },
-                            ))
-                            .with_children(|parent| {
-                                parent.spawn((
+                                children![(
                                     Mesh2d(outer_rectangle.clone()),
                                     MeshMaterial2d(custom_materials.add(ColorReplaceMaterial {
                                         inner_color: LinearRgba::from_u8_array_no_alpha(
@@ -284,16 +225,15 @@ pub fn setup_tile_map(
                                             outer_color,
                                         ),
                                         texture: materials.texture_handle("sv_unitcitizen"),
-                                    })),
+                                    },)),
                                     Transform::from_xyz(0., 0., -1.),
-                                ));
-                            });
-                    });
-                } else {
-                    // Place warrior
-                    commands.entity(parent).with_children(|parent| {
-                        parent
-                            .spawn((
+                                )],
+                            ));
+                        });
+                    }
+                    Unit::Military(unit) => {
+                        commands.entity(parent).with_children(|parent| {
+                            parent.spawn((
                                 Mesh2d(inner_rectangle.clone()),
                                 MeshMaterial2d(custom_materials.add(ColorReplaceMaterial {
                                     inner_color: LinearRgba::from_u8_array_no_alpha(inner_color),
@@ -304,9 +244,7 @@ pub fn setup_tile_map(
                                     translation: Vec3::new(0., tile_pixel_size.y / 4., 6.),
                                     ..Default::default()
                                 },
-                            ))
-                            .with_children(|parent| {
-                                parent.spawn((
+                                children![(
                                     Mesh2d(outer_rectangle.clone()),
                                     MeshMaterial2d(custom_materials.add(ColorReplaceMaterial {
                                         inner_color: LinearRgba::from_u8_array_no_alpha(
@@ -316,50 +254,79 @@ pub fn setup_tile_map(
                                             outer_color,
                                         ),
                                         texture: materials.texture_handle("sv_unitmilitary"),
-                                    })),
+                                    },)),
                                     Transform::from_xyz(0., 0., -1.),
-                                ));
-                            });
-                    });
-                }
-            })
-        }
-
-        if let Some(units) = tile_and_units.get(&tile)
-            && let Some(city_state) = tile_map.starting_tile_and_city_state.get(&tile)
-        {
-            let outer_color = ruleset.nations[city_state.as_str()].outer_color;
-            let inner_color = ruleset.nations[city_state.as_str()].inner_color;
-
-            units.iter().for_each(|unit| {
-                // Place settler
-                commands.entity(parent).with_children(|parent| {
-                    parent
-                        .spawn((
-                            Mesh2d(inner_rectangle.clone()),
-                            MeshMaterial2d(custom_materials.add(ColorReplaceMaterial {
-                                inner_color: LinearRgba::from_u8_array_no_alpha(inner_color),
-                                outer_color: LinearRgba::from_u8_array_no_alpha(outer_color),
-                                texture: materials.texture_handle(unit),
-                            })),
-                            Transform {
-                                translation: Vec3::new(0., -tile_pixel_size.y / 4., 6.),
-                                ..Default::default()
-                            },
-                        ))
-                        .with_children(|parent| {
-                            parent.spawn((
-                                Mesh2d(outer_rectangle.clone()),
-                                MeshMaterial2d(custom_materials.add(ColorReplaceMaterial {
-                                    inner_color: LinearRgba::from_u8_array_no_alpha(inner_color),
-                                    outer_color: LinearRgba::from_u8_array_no_alpha(outer_color),
-                                    texture: materials.texture_handle("sv_unitcitizen"),
-                                })),
-                                Transform::from_xyz(0., 0., -1.),
+                                )],
                             ));
                         });
-                });
-            })
+                    }
+                }
+            };
+        }
+    }
+}
+
+/// Show the area of the main camera on the world map. The area without the main camera on the world map will be hidden to avoid visual confusion.
+///
+/// This function dynamically crops the world map display area to always match the main camera's viewport.
+/// Non-visible areas are hidden to prevent visual confusion, with this mechanism supporting both wrap and non-wrap map projection modes.
+pub fn show_main_camera_area(
+    query: Single<&mut Transform, With<MainCamera>>,
+    map: Option<Res<TileMapResource>>,
+    mut query_world_tile: Query<
+        (&mut Visibility, &mut Transform, &WorldTile),
+        (With<WorldTile>, Without<MainCamera>),
+    >,
+) {
+    if map.is_none() {
+        return;
+    };
+
+    let tile_map = &map.unwrap().0;
+
+    let grid = tile_map.world_grid.grid;
+
+    // (1 + offset_x * 2) should < grid's width
+    // Because if it's not, the same tile will be drawn twice due to the grid's wrapping behavior.
+    const OFFSET_X: i32 = 18;
+    assert!(1 + OFFSET_X * 2 < grid.width() as i32);
+    // (1 + offset_y * 2) should < grid's height
+    // Because if it's not, the same tile will be drawn twice due to the grid's wrapping behavior.
+    const OFFSET_Y: i32 = 10;
+    assert!(1 + OFFSET_Y * 2 < grid.height() as i32);
+
+    let camera_position = query.into_inner().translation.truncate().to_array();
+    let camera_offset_coordinate = grid.pixel_to_offset(camera_position).to_array();
+    let mut left_x = camera_offset_coordinate[0] - OFFSET_X;
+    let mut right_x = camera_offset_coordinate[0] + OFFSET_X;
+    if !grid.wrap_x() {
+        left_x = left_x.max(0);
+        right_x = right_x.min(grid.width() as i32 - 1);
+    }
+    let mut bottom_y = camera_offset_coordinate[1] - OFFSET_Y;
+    let mut top_y = camera_offset_coordinate[1] + OFFSET_Y;
+    if !grid.wrap_y() {
+        bottom_y = bottom_y.max(0);
+        top_y = top_y.min(grid.height() as i32 - 1);
+    }
+
+    let visible_tile_and_offset_list: HashMap<Tile, OffsetCoordinate> = (left_x..=right_x)
+        .flat_map(|x| (bottom_y..=top_y).map(move |y| OffsetCoordinate::new(x, y)))
+        .map(|offset_coordinate| {
+            (
+                Tile::from_offset(offset_coordinate, grid),
+                offset_coordinate,
+            )
+        })
+        .collect();
+
+    for (mut visibility, mut transform, world_tile) in query_world_tile.iter_mut() {
+        if let Some(&offset_coordinate) = visible_tile_and_offset_list.get(&world_tile.0) {
+            let pixel_position = grid.offset_to_pixel(offset_coordinate);
+            *visibility = Visibility::Visible;
+            transform.translation = Vec3::from((pixel_position[0], pixel_position[1], 0.));
+        } else {
+            *visibility = Visibility::Hidden;
         }
     }
 }

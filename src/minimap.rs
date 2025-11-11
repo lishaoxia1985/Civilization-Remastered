@@ -256,7 +256,7 @@ pub fn setup_minimap(
 }
 
 fn minimap_click_handler(
-    drag: On<Pointer<Click>>,
+    click: On<Pointer<Click>>,
     query_main_camera: Single<(&mut Transform, &Projection), With<MainCamera>>,
     query_minimap_indicator: Single<&mut Node, With<FieldOfViewIndicator>>,
     mut query_auxiliary_fov_indicators: Query<
@@ -280,12 +280,12 @@ fn minimap_click_handler(
 
     let (mut camera_transform, projection) = query_main_camera.into_inner();
 
-    if matches!(drag.button, PointerButton::Primary)
+    if matches!(click.button, PointerButton::Primary)
         && let Projection::Orthographic(orthographic) = projection
     {
         let scale = orthographic.scale;
 
-        let drag_position = drag.hit.position.unwrap().truncate();
+        let drag_position = click.hit.position.unwrap().truncate();
         // Invert the y-axis to match the world coordinate system
         let normalized_drag_position = Vec2::new(drag_position[0] + 0.5, -drag_position[1] + 0.5);
 
@@ -310,7 +310,7 @@ fn minimap_click_handler(
 }
 
 pub fn minimap_fov_update(
-    query: Single<(&Transform, &Projection), (Changed<Camera>, With<MainCamera>)>,
+    query_main_camera: Single<(&Transform, &Projection), (Changed<Camera>, With<MainCamera>)>,
     map: Option<Res<TileMapResource>>,
     query_minimap_indicator: Single<&mut Node, With<FieldOfViewIndicator>>,
     mut query_auxiliary_fov_indicators: Query<
@@ -328,7 +328,7 @@ pub fn minimap_fov_update(
     let width = grid.center()[0] * 2.0;
     let height = grid.center()[1] * 2.0;
 
-    let (camera_transform, projection) = query.into_inner();
+    let (camera_transform, projection) = query_main_camera.into_inner();
 
     let scale = if let Projection::Orthographic(orthographic) = projection {
         orthographic.scale

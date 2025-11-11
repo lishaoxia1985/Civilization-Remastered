@@ -1,12 +1,19 @@
-use std::collections::HashMap;
-
 use bevy::prelude::*;
 use civ_map_generator::{nation::Nation, tile::Tile};
 
-use crate::{RulesetResource, TileMapResource, assets::AppState};
+use crate::{RulesetResource, TileMapResource, assets::AppState, world_map::WorldTile};
 
-#[derive(Resource)]
-pub struct UnitListResource(pub HashMap<Tile, Vec<String>>);
+#[derive(Component)]
+pub enum Owner {
+    Civilization(Nation),
+    CityState(Nation),
+}
+
+#[derive(Component)]
+pub enum Unit {
+    Civilian(String),
+    Military(String),
+}
 
 struct MapUnit {
     name: String,
@@ -38,8 +45,8 @@ pub fn game_initialization(
 
     let civ = &tile_map.starting_tile_and_civilization;
     let city_state = &tile_map.starting_tile_and_city_state;
-    let mut tile_and_units = HashMap::new();
-    for (&tile, nation) in civ {
+
+    for (&tile, &nation) in civ {
         let replace_warrior_unit = ruleset
             .units
             .values()
@@ -50,24 +57,28 @@ pub fn game_initialization(
             "Warrior".to_string()
         };
 
-        tile_and_units
-            .entry(tile)
-            .or_insert(Vec::new())
-            .push(military_unit);
-        tile_and_units
-            .entry(tile)
-            .or_insert(Vec::new())
-            .push("Settler".to_string());
+        // Spawn the military unit
+        commands.spawn((
+            Unit::Military(military_unit),
+            Owner::Civilization(nation),
+            WorldTile(tile),
+        ));
+
+        // Spawn the civilian unit
+        commands.spawn((
+            Unit::Civilian("Settler".to_string()),
+            Owner::Civilization(nation),
+            WorldTile(tile),
+        ));
     }
 
-    for (&tile, _) in city_state {
-        tile_and_units
-            .entry(tile)
-            .or_insert(Vec::new())
-            .push("Settler".to_string());
+    for (&tile, &nation) in city_state {
+        commands.spawn((
+            Unit::Civilian("Settler".to_string()),
+            Owner::CityState(nation),
+            WorldTile(tile),
+        ));
     }
-
-    commands.insert_resource(UnitListResource(tile_and_units));
 
     next_state.set(AppState::GameStart);
 }
