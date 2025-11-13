@@ -23,7 +23,6 @@ use bevy::{
 
 use crate::{
     custom_material::ColorReplaceMaterial,
-    game_initialization::game_initialization,
     generating_map::{check_map_generate_status, generate_tile_map},
     minimap::{DefaultFovIndicatorSize, minimap_fov_update, setup_minimap},
     technology::setup_tech_button,
@@ -33,10 +32,10 @@ use crate::{
 mod assets;
 mod custom_material;
 mod custom_mesh;
-mod game_initialization;
 mod generating_map;
 mod minimap;
 mod technology;
+mod unit_component;
 mod world_map;
 
 #[derive(Resource)]
@@ -112,7 +111,6 @@ fn main() {
             ),
         )
         .add_systems(OnEnter(AppState::MapGenerating), generate_tile_map)
-        .add_systems(OnEnter(AppState::GameInitialization), game_initialization)
         .add_systems(OnEnter(AppState::GameStart), setup_tech_button)
         .add_systems(OnEnter(AppState::GameStart), setup_tile_map)
         .run();

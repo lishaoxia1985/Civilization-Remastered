@@ -21,6 +21,5 @@ pub enum AppState {
     #[default]
     AssetLoading,
     MapGenerating,
-    GameInitialization,
     GameStart,
 }

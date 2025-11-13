@@ -7,6 +7,7 @@ use civ_map_generator::{
         hex_grid::{Hex, HexOrientation},
         offset_coordinate::OffsetCoordinate,
     },
+    ruleset::Ruleset,
     tile::Tile,
     tile_component::{BaseTerrain, Feature, TerrainType},
     tile_map::RiverEdge,
@@ -16,7 +17,7 @@ use crate::{
     ColorReplaceMaterial, MainCamera, RulesetResource, TileMapResource,
     assets::MaterialResource,
     custom_mesh::{hex_mesh, line_mesh},
-    game_initialization::{Owner, Unit},
+    unit_component::{Owner, Unit},
 };
 
 use enum_map::{EnumMap, enum_map};
@@ -26,7 +27,6 @@ pub struct WorldTile(pub Tile);
 
 pub fn setup_tile_map(
     mut commands: Commands,
-    query_unit: Query<(&Unit, &Owner, &WorldTile)>,
     map: Option<Res<TileMapResource>>,
     ruleset: Res<RulesetResource>,
     materials: Res<MaterialResource>,
@@ -88,25 +88,18 @@ pub fn setup_tile_map(
     let hex_mesh = meshes.add(hex_mesh(&grid));
 
     for tile in tile_map.all_tiles() {
-        // let pixel_position = grid.offset_to_pixel(offset_coordinate);
-        // let tile = Tile::from_offset(offset_coordinate, grid);
-        let offset_coordinate = tile.to_offset(grid);
-        let pixel_position = grid.offset_to_pixel(offset_coordinate);
         // Spawn the tile with base terrain
-        let parent = commands
+        // this is the base tile entity that will be used to spawn the child entities
+        let tile_entity = commands
             .spawn((
                 Mesh2d(hex_mesh.clone()),
-                Transform {
-                    translation: Vec3::from((pixel_position[0], pixel_position[1], 0.)),
-                    ..Default::default()
-                },
                 MeshMaterial2d(base_terrain_and_material[tile.base_terrain(tile_map)].clone()),
-                // Visibility::Hidden,
+                Visibility::Hidden,
+                WorldTile(tile),
             ))
-            .insert(WorldTile(tile))
             .id();
 
-        commands.entity(parent).with_children(|parent| {
+        commands.entity(tile_entity).with_children(|parent| {
             // Draw river edges
             if let Some(flow_direction_list) = tile_and_river_flow_direction.get(&tile) {
                 flow_direction_list.iter().for_each(|direction| {
@@ -184,84 +177,63 @@ pub fn setup_tile_map(
             }
         });
 
-        // Place settler and warriors at the starting tile of the civilization
         let ruleset = &ruleset.0;
         let radius = tile_pixel_size.min_element() / 3.0;
 
         let inner_rectangle = meshes.add(Rectangle::new(radius / 2., radius / 2.));
         let outer_rectangle = meshes.add(Rectangle::new(radius, radius));
 
-        for (unit, owner, world_tile) in query_unit.iter() {
-            let owner = match owner {
-                Owner::Civilization(nation) => nation,
-                Owner::CityState(nation) => nation,
+        // Place settler and warriors at the starting tile of the civilization
+        if let Some(&civilization) = tile_map.starting_tile_and_civilization.get(&tile) {
+            let replace_warrior_unit = ruleset.units.values().find(|&unit| {
+                unit.unique_to == civilization.as_str() && unit.replaces == "Warrior"
+            });
+            let military_unit = if let Some(unit) = replace_warrior_unit {
+                unit.name.clone()
+            } else {
+                "Warrior".to_string()
             };
 
-            let outer_color = ruleset.nations[owner.as_str()].outer_color;
-            let inner_color = ruleset.nations[owner.as_str()].inner_color;
+            // Spawn the military unit
+            commands.entity(tile_entity).with_children(|parent| {
+                parent.spawn(unit_icon(
+                    Unit::Military(military_unit),
+                    Owner::Civilization(civilization),
+                    ruleset,
+                    inner_rectangle.clone(),
+                    outer_rectangle.clone(),
+                    &mut custom_materials,
+                    &materials,
+                    tile_pixel_size,
+                ));
 
-            if world_tile.0 == tile {
-                match unit {
-                    Unit::Civilian(unit) => {
-                        commands.entity(parent).with_children(|parent| {
-                            parent.spawn((
-                                Mesh2d(inner_rectangle.clone()),
-                                MeshMaterial2d(custom_materials.add(ColorReplaceMaterial {
-                                    inner_color: LinearRgba::from_u8_array_no_alpha(inner_color),
-                                    outer_color: LinearRgba::from_u8_array_no_alpha(outer_color),
-                                    texture: materials.texture_handle(unit),
-                                })),
-                                Transform {
-                                    translation: Vec3::new(0., -tile_pixel_size.y / 4., 6.),
-                                    ..Default::default()
-                                },
-                                children![(
-                                    Mesh2d(outer_rectangle.clone()),
-                                    MeshMaterial2d(custom_materials.add(ColorReplaceMaterial {
-                                        inner_color: LinearRgba::from_u8_array_no_alpha(
-                                            inner_color,
-                                        ),
-                                        outer_color: LinearRgba::from_u8_array_no_alpha(
-                                            outer_color,
-                                        ),
-                                        texture: materials.texture_handle("sv_unitcitizen"),
-                                    },)),
-                                    Transform::from_xyz(0., 0., -1.),
-                                )],
-                            ));
-                        });
-                    }
-                    Unit::Military(unit) => {
-                        commands.entity(parent).with_children(|parent| {
-                            parent.spawn((
-                                Mesh2d(inner_rectangle.clone()),
-                                MeshMaterial2d(custom_materials.add(ColorReplaceMaterial {
-                                    inner_color: LinearRgba::from_u8_array_no_alpha(inner_color),
-                                    outer_color: LinearRgba::from_u8_array_no_alpha(outer_color),
-                                    texture: materials.texture_handle(unit),
-                                })),
-                                Transform {
-                                    translation: Vec3::new(0., tile_pixel_size.y / 4., 6.),
-                                    ..Default::default()
-                                },
-                                children![(
-                                    Mesh2d(outer_rectangle.clone()),
-                                    MeshMaterial2d(custom_materials.add(ColorReplaceMaterial {
-                                        inner_color: LinearRgba::from_u8_array_no_alpha(
-                                            inner_color,
-                                        ),
-                                        outer_color: LinearRgba::from_u8_array_no_alpha(
-                                            outer_color,
-                                        ),
-                                        texture: materials.texture_handle("sv_unitmilitary"),
-                                    },)),
-                                    Transform::from_xyz(0., 0., -1.),
-                                )],
-                            ));
-                        });
-                    }
-                }
-            };
+                parent.spawn(unit_icon(
+                    Unit::Civilian("Settler".to_owned()),
+                    Owner::Civilization(civilization),
+                    ruleset,
+                    inner_rectangle.clone(),
+                    outer_rectangle.clone(),
+                    &mut custom_materials,
+                    &materials,
+                    tile_pixel_size,
+                ));
+            });
+        }
+
+        // Place settler ast the starting tile of city state
+        if let Some(&city_state) = tile_map.starting_tile_and_city_state.get(&tile) {
+            commands.entity(tile_entity).with_children(|parent| {
+                parent.spawn(unit_icon(
+                    Unit::Civilian("Settler".to_owned()),
+                    Owner::CityState(city_state),
+                    ruleset,
+                    inner_rectangle.clone(),
+                    outer_rectangle.clone(),
+                    &mut custom_materials,
+                    &materials,
+                    tile_pixel_size,
+                ));
+            });
         }
     }
 }
@@ -286,25 +258,30 @@ pub fn show_main_camera_area(
 
     let grid = tile_map.world_grid.grid;
 
-    // (1 + offset_x * 2) should < grid's width
+    // The width and height of the visible area in tiles.
+    // Please make sure they are odd numbers. That will make sure the center of the camera is exactly on the center of the visible area.
+    const WIDTH_OF_VISIBLE_AREA: i32 = 37;
+    const HEIGHT_OF_VISIBLE_AREA: i32 = 21;
+
+    // `width_of_camera` should < grid's width
     // Because if it's not, the same tile will be drawn twice due to the grid's wrapping behavior.
-    const OFFSET_X: i32 = 18;
-    assert!(1 + OFFSET_X * 2 < grid.width() as i32);
-    // (1 + offset_y * 2) should < grid's height
+    assert!(WIDTH_OF_VISIBLE_AREA < grid.width() as i32);
+    // `height_of_camera` should < grid's height
     // Because if it's not, the same tile will be drawn twice due to the grid's wrapping behavior.
-    const OFFSET_Y: i32 = 10;
-    assert!(1 + OFFSET_Y * 2 < grid.height() as i32);
+    assert!(HEIGHT_OF_VISIBLE_AREA < grid.height() as i32);
 
     let camera_position = query.into_inner().translation.truncate().to_array();
     let camera_offset_coordinate = grid.pixel_to_offset(camera_position).to_array();
-    let mut left_x = camera_offset_coordinate[0] - OFFSET_X;
-    let mut right_x = camera_offset_coordinate[0] + OFFSET_X;
+    let mut left_x = camera_offset_coordinate[0] - WIDTH_OF_VISIBLE_AREA / 2;
+    let mut right_x = camera_offset_coordinate[0] + WIDTH_OF_VISIBLE_AREA / 2;
+    // If the grid does not wrap on the x-axis, then we need to make sure that the left_x and right_x are within the bounds of the grid.
     if !grid.wrap_x() {
         left_x = left_x.max(0);
         right_x = right_x.min(grid.width() as i32 - 1);
     }
-    let mut bottom_y = camera_offset_coordinate[1] - OFFSET_Y;
-    let mut top_y = camera_offset_coordinate[1] + OFFSET_Y;
+    let mut bottom_y = camera_offset_coordinate[1] - HEIGHT_OF_VISIBLE_AREA / 2;
+    let mut top_y = camera_offset_coordinate[1] + HEIGHT_OF_VISIBLE_AREA / 2;
+    // If the grid does not wrap on the y-axis, then we need to make sure that the bottom_y and top_y are within the bounds of the grid.
     if !grid.wrap_y() {
         bottom_y = bottom_y.max(0);
         top_y = top_y.min(grid.height() as i32 - 1);
@@ -329,4 +306,51 @@ pub fn show_main_camera_area(
             *visibility = Visibility::Hidden;
         }
     }
+}
+
+fn unit_icon(
+    unit: Unit,
+    owner: Owner,
+    ruleset: &Ruleset,
+    inner_rectangle: Handle<Mesh>,
+    outer_rectangle: Handle<Mesh>,
+    custom_materials: &mut ResMut<Assets<ColorReplaceMaterial>>,
+    materials: &MaterialResource,
+    tile_pixel_size: Vec2,
+) -> impl Bundle {
+    let (unit_name, transform_y, out_texture_name) = match &unit {
+        Unit::Civilian(unit) => (unit.to_owned(), -tile_pixel_size.y / 4., "sv_unitcitizen"),
+        Unit::Military(unit) => (unit.to_owned(), tile_pixel_size.y / 4., "sv_unitmilitary"),
+    };
+
+    let nation = match owner {
+        Owner::Civilization(ref nation) | Owner::CityState(ref nation) => nation.as_str(),
+    };
+
+    let outer_color = ruleset.nations[nation].outer_color;
+    let inner_color = ruleset.nations[nation].inner_color;
+
+    (
+        unit,
+        owner,
+        Mesh2d(inner_rectangle.clone()),
+        MeshMaterial2d(custom_materials.add(ColorReplaceMaterial {
+            inner_color: LinearRgba::from_u8_array_no_alpha(inner_color),
+            outer_color: LinearRgba::from_u8_array_no_alpha(outer_color),
+            texture: materials.texture_handle(&unit_name),
+        })),
+        Transform {
+            translation: Vec3::new(0., transform_y, 6.),
+            ..Default::default()
+        },
+        children![(
+            Mesh2d(outer_rectangle.clone()),
+            MeshMaterial2d(custom_materials.add(ColorReplaceMaterial {
+                inner_color: LinearRgba::from_u8_array_no_alpha(inner_color,),
+                outer_color: LinearRgba::from_u8_array_no_alpha(outer_color,),
+                texture: materials.texture_handle(out_texture_name),
+            },)),
+            Transform::from_xyz(0., 0., -1.),
+        )],
+    )
 }

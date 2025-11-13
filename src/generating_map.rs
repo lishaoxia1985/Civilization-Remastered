@@ -41,6 +41,6 @@ pub fn check_map_generate_status(
     if let Some(tile_map) = block_on(future::poll_once(&mut task.0)) {
         commands.insert_resource(TileMapResource(tile_map));
         commands.remove_resource::<MapGenerator>();
-        next_state.set(AppState::GameInitialization);
+        next_state.set(AppState::GameStart);
     }
 }
