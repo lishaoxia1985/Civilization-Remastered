@@ -9,7 +9,7 @@ use civ_map_generator::{
         Grid, GridSize, WorldSizeType, WrapFlags,
         hex_grid::{HexGrid, HexLayout, HexOrientation, Offset},
     },
-    map_parameters::{MapParameters, MapType, WorldGrid},
+    map_parameters::{MapParameters, MapParametersBuilder, WorldGrid},
     ruleset::Ruleset,
     tile_map::TileMap,
 };
@@ -65,11 +65,9 @@ fn main() {
         offset: Offset::Odd,
     };
     let world_grid = WorldGrid::from_grid(grid);
-    let map_parameters = MapParameters {
-        world_grid,
-        map_type: MapType::Fractal,
-        ..Default::default()
-    };
+
+    let map_parameters = MapParametersBuilder::new(world_grid).build();
+
     let map_setting = MapSetting(Arc::new(map_parameters));
 
     // Create default fov indicator size resource

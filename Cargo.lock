@@ -1820,8 +1820,8 @@ checksum = "613afe47fcd5fac7ccf1db93babcb082c5994d996f20b8b159f2ad1658eb5724"
 
 [[package]]
 name = "civ_map_generator"
-version = "0.1.3"
-source = "git+https://github.com/lishaoxia1985/civ-map-generator.git?branch=master#986afbeda6afbbba5c6f83b52e708c27335eaf0a"
+version = "0.1.4"
+source = "git+https://github.com/lishaoxia1985/civ-map-generator.git?branch=master#d56dacff71f4210c8f3c155c96c5acefb1e49e92"
 dependencies = [
  "arrayvec",
  "bitflags 2.9.1",
