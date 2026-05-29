@@ -265,10 +265,14 @@ pub fn show_main_camera_area(
 
     // `width_of_camera` should < grid's width
     // Because if it's not, the same tile will be drawn twice due to the grid's wrapping behavior.
-    assert!(WIDTH_OF_VISIBLE_AREA < grid.width() as i32);
+    if grid.wrap_x() {
+        assert!(WIDTH_OF_VISIBLE_AREA < grid.width() as i32);
+    }
     // `height_of_camera` should < grid's height
     // Because if it's not, the same tile will be drawn twice due to the grid's wrapping behavior.
-    assert!(HEIGHT_OF_VISIBLE_AREA < grid.height() as i32);
+    if grid.wrap_y() {
+        assert!(HEIGHT_OF_VISIBLE_AREA < grid.height() as i32);
+    }
 
     let camera_position = query.into_inner().translation.truncate().to_array();
     let camera_offset_coordinate = grid.pixel_to_offset(camera_position).to_array();
