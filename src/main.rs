@@ -22,11 +22,7 @@ use bevy::{
 };
 
 use crate::{
-    custom_material::ColorReplaceMaterial,
-    generating_map::{check_map_generate_status, generate_tile_map},
-    minimap::{DefaultFovIndicatorSize, minimap_fov_update, setup_minimap},
-    technology::setup_tech_button,
-    world_map::{setup_tile_map, show_main_camera_area},
+    custom_material::ColorReplaceMaterial, generating_map::{check_map_generate_status, generate_tile_map}, minimap::{DefaultFovIndicatorSize, handle_tile_click, minimap_fov_update, setup_info_panel, setup_minimap}, technology::setup_tech_button, world_map::{setup_tile_map, show_main_camera_area},
 };
 
 mod assets;
@@ -84,6 +80,7 @@ fn main() {
             }),
             ..default()
         }))
+        .add_plugins(MeshPickingPlugin)
         .add_plugins(Material2dPlugin::<ColorReplaceMaterial>::default())
         .init_resource::<InputFocus>()
         .insert_resource(ruleset_resource)
@@ -96,6 +93,9 @@ fn main() {
                 .load_collection::<MaterialResource>(),
         )
         .add_systems(OnEnter(AppState::AssetLoading), main_camera_setup)
+        .add_systems(OnEnter(AppState::GameStart), 
+        (setup_minimap, setup_info_panel),
+                )
         .add_systems(
             Update,
             (
@@ -103,7 +103,7 @@ fn main() {
                 cursor_drag_system,
                 zoom_main_camera_system,
                 minimap_fov_update.run_if(in_state(AppState::GameStart)),
-                setup_minimap.run_if(in_state(AppState::GameStart)),
+                handle_tile_click.run_if(in_state(AppState::GameStart)),
                 show_main_camera_area.run_if(in_state(AppState::GameStart)),
                 check_map_generate_status.run_if(in_state(AppState::MapGenerating)),
             ),

@@ -1,39 +1,21 @@
 use bevy::{
-    asset::{Assets, Handle, RenderAssetUsages},
-    camera::{
+    asset::{Assets, Handle, RenderAssetUsages}, camera::{
         Camera, Camera2d, OrthographicProjection, Projection, RenderTarget,
         visibility::RenderLayers,
-    },
-    color::Color,
-    ecs::{
-        component::Component,
-        entity::Entity,
-        observer::On,
-        query::{Changed, With, Without},
-        resource::Resource,
-        system::{Commands, Local, Query, Res, ResMut, Single},
-    },
-    image::Image,
-    math::{Rect, Vec2, Vec3},
-    mesh::{Mesh, Mesh2d},
-    picking::{
+    }, color::Color, ecs::{
+        component::Component, entity::Entity, event::EntityEvent, message::MessageReader, observer::On, query::{Changed, With, Without}, resource::Resource, system::{Commands, Local, Query, Res, ResMut, Single},
+    }, image::Image, math::{Rect, Vec2, Vec3}, mesh::{Mesh, Mesh2d}, picking::{
         Pickable,
         events::{Click, Pointer},
         pointer::PointerButton,
-    },
-    render::render_resource::{Extent3d, TextureDimension, TextureFormat, TextureUsages},
-    sprite_render::{ColorMaterial, MeshMaterial2d},
-    transform::components::Transform,
-    ui::{
-        BorderColor, Node, Overflow, OverflowAxis, PositionType, UiRect, Val,
-        widget::{ImageNode, NodeImageMode},
-    },
-    utils::default,
+    }, render::render_resource::{Extent3d, TextureDimension, TextureFormat, TextureUsages}, sprite_render::{ColorMaterial, MeshMaterial2d}, transform::components::Transform, ui::{
+        BackgroundColor, BorderColor, Node, Overflow, OverflowAxis, PositionType, UiRect, Val, widget::{ImageNode, NodeImageMode, Text},
+    }, utils::default,
 };
 use civ_map_generator::{grid::Grid, tile::Tile, tile_component::BaseTerrain};
 use enum_map::{EnumMap, enum_map};
 
-use crate::{MainCamera, TileMapResource, assets::MaterialResource, custom_mesh::hex_mesh};
+use crate::{MainCamera, TileMapResource, assets::MaterialResource, custom_mesh::hex_mesh, world_map::WorldTile};
 
 #[derive(Component)]
 pub struct FieldOfViewIndicator;
@@ -58,16 +40,11 @@ pub fn setup_minimap(
     mut meshes: ResMut<Assets<Mesh>>,
     mut images: ResMut<Assets<Image>>,
     mut color_materials: ResMut<Assets<ColorMaterial>>,
-    mut enable_minimap: Local<bool>,
     query_main_camera: Single<&Camera, With<MainCamera>>,
 ) {
     if map.is_none() {
         return;
     };
-
-    if *enable_minimap {
-        return;
-    }
 
     let tile_map = &map.unwrap().0;
     let grid = tile_map.world_grid.grid;
@@ -251,8 +228,6 @@ pub fn setup_minimap(
                 ));
             }
         });
-
-    *enable_minimap = true;
 }
 
 fn minimap_click_handler(
@@ -376,4 +351,38 @@ pub fn minimap_fov_update(
             node.width = Val::Px(fov_width * scale);
             node.height = Val::Px(fov_height * scale);
         });
+}
+
+#[derive(Component)]
+pub struct InfoPanel;
+pub fn setup_info_panel(mut commands: Commands) {
+    commands
+        .spawn((
+            Node {
+                position_type: PositionType::Absolute,
+                right: Val::Px(10.0),
+                bottom: Val::Px(10.0),
+                width: Val::Auto,
+                height: Val::Auto,
+                border: UiRect::all(Val::Px(2.0)),
+                ..Default::default()
+            },
+            BackgroundColor(Color::BLACK),
+            BorderColor::all(Color::WHITE),
+            Text("info panel".to_string()),
+            InfoPanel,
+        ));
+}
+
+pub fn handle_tile_click(
+    mut click_events: MessageReader<Pointer<Click>>,
+    query: Query<&WorldTile>,
+     mut query_info_panel: Single<&mut Text, With<InfoPanel>>,
+) {
+
+    for click in click_events.read() {
+        if let Ok(world_tile) = query.get(click.event_target()) {
+           query_info_panel.0 = format!("Tile clicked: {:?}", world_tile.0);
+        }
+    }
 }

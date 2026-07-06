@@ -95,6 +95,7 @@ pub fn setup_tile_map(
                 Mesh2d(hex_mesh.clone()),
                 MeshMaterial2d(base_terrain_and_material[tile.base_terrain(tile_map)].clone()),
                 Visibility::Hidden,
+                Pickable::default(),
                 WorldTile(tile),
             ))
             .id();
