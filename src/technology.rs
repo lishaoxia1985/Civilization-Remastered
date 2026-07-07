@@ -165,11 +165,11 @@ fn technology_button(
             width: px(300),
             height: px(60),
             border: UiRect::all(Val::Px(2.0)),
+            border_radius: BorderRadius::all(Val::Px(10.0)),
             ..default()
         },
         BackgroundColor(Color::NONE),
         BorderColor::all(Color::WHITE),
-        BorderRadius::all(Val::Px(10.0)),
         children![(
             Node {
                 display: Display::Grid,
@@ -198,13 +198,13 @@ fn technology_button(
                             width: px(40),
                             height: px(40),
                             border: UiRect::all(Val::Px(10.0)),
+                            border_radius: BorderRadius::all(px(f32::MAX)),
                             align_items: AlignItems::Center,
                             justify_content: JustifyContent::Center,
                             ..default()
                         },
                         ImageNode::new(materials.texture_handle(&technology_name))
                             .with_color(RED.into()),
-                        BorderRadius::all(px(f32::MAX)),
                         Outline {
                             width: px(2),
                             offset: px(3),
@@ -221,7 +221,7 @@ fn technology_button(
                     },
                     Text(technology_name.clone()),
                     TextFont {
-                        font_size: 12.,
+                        font_size: FontSize::Px(12.0),
                         ..default()
                     },
                 ),
@@ -234,7 +234,7 @@ fn technology_button(
                     },
                     Text("5000 turns".to_string()),
                     TextFont {
-                        font_size: 12.,
+                        font_size: FontSize::Px(12.0),
                         ..default()
                     },
                 ),
@@ -243,12 +243,12 @@ fn technology_button(
                         grid_column: GridPlacement::start(2).set_span(2),
                         grid_row: GridPlacement::start(2),
                         border: UiRect::all(Val::Px(1.0)),
+                        border_radius: BorderRadius::all(Val::Px(10.0)),
                         margin: UiRect::all(Val::Px(1.0)),
                         ..default()
                     },
                     BackgroundColor(Color::NONE),
                     BorderColor::all(Color::WHITE),
-                    BorderRadius::all(Val::Px(10.0)),
                     children![tech_unlock_item_list(technology_name, ruleset, materials)],
                 )
             ]
@@ -345,14 +345,14 @@ fn unit_or_building_or_tile_improvement_item(building_texture: Handle<Image>) ->
         Node {
             width: px(25),
             height: px(25),
-            border: UiRect::all(Val::Px(10.0)),
+            border: UiRect::all(Val::Px(2.0)),
+            border_radius: BorderRadius::all(px(f32::MAX)),
             align_items: AlignItems::Center,
             justify_content: JustifyContent::Center,
             ..default()
         },
         ImageNode::new(building_texture).with_color(BLACK.into()),
         BackgroundColor(WHITE.into()),
-        BorderRadius::all(px(f32::MAX)),
         Outline {
             width: px(1),
             offset: px(3),
@@ -366,14 +366,14 @@ fn unique_item(texture: Handle<Image>) -> impl Bundle {
         Node {
             width: px(25),
             height: px(25),
-            border: UiRect::all(Val::Px(10.0)),
+            border: UiRect::all(Val::Px(2.0)),
+            border_radius: BorderRadius::all(px(f32::MAX)),
             align_items: AlignItems::Center,
             justify_content: JustifyContent::Center,
             ..default()
         },
         ImageNode::new(texture).with_color(BLACK.into()),
         BackgroundColor(WHITE.into()),
-        BorderRadius::all(px(f32::MAX)),
         Outline {
             width: px(1),
             offset: px(3),
