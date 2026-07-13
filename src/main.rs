@@ -10,7 +10,6 @@ use civ_map_generator::{
         hex_grid::{HexGrid, HexLayout, HexOrientation, Offset},
     },
     map_parameters::{MapParameters, MapParametersBuilder, WorldGrid},
-    ruleset::Ruleset,
     tile_map::TileMap,
 };
 
@@ -42,19 +41,12 @@ mod unit_component;
 mod world_map;
 
 #[derive(Resource)]
-pub struct RulesetResource(Arc<Ruleset>);
-
-#[derive(Resource)]
 struct MapSetting(Arc<MapParameters>);
 
 #[derive(Resource)]
 struct TileMapResource(TileMap);
 
 fn main() {
-    // Create ruleset resource
-    let ruleset = Ruleset::default();
-    let ruleset_resource = RulesetResource(Arc::new(ruleset));
-
     // Create map parameters resource
     let world_size_type = WorldSizeType::Standard;
     let grid = HexGrid {
@@ -90,7 +82,6 @@ fn main() {
         .add_plugins(MeshPickingPlugin)
         .add_plugins(Material2dPlugin::<ColorReplaceMaterial>::default())
         .init_resource::<InputFocus>()
-        .insert_resource(ruleset_resource)
         .insert_resource(map_setting)
         .insert_resource(default_fov_indicator_size)
         .init_state::<AppState>()

@@ -10,20 +10,15 @@ use bevy::{
 };
 use civ_map_generator::{generate_map, tile_map::TileMap};
 
-use crate::{MapSetting, RulesetResource, TileMapResource, assets::AppState};
+use crate::{MapSetting, TileMapResource, assets::AppState};
 
 #[derive(Resource)]
 pub struct MapGenerator(Task<TileMap>);
 
-pub fn generate_tile_map(
-    mut commands: Commands,
-    map_setting: Res<MapSetting>,
-    ruleset: Res<RulesetResource>,
-) {
+pub fn generate_tile_map(mut commands: Commands, map_setting: Res<MapSetting>) {
     let map_parameters = Arc::clone(&map_setting.0);
-    let ruleset = Arc::clone(&ruleset.0);
     let thread_pool = AsyncComputeTaskPool::get();
-    let task = thread_pool.spawn(async move { generate_map(&map_parameters, &ruleset) });
+    let task = thread_pool.spawn(async move { generate_map(&map_parameters) });
     commands.insert_resource(MapGenerator(task));
 }
 

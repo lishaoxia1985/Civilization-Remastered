@@ -16,8 +16,7 @@ use bevy::{
 };
 use civ_map_generator::ruleset::Ruleset;
 
-use crate::RulesetResource;
-use crate::assets::MaterialResource;
+use crate::{MapSetting, assets::MaterialResource};
 
 pub fn setup_tech_button(mut commands: Commands) {
     commands
@@ -44,10 +43,10 @@ struct ScrollableNode;
 fn open_tech_tree(
     drag: On<Pointer<Click>>,
     mut commands: Commands,
-    ruleset: Res<RulesetResource>,
+    map_setting: Res<MapSetting>,
     materials: Res<MaterialResource>,
 ) {
-    let ruleset = &ruleset.0;
+    let ruleset = &map_setting.0.ruleset;
     let column_count = ruleset
         .technologies
         .values()

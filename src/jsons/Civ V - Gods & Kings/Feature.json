@@ -2,22 +2,16 @@
 	// Terrain features
 	{
 		"name": "Forest",
-		"type": "TerrainFeature",
 		"production": 1,
 		"food": 1,
 		"movementCost": 2,
 		"overrideStats": true,
 		"unbuildable": true,
 		"defenceBonus": 0.25,
-		"occursOnType": [
-			"Flatland",
-			"Hill"
-		],
-		"occursOnBase": [
-			"Tundra",
-			"Plain",
-			"Grassland"
-		],
+		"requiredTerrain": {
+             "terrainType": ["Flatland","Hill"],
+             "baseTerrain": ["Tundra","Plain","Grassland"]
+        },
 		"uniques": [
 			"Rough terrain",
 			"Vegetation",
@@ -40,21 +34,17 @@
 			}
 		]
 	},
-	{
+	{ // Notice: When placing a jungle, the base terrain of the tile will be changed to Plain. 
 		"name": "Jungle",
-		"type": "TerrainFeature",
 		"food": 2,
 		"movementCost": 2,
 		"overrideStats": true,
 		"unbuildable": true,
 		"defenceBonus": 0.25,
-		"occursOnType": [
-			"Flatland",
-			"Hill"
-		],
-		"occursOnBase": [
-			"Grassland"
-		],
+		"requiredTerrain": {
+			 "terrainType": ["Flatland","Hill"],
+			 "baseTerrain": ["Grassland","Plain"]
+		},
 		"uniques": [
 			"Rough terrain",
 			"Vegetation",
@@ -71,17 +61,14 @@
 	},
 	{
 		"name": "Marsh",
-		"type": "TerrainFeature",
 		"food": -1,
 		"movementCost": 3,
 		"unbuildable": true,
 		"defenceBonus": -0.15,
-		"occursOnType": [
-			"Flatland"
-		],
-		"occursOnBase": [
-			"Grassland"
-		],
+		"requiredTerrain": {
+			 "terrainType": ["Flatland"],
+			 "baseTerrain": ["Grassland"]
+		},
 		"uniques": [
 			"Rare feature",
 			"[-2] to Fertility for Map Generation",
@@ -96,7 +83,6 @@
 	},
 	{
 		"name": "Fallout",
-		"type": "TerrainFeature",
 		"movementCost": 2,
 		"unbuildable": true,
 		"uniques": [
@@ -105,31 +91,25 @@
 		],
 		// For map editor only - the generator won't place it without code or enabling uniques
 		// If the map generator is ever updated to always take these into account, it should also take the "Doesn't generate naturally" unique into account
-		"occursOnBase": [
-			"Grassland",
-			"Plain",
-			"Desert",
-			"Tundra",
-			"Snow"
-		],
+		"requiredTerrain": {
+			 "terrainType": ["Flatland","Hill"],
+			 "baseTerrain": ["Grassland","Plain","Desert","Tundra","Snow"]
+		},
 		"defenceBonus": -0.15
 	},
 	{
 		"name": "Oasis",
-		"type": "TerrainFeature",
 		"food": 3,
 		"gold": 1,
 		"movementCost": 1,
 		"unbuildable": true,
 		"defenceBonus": -0.1,
-		"occursOnType": [
-			"Flatland"
-		],
-		"occursOnBase": [
-			"Desert"
-		],
+		"requiredTerrain": {
+			 "terrainType": ["Flatland"],
+			 "baseTerrain": ["Desert"]
+		},
 		"uniques": [
-			"Fresh water",
+			"Provide fresh water to adjacent land tiles",
 			"Rare feature",
 			"Only [All Road] improvements may be built on this tile",
 			"Always Fertility [4] for Map Generation",
@@ -139,16 +119,14 @@
 	},
 	{
 		"name": "Floodplain",
-		"type": "TerrainFeature",
 		"food": 2,
 		"movementCost": 1,
 		"defenceBonus": -0.1,
-		"occursOnType": [
-			"Flatland"
-		],
-		"occursOnBase": [
-			"Desert"
-		],
+		"requiredTerrain": {
+			 "terrainType": ["Flatland"],
+			 "baseTerrain": ["Desert"],
+			 "river": true
+		},
 		"uniques": [
 			"Always Fertility [5] for Map Generation",
 			"Considered [Food] when determining start locations",
@@ -157,17 +135,12 @@
 	},
 	{
 		"name": "Ice",
-		"type": "TerrainFeature",
 		"impassable": true,
 		"overrideStats": true,
-		"occursOnType": [
-			"Water"
-		],
-		"occursOnBase": [
-			"Ocean",
-			"Coast",
-			"Lake"
-		],
+		"requiredTerrain": {
+			 "terrainType": ["Water"],
+			 "baseTerrain": ["Ocean","Coast","Lake"]
+		},
 		"uniques": [
 			"Occurs at temperature between [-1] and [-0.8] and humidity between [0] and [1]",
 			"[-1] to Fertility for Map Generation",
@@ -176,17 +149,13 @@
 	},
 	{
 		"name": "Atoll",
-		"type": "TerrainFeature",
 		"movementCost": 1,
 		"food": 1,
 		"production": 1,
-		"occursOnType": [
-			"Water"
-		],
-		"occursOnBase": [
-			"Ocean",
-			"Coast"
-		],
+		"requiredTerrain": {
+			 "terrainType": ["Water"],
+			 "baseTerrain": ["Coast"]
+		},
 		"uniques": [
 			"Rare feature"
 		]

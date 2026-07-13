@@ -32,7 +32,7 @@ use bevy::{
     },
     utils::default,
 };
-use civ_map_generator::{grid::Grid, tile::Tile, tile_component::BaseTerrain};
+use civ_map_generator::{grid::Grid, ruleset::enums::BaseTerrain, tile::Tile};
 use enum_map::{EnumMap, enum_map};
 
 use crate::{

@@ -7,14 +7,13 @@ use civ_map_generator::{
         hex_grid::{Hex, HexOrientation},
         offset_coordinate::OffsetCoordinate,
     },
-    ruleset::Ruleset,
+    ruleset::{Ruleset, enums::*},
     tile::Tile,
-    tile_component::{BaseTerrain, Feature, TerrainType},
     tile_map::RiverEdge,
 };
 
 use crate::{
-    ColorReplaceMaterial, MainCamera, RulesetResource, TileMapResource,
+    ColorReplaceMaterial, MainCamera, MapSetting, TileMapResource,
     assets::MaterialResource,
     custom_mesh::{hex_mesh, line_mesh},
     unit_component::{Owner, Unit},
@@ -27,8 +26,8 @@ pub struct WorldTile(pub Tile);
 
 pub fn setup_tile_map(
     mut commands: Commands,
+    map_setting: Res<MapSetting>,
     map: Option<Res<TileMapResource>>,
-    ruleset: Res<RulesetResource>,
     materials: Res<MaterialResource>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut color_materials: ResMut<Assets<ColorMaterial>>,
@@ -178,7 +177,7 @@ pub fn setup_tile_map(
             }
         });
 
-        let ruleset = &ruleset.0;
+        let ruleset = &map_setting.0.ruleset;
         let radius = tile_pixel_size.min_element() / 3.0;
 
         let inner_rectangle = meshes.add(Rectangle::new(radius / 2., radius / 2.));

@@ -2,6 +2,7 @@
 	//Spectator
 	{
 		"name": "Spectator",
+		"nationType": "Spectator",
 		"outerColor": [255,255,255]
 //		"innerColor": [255,255,255]
 	},
@@ -11,7 +12,7 @@
 		"name": "Babylon",
 		"leaderName": "Nebuchadnezzar II",
 		"adjective": ["Babylonian"],
-		"avoidRegionType": ["Tundra"],
+		"startBias": {"RegionTypeAvoid": ["Tundra"]},
 		"preferredVictoryType": "Scientific",
 
 		"startIntroPart1": "May the blessings of heaven be upon you, O great Nebuchadnezzar, father of mighty and ancient Babylon! Young was the world when Sargon built Babylon some five thousand years ago, long did it grow and prosper, gaining its first empire the eighteenth century BC, under godlike Hammurabi, the giver of law. Although conquered by the Kassites and then by the Assyrians, Babylon endured, emerging phoenix-like from its ashes of destruction and regaining its independence despite its many enemies. Truly was Babylon the center of arts and learning in the ancient world. O Nebuchadnezzar, your empire endured but a short time after your death, falling to the mighty Persians, and then to the Greeks, until the great city was destroyed by 141 BC.",
@@ -29,6 +30,7 @@
 
 		"outerColor": [27,53,63],
 		"innerColor": [213,249,255],
+		"favoredReligion": "Islam",
 		"uniqueName": "Ingenuity",
 		"uniques": ["Receive free [Great Scientist] when you discover [Writing]", "[Great Scientist] is earned [50]% faster"],
 		"cities": ["Babylon","Akkad","Dur-Kurigalzu","Nippur","Borsippa","Sippar","Opis","Mari","Shushan","Eshnunna",
@@ -40,7 +42,7 @@
 		"name": "Greece",
 		"leaderName": "Alexander",
 		"adjective": ["Greek"],
-		"alongOcean": true,
+		"startBias": "AlongOcean",
 		"preferredVictoryType":"Diplomatic",
 
 		"startIntroPart1": "May the blessings of the gods be upon you, oh great King Alexander! You are the ruler of the mighty Greek nation. Your people lived for so many years in isolated city-states - legendary cities such as Athens, Sparta, Thebes - where they gave the world many great things, such as democracy, philosophy, tragedy, art and architecture, the very foundation of Western Civilization. Although few in number and often hostile to each other, in the 5th century BC they were able to defeat their much larger neighbor, Persia, on land and sea.",
@@ -58,6 +60,7 @@
 
 		"outerColor": [181, 232, 232],
 		"innerColor": [68,142,249],
+		"favoredReligion": "Christianity",
 		"uniqueName": "Hellenic League",
 		"uniques": ["[-50]% City-State Influence degradation", "City-State Influence recovers at twice the normal rate", "City-State territory always counts as friendly territory"],
 		"cities": ["Athens","Sparta","Corinth","Argos","Knossos","Mycenae","Pharsalos","Ephesus","Halicarnassus","Rhodes",
@@ -83,6 +86,7 @@
 		"tradeRequest": "My friend, do you think you can accept this request?",
 		"outerColor": [9, 112, 84],
 		"innerColor": [255,255,255],
+		"favouredReligion": "Taoism",
 		"uniqueName": "Art of War",
 		"uniques": ["Great General provides double combat bonus", "[Great General] is earned [50]% faster"],
 		"cities": ["Beijing","Shanghai","Guangzhou","Nanjing","Xian","Chengdu","Hangzhou","Tianjin","Macau","Shandong",
@@ -94,7 +98,7 @@
 		"name": "Egypt",
 		"leaderName": "Ramesses II",
 		"adjective": ["Egyptian"],
-		"avoidRegionType": ["Jungle","Forest"],
+		"startBias": {"RegionTypeAvoid": ["Jungle","Forest"]},
 		"preferredVictoryType": "Cultural",
 
 		"startIntroPart1": "We greet thee, oh great Ramesses, Pharaoh of Egypt, who causes the sun to rise and the Nile to flow, and who blesses his fortunate people with all the good things of life! Oh great lord, from time immemorial your people lived on the banks of the Nile river, where they brought writing to the world, and advanced mathematics, sculpture, and architecture. Thousands of years ago they created the great monuments which still stand tall and proud.",
@@ -112,6 +116,7 @@
 
 		"outerColor": [ 231, 213, 0],
 		"innerColor": [98,10,210],
+		"favoredReligion": "Islam",
 		"uniqueName": "Monument Builders",
 		"uniques": ["[+20]% Production when constructing [All] wonders [in all cities]"],
 		"cities": ["Thebes","Memphis","Heliopolis","Elephantine","Alexandria","Pi-Ramesses","Giza","Byblos","Akhetaten",
@@ -124,7 +129,7 @@
 		"name": "England",
 		"leaderName": "Elizabeth",
 		"adjective": ["English"],
-		"alongOcean": true,
+		"startBias": "AlongOcean",
 		"preferredVictoryType": "Diplomatic",
 
 		"startIntroPart1": "Praises upon her serene highness, Queen Elizabeth Gloriana. You lead and protect the celebrated maritime nation of England. England is an ancient land, settled as early as 35,000 years ago. The island has seen countless waves of invaders, each in turn becoming a part of the fabric of the people. Although England is a small island, for many years your people dominated the world stage. Their matchless navy, brilliant artists and shrewd merchants, giving them power and influence far in excess of their mere numbers.",
@@ -138,6 +143,7 @@
 		"tradeRequest": "Would you be interested in a trade agreement with England?",
 		"outerColor": [ 114, 0, 0],
 		"innerColor": [255,255,255],
+		"favoredReligion": "Christianity",
 		"uniqueName": "Sun Never Sets",
 		"uniques": ["[+2] Movement <for [Water] units>"],
 		"cities": ["London","York","Nottingham","Hastings","Canterbury","Coventry","Warwick","Newcastle","Oxford","Liverpool",
@@ -162,6 +168,7 @@
 		"tradeRequest": "France offers you this exceptional proposition.",
 		"outerColor": [ 38, 98, 255],
 		"innerColor": [239,236,148],
+		"favoredReligion": "Christianity",
 		"uniqueName": "Ancien Régime",
 		"uniques": ["[+2 Culture] [in all cities] <before discovering [Steam Power]>"],
 		"cities": ["Paris","Orleans","Lyon","Troyes","Tours","Marseille","Chartres","Avignon","Rouen","Grenoble",
@@ -173,7 +180,7 @@
 		"name": "Russia",
 		"leaderName": "Catherine",
 		"adjective": ["Russian"],
-		"regionTypePriority": ["Tundra"],
+		"startBias": {"RegionTypePriority": ["Tundra"]},
 		"preferredVictoryType": "Scientific",
 
 		"startIntroPart1": "Greetings upon thee, Your Imperial Majesty Catherine, wondrous Empress of all the Russias. At your command lies the largest country in the world. Mighty Russia stretches from the Pacific Ocean in the east to the Baltic Sea in the west. Despite wars, droughts, and every manner of disaster the heroic Russian people survive and prosper, their artists and scientists among the best in the world. The Empire today remains one of the strongest ever seen in human history - a true superpower, with the greatest destructive force ever devised at her command.",
@@ -187,6 +194,7 @@
 		"tradeRequest": "How would you like it if I propose this kind of exchange?",
 		"outerColor": [ 236, 178, 0],
 		"innerColor": [0,0,0],
+		"favoredReligion": "Christianity",
 		"uniqueName": "Siberian Riches",
 		"uniques": ["[+1 Production] from every [Strategic resource]","Double quantity of [Horses] produced",
 			"Double quantity of [Iron] produced","Double quantity of [Uranium] produced"],
@@ -199,7 +207,7 @@
 		"name": "Rome",
 		"leaderName": "Augustus Caesar",
 		"adjective": ["Roman"],
-		"avoidRegionType": ["Tundra","Desert"],
+		"startBias": {"RegionTypeAvoid": ["Tundra","Desert"]},
 		"preferredVictoryType": "Scientific",
 
 		"startIntroPart1": "The blessings of the gods be upon you, Caesar Augustus, emperor of Rome and all her holdings. Your empire was the greatest and longest lived of all in Western civilization. And your people single-handedly shaped its culture, law, art, and warfare like none other, before or since. Through years of glorious conquest, Rome came to dominate all the lands of the Mediterranean from Spain in the west to Syria in the east. And her dominion would eventually expand to cover much of England and northern Germany. Roman art and architecture still awe and inspire the world. And she remains the envy of all lesser civilizations who have followed.",
@@ -214,6 +222,7 @@
 		"tradeRequest": "I offer this, for your consideration.",
 		"outerColor": [ 53,0,87],
 		"innerColor": [238,201,9],
+		"favoredReligion": "Christianity",
 		"uniqueName": "The Glory of Rome",
 		"uniques": ["[+25]% Production towards any buildings that already exist in the Capital"],
 		"cities": ["Rome","Antium","Cumae","Neapolis","Ravenna","Arretium","Mediolanum","Arpinum","Circei","Setia",
@@ -225,7 +234,7 @@
 		"name": "Arabia",
 		"leaderName": "Harun al-Rashid",
 		"adjective": ["Arabian"],
-		"regionTypePriority": ["Desert"],
+		"startBias": {"RegionTypePriority": ["Desert"]},
 		"preferredVictoryType": "Scientific",
 
 		"startIntroPart1": "Blessings of God be upon you oh great caliph Harun al-Rashid, leader of the pious Arabian people! The Muslim empire, the Caliphate was born in the turbulent years after the death of the prophet Muhammad in 632 AD, as his followers sought to extend the rule of God to all of the people of the earth. The caliphate grew mighty indeed at the height of its power, ruling Spain, North Africa, the Middle East, Anatolia, the Balkans and Persia. An empire as great as or even greater than that of Rome. The arts and sciences flourished in Arabia during the Middle Ages, even as the countries of Europe descended into ignorance and chaos. The Caliphate survived for six hundred years, until finally succumbing to attack from the Mongols, those destroyers of Empires.",
@@ -239,6 +248,7 @@
 		"tradeRequest": "Come forth, let's do business.",
 		"outerColor": [ 41,83,42],
 		"innerColor": [146,221,9],
+		"favoredReligion": "Islam",
 		"uniqueName": "Trade Caravans",
 		"uniques": ["[+1 Gold] from each Trade Route", "Double quantity of [Oil] produced"],
 		"cities": ["Mecca","Medina","Damascus","Baghdad","Najran","Kufah","Basra","Khurasan","Anjar","Fustat",
@@ -262,6 +272,7 @@
 		"tradeRequest": "Is the following trade of interest to you?",
 		"outerColor": [ 28,51,119],
 		"innerColor": [255,255,255],
+		"favoredReligion": "Christianity",
 		"uniqueName": "Manifest Destiny",
 		"uniques": ["[+1] Sight <for [{Military} {Land}] units>", "[-50]% Gold cost of acquiring tiles [in all cities]"],
 		"cities": ["Washington","New York","Boston","Philadelphia","Atlanta","Chicago","Seattle","San Francisco","Los Angeles","Houston",
@@ -275,7 +286,7 @@
 		"name": "Japan",
 		"leaderName": "Oda Nobunaga",
 		"adjective": ["Japanese"],
-		"alongOcean": true,
+		"startBias": "AlongOcean",
 		"preferredVictoryType": "Domination",
 
 		"startIntroPart1": "Blessings upon you, noble Oda Nobunaga, ruler of Japan, the land of the Rising Sun! May you long walk among its flowering blossoms. The Japanese are an island people, proud and pious with a rich culture of arts and letters. Your civilization stretches back thousands of years, years of bloody warfare, expansion and isolation, great wealth and great poverty. In addition to their prowess on the field of battle, your people are also immensely industrious, and their technological innovation and mighty factories are the envy of lesser people everywhere.",
@@ -289,6 +300,7 @@
 		"tradeRequest": "I would be grateful if you agreed on the following proposal.",
 		"outerColor": [215,225,225],
 		"innerColor": [185,0,0],
+		"favoredReligion": "Shinto",
 		"uniqueName": "Bushido",
 		"uniques": ["Damage is ignored when determining unit Strength <for [non-air] units>"],
 		"cities": ["Kyoto","Osaka","Tokyo","Satsuma","Kagoshima","Nara","Nagoya","Izumo","Nagasaki","Yokohama",
@@ -300,9 +312,11 @@
 		"name": "India",
 		"leaderName": "Gandhi",
 		"adjective": ["Indian"],
-		"regionTypePriority": ["Grassland"],
+		"startBias": {"RegionTypePriority": ["Grassland"]},
 		"preferredVictoryType": "Cultural",
 
+		"startIntroPart1": "Greetings, President Mahatma Gandhi, great souled leader of India! You are the ruler of one of the oldest countries in the world with history stretching back almost 10,000 years. A spiritual country, India is the birthplace of three of the world's great religions - Hinduism, Buddhism and Jainism. This is a passionate land of music and color, a land of great wealth and grinding poverty. For centuries, India was divided into kingdoms who fought constantly with each other and against outside invaders. That was, however, after empires such as Maratha, Maurya and Gupta. In the 12th century AD, India was conquered by Muslim Turks who fled from the Mongols. In the early 17th century, the English arrived, and through a combination of shrewd diplomacy and technological superiority, they conquered your fragmented nation. England remained in power for some two centuries until driven out by a rising wave of Indian nationalism, a peaceful rebellion unlike any before seen in history, one led by you!",
+		"startIntroPart2": "Gandhi, your people look to you to lead them to even greater heights of glory! Can you help your people realize their great potential, to once again become the world's center of arts, culture and religion? Can you build a civilization that will stand the test of time?",
 		"declaringWar": "I have just received a report that large numbers of my troops have crossed your borders.",
 		"attacked": "My attempts to avoid violence have failed. An eye for an eye only makes the world blind.",
 		"defeated": "You can chain me, you can torture me, you can even destroy this body, but you will never imprison my mind.",
@@ -312,6 +326,7 @@
 		"tradeRequest": "My friend, are you interested in this arrangement?",
 		"outerColor": [16,126,5],
 		"innerColor": [255,153,51],
+		"favoredReligion": "Hinduism",
 		"uniqueName": "Population Growth",
 		"uniques": ["Unhappiness from number of Cities doubled", "[-50]% Unhappiness from [Population] [in all cities]"],
 		"cities": ["Delhi","Mumbai","Vijayanagara","Pataliputra","Varanasi","Agra","Calcutta","Lahore","Bangalore","Hyderabad","Madurai","Ahmedabad",
@@ -335,6 +350,7 @@
 		"tradeRequest": "It would be in your best interest, to carefully consider this proposal.",
 		"outerColor": [150,150,150],
 		"innerColor": [60,60,60],
+		"favoredReligion": "Christianity",
 		"uniqueName": "Furor Teutonicus",
 		"uniques": ["When conquering an encampment, earn [25] Gold and recruit a Barbarian unit <with [67]% chance>",
 			"[-25]% maintenance costs <for [Land] units>"],
@@ -350,7 +366,7 @@
 		"name": "The Ottomans",
 		"leaderName": "Suleiman I",
 		"adjective": ["Ottoman"],
-		"alongOcean": true,
+		"startBias": "AlongOcean",
 		"preferredVictoryType": "Domination",
 
 		"startIntroPart1": "Blessings of God be upon you, oh Great Emperor Suleiman! Your power, wealth and generosity awe the world! Truly, are you called 'Magnificent!' Your empire began in Bithynia, a small country in Eastern Anatolia in 12th century. Taking advantage in the decline of the great Seljuk Sultanate of Rum, King Osman I of Bithynia expanded west into Anatolia. Over the next century, your subjects brought down the empire of Byzantium, taking its holdings in Turkey and then the Balkans. In the mid 15th century, the Ottomans captured ancient Constantinople, gaining control of the strategic link between Europe and the Middle East. Your people's empire would continue to expand for centuries governing much of North Africa, the Middle East and Eastern Europe at its height.",
@@ -364,6 +380,7 @@
 		"tradeRequest": "Let us do business! Would you be interested?",
 		"outerColor": [245,248,185],
 		"innerColor": [18,84,30],
+		"favoredReligion": "Islam",
 		"uniqueName": "Barbary Corsairs",
 		"uniques": ["[-66]% maintenance costs <for [Water] units>",
 			"When defeating a [{Barbarian} {Water}] unit, earn [25] Gold and recruit it <with [50]% chance>"],
@@ -376,7 +393,7 @@
 		"name": "Korea",
 		"leaderName": "Sejong",
 		"adjective": ["Korean"],
-		"alongOcean": true,
+		"startBias": "AlongOcean",
 		"preferredVictoryType": "Scientific",
 
 		"startIntroPart1": "Greetings to you, exalted King Sejong the Great, servant to the people and protector of the Choson Dynasty! Your glorious vision of prosperity and overwhelming benevolence towards the common man made you the most beloved of all Korean kings. From the earliest days of your reign, the effort you took to provide a fair and just society for all was surpassed only by the technological advances spurred onwards by your unquenched thirst for knowledge. Guided by your wisdom, the scholars of the Jade Hall developed Korea's first written language, Hangul, bringing the light of literature and science to the masses after centuries of literary darkness.",
@@ -391,6 +408,7 @@
 		"tradeRequest": "We have many things to discuss and have much to benefit from each other.",
 		"outerColor": [26,32,96],
 		"innerColor": [255,0,0],
+		"favoredReligion": "Confucianism",
 		"uniqueName": "Scholars of the Jade Hall",
         "uniques": ["[+2 Science] from every specialist [in all cities]", "[+2 Science] from every [Great Improvement]","Receive a tech boost when scientific buildings/wonders are built in capital"],
 		"cities": ["Seoul","Busan","Jeonju","Daegu","Pyongyang","Kaesong","Suwon","Gwangju","Gangneung","Hamhung","Wonju","Ulsan",
@@ -402,7 +420,7 @@
 		"name": "Iroquois",
 		"leaderName": "Hiawatha",
 		"adjective": ["Iroquoise"],
-		"regionTypePriority": ["Forest"],
+		"startBias": {"RegionTypePriority": ["Forest"]},
 		"preferredVictoryType": "Scientific",
 
 		"startIntroPart1": "Greetings, noble Hiawatha, leader of the mighty Iroquois nations! Long have your people lived near the great and holy lake Ontario in the land that has come to be known as the New York state in North America. In the mists of antiquity, the five peoples of Seneca, Onondaga, Mohawks, Cayugas and Oneida united into one nation, the Haudenosaunee, the Iroquois. With no written language, the wise men of your nation created the great law of peace, the model for many constitutions including that of the United States. For many years, your people battled great enemies, such as the Huron, and the French and English invaders. Tough outnumbered and facing weapons far more advanced than the ones your warriors wielded, the Iroquois survived and prospered, until they were finally overwhelmed by the mighty armies of the new United States.",
@@ -416,6 +434,7 @@
 		"tradeRequest": "Does this trade work for you, my friend?",
 		"outerColor": [54,72,72],
 		"innerColor": [246,205,137],
+		"favoredReligion": "Christianity",
 		"uniqueName": "The Great Warpath",
 		"uniques": ["All units move through Forest and Jungle Tiles in friendly territory as if they have roads. These tiles can be used to establish City Connections upon researching the Wheel."],
 		"cities": ["Onondaga","Osininka","Grand River","Akwesasme","Buffalo Creek","Brantford","Montreal","Genesse River",
@@ -440,6 +459,7 @@
 		"tradeRequest": "In my endless magnanimity, I am making you this offer. You agree, of course?",
 		"outerColor": [153,5,3],
 		"innerColor": [244,232,54],
+		"favoredReligion": "Zoroastrianism",
 		"uniqueName": "Achaemenid Legacy",
 		"uniques": ["[+50]% Golden Age length", "[+1] Movement <for [All] units> <during a Golden Age>", "[+10]% Strength <for [All] units> <during a Golden Age>"],
 		"cities": ["Persepolis","Parsagadae","Susa","Ecbatana","Tarsus","Gordium","Bactra","Sardis","Ergili","Dariushkabir",
@@ -454,7 +474,7 @@
 		"name": "Polynesia",
 		"leaderName": "Kamehameha I",
 		"adjective": ["Polynesia"],
-		"alongOcean": true,
+		"startBias": "AlongOcean",
 		"preferredVictoryType": "Cultural",
 
 		"startIntroPart1": "Greetings and blessings be upon you, Kamehameha the Great, chosen by the heavens to unite your scattered peoples. Oh mighty King, you were the first to bring the Big Island of Hawai'i under one solitary rule in 1791 AD. This was followed by the merging of all the remaining islands under your standard in 1810. As the first King of Hawai'i, you standardized the legal and taxation systems and instituted the Mamalahoe Kawanai, an edict protecting civilians in times of war. You ensured the continued unification and sovereignty of the islands by your strong laws and deeds, even after your death in 1819.",
@@ -468,6 +488,7 @@
 		"tradeRequest": "Come, let our people feast together!",
 		"outerColor": [225,105,0],
 		"innerColor": [255,255,78],
+		"favoredReligion": "Christianity",
 		"uniqueName": "Wayfinding",
 		"uniques": ["Enables embarkation for land units <starting from the [Ancient era]>", "Enables [All] units to enter ocean tiles <starting from the [Ancient era]>", "Normal vision when embarked <for [All] units>", "[+10]% Strength <within [2] tiles of a [Moai]>"],
 		"cities": ["Honolulu","Samoa","Tonga","Nuku Hiva","Raiatea","Aotearoa","Tahiti","Hilo","Te Wai Pounamu","Rapa Nui",
@@ -479,7 +500,7 @@
 		"name": "Siam",
 		"leaderName": "Ramkhamhaeng",
 		"adjective": ["Siamese"],
-		"avoidRegionType": ["Forest"],
+		"startBias": {"RegionTypeAvoid": ["Forest"]},
 		"preferredVictoryType":"Diplomatic",
 
 		"startIntroPart1": "Greetings to you, Great King Ramkhamhaeng, leader of the glorious Siamese people! O mighty King, your people bow down before you in awe and fear! You are the ruler of Siam, an ancient country in the heart of Southeast Asia, a beautiful and mysterious land. Surrounded by foes, beset by bloody war and grinding poverty, the clever and loyal Siamese people have endured and triumphed. King Ramkhamhaeng, your empire was once part of the Khmer Empire, until the 13th century AD, when your ancestors revolted, forming the small Sukhothai kingdom. Through successful battle and cunning diplomacy, the tiny kingdom grew into a mighty empire, an empire which would dominate South East Asia for more than a century!",
@@ -493,6 +514,7 @@
 		"tradeRequest": "Greetings. I believe this is a fair proposal for both parties. What do you think?",
 		"outerColor": [228,208,43],
 		"innerColor": [193,21,17],
+		"favoredReligion": "Buddhism",
 		"uniqueName": "Father Governs Children",
 		"uniques": ["[+50]% [Food] from City-States","[+50]% [Culture] from City-States","[+50]% [Faith] from City-States","Military Units gifted from City-States start with [+10] XP"],
 		"cities": ["Sukhothai","Si Satchanalai","Muang Saluang","Lampang","Phitsanulok","Kamphaeng Pet","Nakhom Chum","Vientiane",
@@ -504,7 +526,7 @@
 		"name": "Spain",
 		"leaderName": "Isabella",
 		"adjective": ["Spanish"],
-		"alongOcean": true,
+		"startBias": "AlongOcean",
 		"preferredVictoryType": "Domination",
 
 		"startIntroPart1": "Blessed Isabella, servant of God, holy queen of Castille and León! Your people greet and welcome you. You are the ruler of Spain, a beautiful and ancient country at the crossroads of the world between Europe and Africa, one shore on the Mediterranean and the other on the mighty Atlantic Ocean. The Spanish are a multicultural people with roots in the Muslim and Christian worlds. A seafaring race, Spanish explorers found and conquered much of the New World, and, for many centuries, its gold and silver brought Spain unrivalled wealth and power, making the Spanish court the envy of the world.",
@@ -518,6 +540,7 @@
 		"tradeRequest": "I hope this deal will receive your blessing.",
 		"outerColor": [102,0,0],
 		"innerColor": [255,102,102],
+		"favoredReligion": "Christianity",
 		"uniqueName": "Seven Cities of Gold",
 		"uniques": ["100 Gold for discovering a Natural Wonder (bonus enhanced to 500 Gold if first to discover it)",
 			"Double Happiness from Natural Wonders", "Tile yields from Natural Wonders doubled"],
@@ -530,7 +553,7 @@
 		"name": "Songhai",
 		"leaderName": "Askia",
 		"adjective": ["Songhai"],
-		"avoidRegionType": ["Tundra"],
+		"startBias": {"RegionTypeAvoid": ["Tundra"]},
 		"preferredVictoryType": "Domination",
 
 		"startIntroPart1": "May the blessings of God, who is greatest of all, be upon you Askia, leader of the Songhai people! For many years your kingdom was a vassal of the mighty West African state of Mali, until the middle of the 14th century, when King Sunni Ali Ber wrested independence from the Mali, conquering much territory and fighting off numerous foes who sought to destroy him. Ultimately, his conquest of the wealthy cities of Timbuktu and Jenne gave the growing Songhai empire the economic power to survive for some 100 years, until the empire was destroyed by foes with advanced technology - muskets against spearmen.",
@@ -544,8 +567,9 @@
 		"tradeRequest": "Can I interest you in this deal?",
 		"outerColor": [214,145,19],
 		"innerColor": [90,0,10],
+		"favoredReligion": "Islam",
 		"uniqueName": "River Warlord",
-		"uniques": ["Receive triple Gold from Barbarian encampments and pillaging Cities", "Defense bonus when embarked <for [All] units>"],
+		"uniques": ["Receive triple Gold from Barbarian encampments and pillaging Cities", "Defense bonus when embarked <for [All] units>", "[Land] units gain the [Amphibious] promotion"],
 		"cities": ["Gao","Tombouctu","Jenne","Taghaza","Tondibi","Kumbi Saleh","Kukia","Walata","Tegdaoust","Argungu","Gwandu",
 			"Kebbi","Boussa","Motpi","Bamako","Wa","Kayes","Awdaghost","Ouadane","Dakar","Tadmekket","Tekedda","Kano",
 			"Agadez","Niamey","Torodi","Ouatagouna","Dori","Bamba","Segou"]
@@ -554,7 +578,7 @@
 		"name": "Mongolia",
 		"leaderName": "Genghis Khan",
 		"adjective": ["Mongolian"],
-		"regionTypePriority": ["Plain"],
+		"startBias": {"RegionTypePriority": ["Plain"]},
 		"preferredVictoryType": "Domination",
 
 		"startIntroPart1": "Greetings, o great Temuujin, immortal emperor of the mighty Mongol Empire! Your fists shatter walls of cities and your voice brings despair to your enemies. O Khan! You united the warring tribes of Northern Asia into a mighty people, creating the greatest cavalry force the world has ever witnessed. Your people's cunning diplomacy divided their enemies, making them weak and helpless before Mongolia's conquering armies. In a few short years, your people's soldiers conquered most of China and Eastern Asia, and the empire continued to grow until it reached west into Europe and south to Korea. Indeed, it was the greatest empire ever seen, dwarfing those pathetic conquests of the Romans or the Greeks.",
@@ -568,6 +592,7 @@
 		"tradeRequest": "I am not always this generous, but we hope you take this rare opportunity we give you.",
 		"outerColor": [81,0,9],
 		"innerColor": [255,120,0],
+		"favoredReligion": "Tengriism",
 		"uniqueName": "Mongol Terror",
 		"uniques": ["+30% Strength when fighting City-State units and cities", "[+1] Movement <for [Mounted] units>"],
 		"cities": ["Karakorum","Beshbalik","Turfan","Hsia","Old Sarai","New Sarai","Tabriz","Tiflis","Otrar","Sanchu","Kazan",
@@ -579,7 +604,7 @@
 		"name": "Aztecs",
 		"leaderName": "Montezuma I",
 		"adjective": ["Aztec"],
-		"regionTypePriority": ["Jungle"],
+		"startBias": {"RegionTypePriority": ["Jungle"]},
 		"preferredVictoryType": "Domination",
 
 		"startIntroPart1": "Welcome, O divine Montezuma! We grovel in awe at your magnificence! May the heaven shower all manner of good things upon you all the days of your life! You are the leader of the mighty Aztec people, wandering nomads from a lost home in the north who in the 12th century came to live in the mesa central in the heart of what would come to be called Mexico. Surrounded by many tribes fighting to control the rich land surrounding the sacred lakes of Texcoco, Xaltocan and Zampango, through cunning alliances and martial prowess, within a mere two hundred years, the Aztecs came to dominate the Central American basin, ruling a mighty empire stretching from sea to sea. But the empire fell at last under the assault of foreign devils - the accursed Spaniards! - wielding fiendish weapons the likes of which your faithful warriors had never seen.",
@@ -596,6 +621,7 @@
 
 		"outerColor": [139,32,23],
 		"innerColor": [134,238,214],
+		"favoredReligion": "Christianity",
 		"uniqueName": "Sacrificial Captives",
 		"uniques": ["Earn [100]% of killed [Military] unit's [Strength] as [Culture]"],
 		"cities": ["Tenochtitlan","Teotihuacan","Tlatelolco","Texcoco","Tlaxcala","Calixtlahuaca","Xochicalco","Tlacopan",
@@ -608,7 +634,7 @@
 		"name": "Inca",
 		"leaderName": "Pachacuti",
 		"adjective": ["Incan"],
-		"regionTypePriority": ["Hill"],
+		"startBias": {"RegionTypePriority": ["Hill"]},
 		"preferredVictoryType": "Cultural",
 
 		"startIntroPart1": "Oh ye who remakes the world, your loyal subjects greet you, King Pachacuti Sapa Inca, ruler of Tawantinsuyu and the Inca people! From the beginnings in the small state of Cusco, the Incans displayed their potential for greatness, marching to war against their many enemies, crushing their armies into dust and carving for themselves a mighty empire stretching from Ecuador to Chile. Indeed, they built the greatest empire ever seen in pre-Columbian America. More than mere soldiers, your people were great builders and artists as well, and the remnants of their works still awe and inspire the world today.",
@@ -634,6 +660,7 @@
 
 		"outerColor": [255,184,33],
 		"innerColor": [3,115,86],
+		"favoredReligion": "Christianity",
 		"uniqueName": "Great Andean Road",
 		"uniques": ["Units ignore terrain costs when moving into any tile with Hills",
 			"[-50]% maintenance on road & railroads",
@@ -647,7 +674,7 @@
 		"name": "Denmark",
 		"leaderName": "Harald Bluetooth",
 		"adjective": ["Danish"],
-		"alongOcean": true,
+		"startBias": "AlongOcean",
 		"preferredVictoryType": "Cultural",
 
 		"startIntroPart1": "Honor and glory be yours, Harald Bluetooth Gormsson, mighty heir of King Gorm of the Old and Thyra Dannebod. Not only were you victorious on the battlefield against the armies of Norway, you also completed massive construction project across the land - numerous Ring Fortresses to protect the populace from invasion and internal strife. You successfully drove off waves of German settlers in 983 AD and sheltered your kingdom from unwanted foreign influence.",
@@ -661,6 +688,7 @@
 		"tradeRequest": "This is a fine deal! Even a drunk beggar would agree!",
 		"outerColor": [51,25,0],
 		"innerColor": [255,255,102],
+		"favoredReligion": "Christianity",
 		"uniqueName": "Viking Fury",
 		"uniques": ["[+1] Movement <for [Embarked] units>", "[1] Movement point cost to disembark <for [All] units>",
 			"No movement cost to pillage <for [Melee] units>"],
@@ -670,12 +698,290 @@
 			"Fredrikstad","Kolding","Horsens","Tromsoe","Vejle","Koge","Sandnes","Holstebro","Slagelse","Drammen",
 			"Hillerod","Sonderborg","Skien","Svendborg","Holbaek","Hjorring","Fladstrand","Haderslev","Ringsted","Skrive"]
 	},
+	{
+		"name": "The Huns",
+		"leaderName": "Attila the Hun",
+		"adjective": ["Hunnic"],
+		"startBias": {"RegionTypeAvoid": ["Jungle","Forest"]},
+		"preferredVictorType": "Domination",
+
+		"startIntroPart1": "Your men stand proudly to greet you, Great Attila, grand warrior and ruler of the Hunnic empire. Together with your brother Bleda you expanded the boundaries of your empire, becoming the most powerful and frightening force of the 5th century. You bowed the Eastern Roman Emperors to your will and took kingdom after kingdom along the Danube and Nisava Rivers. As the sovereign ruler of the Huns, you marched your army across Europe into Gaul, planning to extend your already impressive lands all the way to the Atlantic Ocean. Your untimely death led to the quick disintegration and downfall of your empire, but your name and deeds have created an everlasting legacy for your people.",
+		"startIntroPart2": "Fearsome General, your people call for the recreation of a new Hunnic Empire, one which will make the exploits and histories of the former seem like the faded dreaming of a dying sun. Will you answer their call to regain your rightful prominence and glory? Will you mount your steadfast steed and lead your armies to victory? Will you build a civilization that stands the test of time?",
+		"declaringWar": "I grow tired of this throne. I think I should like to have yours instead.",
+		"defeated": "My people will mourn me not with tears, but with human blood.",
+		"attacked": "Now what is this?! You ask me to add your riches to my great avails. The invitation is accepted.",
+		"introduction": "You are in the presence of Attila, scourge of Rome. Do not let hubris be your downfall as well.",
+		"neutralHello": "Good day to you.",
+		"hateHello": "What do you want?",
+		"tradeRequest": "This is better than you deserve, but let it not be said that I am an unfair man.",
+		"outerColor": [180, 178, 164],
+		"innerColor": [70, 0, 4],
+		"favoredReligion": "Tengriism",
+		"uniqueName": "Scourge of God",
+		"uniques": ["[+1 Production] from every [Pasture]", "Cities are razed [2] times as fast", "Starts with [Animal Husbandry]", "\"Borrows\" city names from other civilizations in the game"],
+		"cities": ["Atilla's Court"]
+	},
+	{
+		"name": "The Netherlands",
+		"leaderName": "William of Orange",
+		"adjective": ["Dutch"],
+		"startBias": {"RegionTypePriority": ["Grassland"]},
+		"preferredVictoryType": "Cultural",
+
+		"startIntroPart1": "Hail stalwart Prince William of Orange, liberator of the Netherlands and hero to the Dutch people. It was your courageous effort in the 1568 rebellion against Spanish dominion that led the Dutch to freedom, and ultimately resulted in the Eighty Years' War. Your undertaking allowed for the creation of one of Europe's first modern republics, the Seven United Provinces. You gave your life to the rebellion, falling at the hands of an assassin in 1584, but your death would only serve to embolden the people's charge, and your legacy as \"Father of the Fatherland\" will stand as a symbol of Dutch independence for all time.",
+		"startIntroPart2": "Brave prince, the people again yearn for the wise stewardship your wisdom afforded them. Can you once again secure the sovereignty of your kingdom and lead your people to greatness? Can you build a civilization that stands the test of time?",
+		"declaringWar": "As much as I despise war, I consider it a, hahaha, contribution to the common cause to erase your existence.",
+		"attacked": "You call yourself an exalted ruler, but I see nothing more than a smartly dressed barbarian!",
+		"defeated": "My God, be merciful to my soul. My God, feel pity for this... my poor people!",
+		"introduction": "I am William of Orange, stadtholder of The Netherlands. Did you need anything? I still have a lot to do.",
+		"neutralHello": "Once again, greetings.",
+		"hateHello": "What do you want?",
+		"tradeRequest": "I believe I have something that may be of some importance to you.",
+		"outerColor": [255, 144, 0],
+		"innerColor": [255, 255, 255],
+		"favoredReligion": "Christianity",
+		"uniqueName": "Dutch East India Company",
+		"uniques": ["Retain [50]% of the happiness from a luxury after the last copy has been traded away"],
+		"cities": ["Amsterdam", "Rotterdam", "Utrecht", "Groningen", "Breda", "Nijmegen", "Den Haag", "Haarlem", "Arnhem", "Zutphen", "Maastricht", "Tilburg", "Eindhoven", "Dordrecht", "Leiden", "'s Hertogenbosch", "Almere", "Alkmaar", "Brielle", "Vlissingen", "Apeldoorn", "Enschede", "Amersfoort", "Zwolle", "Venlo", "Uden", "Grave", "Delft", "Gouda", "Nieuwstadt", "Weesp", "Coevorden", "Kerkrade"]
+	},
+
+	{
+	    "name": "Sweden",
+		"leaderName": "Gustavus Adolphus",
+		"adjective": ["Swedish"],
+		"startBias": {"RegionTypePriority": ["Tundra"]},
+		"preferredVictoryType": "Diplomatic",
+
+		"startIntroPart1": "All hail the transcendent King Gustavus Adolphus, founder of the Swedish Empire and her most distinguished military tactician. It was during your reign that Sweden emerged as one of the greatest powers in Europe, due in no small part to your wisdom, both on and off the battlefield. As king, you initiated a number of domestic reforms that ensured the economic stability and prosperity of your people. As the general who came to be known as the \"Lion of the North,\" your visionary designs in warfare gained the admiration of military commanders the world over. Thanks to your triumphs in the Thirty Years' War, you were assured a legacy as one of history's greatest generals.",
+		"startIntroPart2": "Oh noble King, the people long for your prudent leadership, hopeful that once again they will see your kingdom rise to glory. Will you devise daring new strategies, leading your armies to victory on the theater of war? Will you build a civilization that stands the test of time?",
+
+		"declaringWar": "The Hakkapeliittas will ride again and your men will fall just at the sight of my cavalry! God with us!",
+		"attacked": "Ha ha ha, captain Gars will be very glad to head out to war again.",
+		"defeated": "I am Sweden's king. You can take my lands, my people, my kingdom, but you will never reach the House of Vasa.",
+		"introduction": "Stranger, welcome to the Snow King's kingdom! I am Gustavus Adolphus, member of the esteemed House of Vasa",
+
+		"neutralHello": "Oh, welcome!",
+		"hateHello": "Oh, it is you.",
+		"tradeRequest": "My friend, it is my belief that this settlement can benefit both our peoples.",
+        "outerColor": [37,56,123],
+		"innerColor": [227,225,44],
+		"favoredReligion": "Christianity",
+		"uniqueName": "Nobel Prize",
+		"uniques": ["Gain [90] Influence with a [Great Person] gift to a City-State", "When declaring friendship, both parties gain a [10]% boost to great person generation"],
+		"cities": ["Stockholm","Uppsala","Gothenburg","Malmö","Linköping","Kalmar","Skara","Västerås","Jönköping",
+		"Visby","Falun","Norrköping","Gävle","Halmstad","Karlskrona","Hudiksvall","Örebro","Umeå","Karlstad",
+		"Helsingborg","Härnösand","Vadstena","Lund","Västervik","Enköping","Skövde","Eskilstuna","Luleå","Lidköping",
+		"Södertälje","Mariestad","Östersund","Borås","Sundsvall","Vimmerby","Köping","Mora","Arboga","Växjö","Gränna",
+		"Kiruna","Borgholm","Strängnäs","Sveg"]
+	},
+	{
+		"name": "Austria",
+		"leaderName": "Maria Theresa",
+		"adjective": ["Austrian"],
+		"startBias": {"RegionTypePriority": ["Hill"]},
+		"preferredVictoryType": "Diplomatic",
+
+		"startIntroPart1": "Noble and virtuous Queen Maria Theresa, Holy Roman Empress and sovereign of Austria, the people bow to your gracious will. Following the death of your father King Charles VI, you ascended the thone of Austria during a time of great instability, but the empty coffers and diminished military did litle to dissuade your ambitions. Faced with war almost immediately upon your succession to the thron, you managed to fend off your foes, and in naming your husband Francis Stephen co-ruler, assured your place as Empress of the Holy Roman Empire. During your reigh, you guided Austria on a new path of reform - strengthening the military, replenishing the treasury, and improving the educational system of the kingdom.",
+		"startIntroPart2": "Oh great queen, bold and dignified, the time has come for you to rise and guide the kingdom once again. Can you return your people to the height of prosperity and splendor? Will you build a civilization that stands the test of time?",
+
+		"declaringWar": "Shame that it has come this far. But ye wished it so. Next time, be so good, choose your words more wisely.",
+		"attacked": "What a fool ye are! Ye will end swiftly and miserably.",
+		"defeated": "The world is pitiful! There's no beauty in it, no wisdom. I am almost glad to go.",
+		"introduction": "The archduchess of Austria welcomes your Eminence to... Oh let's get this over with! I have a luncheon at four o'clock.",
+
+		"neutralHello": "Hello!",
+		"hateHello": "Oh, it's ye!",
+		"tradeRequest": "I see you admire my new damask. Nobody should say that I am an unjust woman. Let's reach an agreement!",
+		"outerColor": [234,0,0],
+		"innerColor": [255,255,255],
+		"favoredReligion": "Christianity",
+		"uniqueName": "Diplomatic Marriage",
+		"uniques": ["Can spend Gold to annex or puppet a City-State that has been your ally for [5] turns."],
+		"cities": ["Vienna", "Salzburg", "Graz", "Linz", "Klagenfurt", "Bregenz", "Innsbruck", "Kitzbühel",
+			"St. Pölten", "Eisenstadt", "Villach", "Zwettl", "Traun", "Wels", "Dornbirn", "Feldkirch",
+			"Amstetten", "Bad Ischl", "Wolfsberg", "Kufstein", "Leoben", "Klosterneuburg", "Leonding",
+			"Kapfenberg", "Hallein", "Bischofshofen", "Waidhofen", "Saalbach", "Lienz", "Steyr"
+		]
+	},
+	{
+		"name": "Carthage",
+		"leaderName": "Dido",
+		"adjective": ["Carthaginian"],
+		"startBias": "AlongOcean",
+		"preferredVictoryType": "Domination",
+
+		"startIntroPart1": "Blessings and salutations to you, revered Queen Dido, founder of the legendary kingdom of Carthage. Chronicled by the words of the great poet Virgil, your husband Acerbas was murdered at the hands of your own brother, King Pygmalion of Tyre, who subsequently claimed the treasures of Acerbas that were now rightfully yours. Fearing the lengths from which your brother would pursue this vast wealth, you and your compatriots sailed for new lands. Arriving on the shores of North Africa, you tricked the local king with the simple manipulation of an ox hide, laying out a vast expanse of territory for your new home, the future kingdom of Carthage.",
+		"startIntroPart2": "Clever and inquisitive Dido, the world longs for a leader who can provide a shelter from the coming storm, guided by brilliant intuition and cunning. Can you lead the people in the creation of a new kingdom to rival that of once mighty Carthage? Can you build a civilization that will stand the test of time?",
+
+		"declaringWar": "Tell me, do you all know how numerous my armies, elephants and the gdadons are? No? Today, you shall find out!",
+		"attacked": "Fate is against you. You earned the animosity of Carthage in your exploration. Your days are numbered.",
+		"defeated": "The fates became to hate me. This is it? You wouldn't destroy us so without their help.",
+		"introduction": "The Phoenicians welcome you to this most pleasant kingdom. I am Dido, the queen of Carthage and all that belongs to it.",
+		"neutralHello": "Greetings.",
+		"hateHello": "What is it now?",
+		"tradeRequest": "I just had the marvelous idea, and I think you'll appreciate it too.",
+		"outerColor": [205,205,205],
+		"innerColor": [81,0,137],
+		"favoredReligion": "Islam",
+		"uniqueName": "Phoenician Heritage",
+		"uniques": ["Gain a free [Harbor] [in all coastal cities]","Land units may cross [Mountain] tiles after the first [Great General] is earned",
+			"Units ending their turn on [Mountain] tiles take [50] damage"],
+		"cities": ["Carthage","Utique","Hippo Regius","Gades","Saguntum","Carthago Nova","Panormus","Lilybaeum","Hadrumetum","Zama Regia",
+			"Karalis","Malaca","Leptis Magna","Hippo Diarrhytus","Motya","Sulci","Leptis Parva","Tharros","Soluntum","Lixus",
+			"Oea","Theveste","Ibossim","Thapsus","Aleria","Tingis","Abyla","Sabratha","Rusadir","Baecula",
+			"Saldae"]
+	},
+	{
+		"name": "Byzantium",
+		"leaderName": "Theodora",
+		"adjective": ["Byzantine"],
+		"startBias": "AlongOcean",
+		"preferredVictoryType": "Cultural",
+
+		"startIntroPart1": "All hail the most magnificent and magnanimous Empress Theodora, beloved of Byzantium and of Rome! From the lowly ranks of actress and courtesan you became the most powerful woman in the Roman Empire, consort to Justinian I. Starting in the late 520's AD, you joined your husband in a series of important spiritual and legal reforms, creating many laws which elevated the status of and promoted equal treatment of women in the empire. You also aided in the restoration and construction of many aqueducts, bridges, and churches across Constantinople, culminating in the creation of the Hagia Sophia, one of the most splendid architectural wonders of the world.",
+		"startIntroPart2": "Beautiful Empress, Byzantium is in need of your wisdom and strength - her people are lost without your light to lead them. The Byzantine Empire may have fallen once, but its spirit is still intact waiting to be reborn anew. Can you return Byzantium to the heights of glory it once enjoyed? Can you create a civilization to stand the test of time?",
+
+		"declaringWar": "It is always a shame to destroy a thing of beauty. Happily, you are not one.",
+		"attacked": "Now darling, tantrums are most unbecoming. I shall have to teach you a lesson.",
+		"defeated": "Like a child playing with toys you are. My people will never love you, nor suffer this indignation gracefully.",
+		"introduction": "My, isn't this a pleasant surprise - what may I call you, oh mysterious stranger? I am Theodora, beloved of Byzantium.",
+		"neutralHello": "Hello again.",
+		"tradeRequest": "I have heard that you adept at certain kinds of ... interactions. Show me.",
+		"outerColor": [114, 162, 233],
+		"innerColor": [61, 0, 109],
+		"favoredReligion": "Christianity",
+		"uniqueName": "Patriarchate of Constantinople",
+		"uniques": ["May choose [1] additional belief(s) of any type when [founding] a religion"],
+
+		"cities": ["Constantinople", "Adrianople", "Nicaea", "Antioch", "Varna", "Ohrid", "Nicomedia", "Trebizond", "Cherson", "Sardica", 
+			"Ani", "Dyrrachium", "Edessa", "Chalcedon", "Naissus", "Bari", "Iconium", "Prilep", "Samosata", "Kars", "Nicopolis", "Theodosiopolis", 
+			"Tyana", "Gaza", "Kerkyra", "Phoenice", "Selymbria", "Sillyon", "Chrysopolis", "Vodena", "Caesarea", "Traianoupoli", "Constantia", "Athens", 
+			"Patra", "Korinthos"]
+	},
+	{
+		"name": "Celts",
+		"leaderName": "Boudicca",
+		"adjective": ["celtic"],
+		"startBias": {"RegionTypePriority": ["Forest"]},
+		"preferredVictoryType": "Domination",
+
+		"startIntroPart1": "Eternal glory and praise for you, fierce and vengeful Warrior Queen! In a time dominated by men, you not only secured your throne and sovereign rule, but also successfully defied the power of the Roman Empire. After suffering terrible punishment and humiliation at the hand of the Roman invaders, you rallied your people in a bloody and terrifying revolt. Legions fell under your chariot wheels and the city of London burned. While in the end the Romans retained ownership of the isles, you alone made Nero consider withdrawing all troops and leaving Britain forever.",
+		"startIntroPart2": "Oh sleeping lioness, your people desire that you rise and lead them again in the calling that is your namesake. Will you meet their challenge on the open field and lead the Celts to everlasting victory? Will you restore your lands and build an empire to stand the test of time?",
+
+		"declaringWar": "You shall stain this land no longer with your vileness! To arms, my countrymen. We ride to war!",
+		"attacked": "Traitorous man! The Celtic peoples will not stand for such wanton abuse and slander - I shall have your balls!",
+		"defeated": "Vile ruler, know you have won this war in name alone. Your cities lie buried and your troops defeated. I have my own victory.",
+		"introduction": "I am Boudicca, Queen of the Celts. Let no-one underestimate me!",
+		"tradeRequest": "Let us join our forces together and reap the rewards.",
+		"afterPeace": "Well played, fellow warrior.",
+
+		"neutralHello": "God has given good to you.",
+		"neutralLetsHearIt": ["We are all ears…","We are all ears…","Forward."],
+		"neutralNo": ["We must decline.","No.","We refuse."],
+		"neutralYes": ["Okay.","Sure, it shall be so.","Accepted."],
+
+		"hateHello": "Well?",
+		"hateLetsHearIt": ["Forward! Before I change my mind!","And?","Speak!"],
+		"hateNo": ["That's unacceptable!","A thousand times no!","Never!"],
+		"hateYes": ["Eugh! Fine then…","Disgusting! Okay then…","But if I have to…"],
+
+		"outerColor": [12,75,25],
+		"innerColor": [157,172,255],
+		"favoredReligion": "Christianity",
+		"uniqueName": "Druidic Lore",
+		"uniques": ["[+1 Faith] [in all cities] <with [1] to [2] neighboring [unimproved] [Forest] tiles>",
+			"[+2 Faith] [in all cities] <with [3] to [6] neighboring [unimproved] [Forest] tiles>"],
+		"cities": ["Edinburgh","Dublin","Cardiff","Truro","Nantes","Douglas","Glasgow","Cork","Aberystwyth",
+			"Penzance","Rennes","Ramsey","Inverness","Limerick","Swansea","St. Ives","Brest","Peel","Aberdeen",
+			"Belfast","Caernarfon","Newquay","Saint-Nazaire","Castletown","Stirling","Galway","Conwy",
+			"St. Austell","Saint-Malo","Onchan","Dundee","Londonderry","Llanfairpwllgwyngyll","Falmouth","Lorient"]
+		// Llanfairpwllgwyngyll should actually be Llanfairpwllgwyngyllgogerychwyrndrobwllllantysiliogogogoch
+	},
+	{
+		"name": "Ethiopia",
+		"leaderName": "Haile Selassie",
+		"adjective": ["ethiopian"],
+		"startBias": {"RegionTypePriority": ["Jungle"]},
+		"preferredVictoryType": "Cultural",
+
+		"startIntroPart1": "Blessings be upon you, honorable and righteous Emperor of Ethiopia, Haile Selassie. Your legacy as one of Ethiopia's greatest rulers, and as the spiritual leader to the Rastafarian movement, is outshone only by the influence you had on diplomacy and political cooperation throughout the world. In introducing Ethiopia's first written constitution, you planted the seeds of democracy that would take root over the coming years, and your infinitely wise grasp of global affairs secured Ethiopia's place as a charter member of the United Nations. Spearheading efforts to reform and modernize the nation during your reign, you changed the course of Ethiopian history forever",
+		"startIntroPart2": "Revered king, your composed demeanor once protected the people from the many conflicts that plague the nations of men, and the kingdom looks to you to assure peace once again. Will you lead the people with courage and authority, moving forward into a new age? Will you build a civilization that stands the test of time?",
+
+		"declaringWar": "I have tried all other avenues, but yet you persist in this madness. I hope, for your sake, your end is swift.",
+		"attacked": "It is silence that allows evil to triumph. We will not stand mute and allow you to continue on this mad quest unchecked.",
+		"defeated": "God and history will remember your actions this day. I hope you are ready for your impending judgment.",
+		"introduction": "A thousand welcomes to our fair nation. I am Selassie, the Ras Tafari Makonnen and Emperor of Ethiopia, your humble servant.",
+		"tradeRequest": "I request that you consider this offer between our two peoples. I believe it will do us both good.",
+		"afterPeace": "Today is the day on which we defeated our enemy. However, we shall only rejoice in our hearts, and in the spirit of heaven.",
+
+		"neutralHello": "Welcome.",
+		"neutralLetsHearIt": ["Continue.","I am listening.","Yes?"],
+		"neutralNo": ["It is not right.","We oppose because it is not right.","But I feel the agreement is done."],
+		"neutralYes": ["Great.","An agreement has been reached.","Our heart and soul is very much satisfied."],
+
+		"hateHello": "What do you want?",
+		"hateLetsHearIt": ["You said it.","What?","Continue."],
+		"hateNo": ["That is unacceptable.","You are not sure about it.","Please repeat for me."],
+		"hateYes": ["Fine, in my understanding.","It is clear.","It is clear."],
+
+		"outerColor": [19,70,24],
+		"innerColor": [255,46,46],
+		"favoredReligion": "Christianity",
+		"uniqueName": "Spirit of Adwa",
+		"uniques": ["[+20]% Strength <when fighting units from a Civilization with more Cities than you>"],
+		"cities": ["Addis Ababa","Harar","Adwa","Lalibela","Gondar","Axum","Dire Dawa","Bahir Dar","Adama",
+			"Mek'ele","Awasa","Jimma","Jijiga","Dessie","Debre Berhan","Shashamane","Debre Zeyit","Sodo","Hosaena",
+			"Nekemte","Asella","Dila","Adigrat","Debre Markos","Kombolcha","Debre Tabor","Sebeta",
+			"Shire","Ambo","Negele Arsi","Gambela","Ziway","Weldiya"]
+	},
+	{
+		"name": "The Maya",
+		"leaderName": "Pacal",
+		"adjective": ["mayan"],
+		"startBias": {"RegionTypePriority": ["Jungle"]},
+		"preferredVictoryType": "Scientific",
+
+		"startIntroPart1": "Your people kneel before you, exalted King Pacal the Great, favored son of the gods and shield to the citizens of the Palenque domain. After years of strife at the hands of your neighboring rivals, you struck back at the enemies of your people, sacrificing their leaders in retribution for the insults dealt to your predecessors. The glory of Palenque was restored only by the guidance afforded by your wisdom, as you orchestrated vast reconstruction efforts within the city, creating some of the greatest monuments and architecture your people - and the world - have ever known.",
+		"startIntroPart2": "Illustrious King, your people once again look to you for leadership and counsel in the coming days. Will you channel the will of the gods and restore your once proud kingdom to its greatest heights? Will you build new monuments to forever enshrine the memories of your people? Can you build a civilization that will stand the test of time?",
+
+		"declaringWar": "A sacrifice unlike all others must be made!",
+		"attacked": "Muahahahahahaha!",
+		"defeated": "Today comes a great searing pain. With you comes the path to the black storm.",
+		"introduction": "Greetings, wayward one. I am known as Pacal.",
+		"tradeRequest": "Friend, I believe I may have found a way to save us all! Look, look and accept my offering!",
+
+		"neutralHello": "A fine day, it helps you.",
+/* Not used by Unciv, and uncertain
+		"afterPeace": "",
+
+		"neutralLetsHearIt": ["If you must show me."],
+		"neutralNo": ["No no, too much trouble.","No!","Not good enough."],
+		"neutralYes": ["Okay.","Fine.","Accepted."],
+
+		"hateHello": "You.",
+		"hateLetsHearIt": ["Talk.","So?","Speak!"],
+		"hateNo": ["That's unacceptable!","A thousand times no!","Never!"],
+		"hateYes": ["Oh… Fine, okay."],
+*/
+		"outerColor": [198,141,99], // color picker: cf9f75
+		"innerColor": [24,63,66], // color picker: 1f4a4d
+		"favoredReligion": "Christianity",
+		"uniqueName": "The Long Count",
+		"uniques": ["Receive a free Great Person at the end of every [Maya Long Count calendar cycle] (every 394 years), after researching [Theology]. Each bonus person can only be chosen once.",
+			"Once The Long Count activates, the year on the world screen displays as the traditional Mayan Long Count."],
+ 		// Parameters: tech, comment, amount, comment. Compare "Free [Great General] appears" as used by policies
+		"cities": ["Palenque","Tikal","Chichen Itza","Uxmal","Tulum","Copan","Coba","El Mirador","Calakmul",
+			"Edzna","Lamanai","Izapa","Uaxactun","Comalcalco","Piedras Negras","Cancuen","Yaxha","Quirigua",
+			"Q'umarkaj","Nakbe","Cerros","Xunantunich","Takalik Abaj","Cival","San Bartolo","Altar de Sacrificios","Seibal",
+			"Caracol","Naranjo","Dos Pilas","Mayapan","Ixinche","Zaculeu","Kabah"]
+	},
+
 
 	// City-States sorted by cityStateType, name
 	{
 		"name": "Brussels",
 		"adjective": ["Bruxellois"],
-		"cityStateType": "Cultured",
+		"nationType": { "CityState": "Cultured"},
 
 		"declaringWar": "You leave us no choice. War it must be.",
 		"attacked": "Very well, this shall not be forgotten.",
@@ -687,7 +993,7 @@
 	{
 		"name": "Florence",
 		"adjective": ["Florentine"],
-		"cityStateType": "Cultured",
+		"nationType": { "CityState": "Cultured"},
 
 		"declaringWar": "You leave us no choice. War it must be.",
 		"attacked": "Very well, this shall not be forgotten.",
@@ -699,7 +1005,7 @@
 	{
 		"name": "Hanoi",
 		"adjective": ["Hanoi"],
-		"cityStateType": "Cultured",
+		"nationType": { "CityState": "Cultured"},
 
 		"declaringWar": "You leave us no choice. War it must be.",
 		"attacked": "Very well, this shall not be forgotten.",
@@ -711,7 +1017,7 @@
 	{
 		"name": "Kabul",
 		"adjective": ["Kabul"],
-		"cityStateType": "Cultured",
+		"nationType": { "CityState": "Cultured"},
 
 		"declaringWar": "You leave us no choice. War it must be.",
 		"attacked": "Very well, this shall not be forgotten.",
@@ -723,7 +1029,7 @@
 	{
 		"name": "Kuala Lumpur",
 		"adjective": ["KLite"],
-		"cityStateType": "Cultured",
+		"nationType": { "CityState": "Cultured"},
 
 		"declaringWar": "You leave us no choice. War it must be.",
 		"attacked": "Very well, this shall not be forgotten.",
@@ -736,7 +1042,7 @@
 		"name": "Lhasa",
 		"translatedName": "Lhasa",
 		"adjective": ["tibetano"],
-		"cityStateType": "Cultured",
+		"nationType": { "CityState": "Cultured"},
 
 		"declaringWar": "You leave us no choice. War it must be.",
 		"attacked": "Very well, this shall not be forgotten.",
@@ -748,7 +1054,7 @@
 	{
 		"name": "Milan",
 		"adjective": ["Milanese"],
-		"cityStateType": "Cultured",
+		"nationType": { "CityState": "Cultured"},
 
 		"declaringWar": "You leave us no choice. War it must be.",
 		"attacked": "Very well, this shall not be forgotten.",
@@ -760,7 +1066,7 @@
 	{
 		"name": "Quebec City",
 		"adjective": ["Québécois"],
-		"cityStateType": "Cultured",
+		"nationType": { "CityState": "Cultured"},
 
 		"declaringWar": "You leave us no choice. War it must be.",
 		"attacked": "Very well, this shall not be forgotten.",
@@ -773,7 +1079,7 @@
 	{
 		"name": "Cape Town",
 		"adjective": ["Cape Town"],
-		"cityStateType": "Maritime",
+		"nationType": { "CityState": "Maritime"},
 
 		"declaringWar": "You leave us no choice. War it must be.",
 		"attacked": "Very well, this shall not be forgotten.",
@@ -785,7 +1091,7 @@
 	{
 		"name": "Helsinki",
 		"adjective": ["Helsinki"],
-		"cityStateType": "Maritime",
+		"nationType": { "CityState": "Maritime"},
 
 		"declaringWar": "You leave us no choice. War it must be.",
 		"attacked": "Very well, this shall not be forgotten.",
@@ -797,7 +1103,7 @@
 	{
 		"name": "Manila",
 		"adjective": ["Manilan"],
-		"cityStateType": "Maritime",
+		"nationType": { "CityState": "Maritime"},
 
 		"declaringWar": "You leave us no choice. War it must be.",
 		"attacked": "Very well, this shall not be forgotten.",
@@ -809,7 +1115,7 @@
 	{
 		"name": "Mogadishu",
 		"adjective": ["Mogadishu"],
-		"cityStateType": "Maritime",
+		"nationType": { "CityState": "Maritime"},
 
 		"declaringWar": "You leave us no choice. War it must be.",
 		"attacked": "Very well, this shall not be forgotten.",
@@ -821,8 +1127,8 @@
 	{
 		"name": "Rio de Janeiro",
 		"adjective": ["Carioca"],
-		"cityStateType": "Maritime",
-		"alongOcean": true,
+		"nationType": { "CityState": "Maritime"},
+		"startBias": "AlongOcean",
 
 		"declaringWar": "I have to do this, for the sake of progress if nothing else. You must be opposed!",
 		"attacked": "You can see how fruitless this will be for you... right?",
@@ -834,7 +1140,7 @@
 	{
 		"name": "Sydney",
 		"adjective": ["Sydney"],
-		"cityStateType": "Maritime",
+		"nationType": { "CityState": "Maritime"},
 
 		"declaringWar": "After thorough deliberation, Australia finds itself at a crossroads. Prepare yourself, for war is upon us.",
 		"attacked": "We will mobilize every means of resistance to stop this transgression against our nation!",
@@ -846,8 +1152,8 @@
 	{
 		"name": "Ur",
 		"adjective": ["Ur"],
-		"cityStateType": "Maritime",
-		"alongOcean": true,
+		"nationType": { "CityState": "Maritime"},
+		"startBias": "AlongOcean",
 
 		"declaringWar": "I will enjoy hearing your last breath as you witness the destruction of your realm!",
 		"attacked": "Why do we fight? Because Inanna demands it. Now, witness the power of the Sumerians!",
@@ -860,7 +1166,7 @@
 		"name": "Vancouver",
 		"translatedName": "Vancouver",
 		"adjective": ["Vancouverite"],
-		"cityStateType": "Maritime",
+		"nationType": { "CityState": "Maritime"},
 
 		"declaringWar": "In responding to the unstinting malignancy that has heretofore defined your relationship with Canada, we can have no recourse but war!",
 		"attacked": "As we can reach no peaceful resolution with you, Canada must turn, with reluctance, to war.",
@@ -872,8 +1178,8 @@
 	{
 		"name": "Venice",
 		"adjective": ["Venetian"],
-		"cityStateType": "Maritime",
-		"alongOcean": true,
+		"nationType": { "CityState": "Maritime"},
+		"startBias": "AlongOcean",
 
 		"declaringWar": "You have revealed your purposes a bit too early, my friend...",
 		"attacked": "Very well, this shall not be forgotten.",
@@ -886,8 +1192,8 @@
 	{
 		"name": "Antwerp",
 		"adjective": ["Antwerp"],
-		"cityStateType": "Mercantile",
-		"alongOcean": true,
+		"nationType": { "CityState": "Mercantile"},
+		"startBias": "AlongOcean",
 
 		"declaringWar": "You leave us no choice. War it must be.",
 		"attacked": "Very well, this shall not be forgotten.",
@@ -899,8 +1205,8 @@
 	{
 		"name": "Genoa",
 		"adjective": ["Genoese"],
-		"cityStateType": "Mercantile",
-		"alongOcean": true,
+		"nationType": { "CityState": "Mercantile"},
+		"startBias": "AlongOcean",
 
 		"declaringWar": "You leave us no choice. War it must be.",
 		"attacked": "Very well, this shall not be forgotten.",
@@ -912,7 +1218,7 @@
 	{
 		"name": "Kathmandu",
 		"adjective": ["Kathmandu"],
-		"cityStateType": "Mercantile",
+		"nationType": { "CityState": "Mercantile"},
 
 		"declaringWar": "You leave us no choice. War it must be.",
 		"attacked": "Very well, this shall not be forgotten.",
@@ -924,7 +1230,7 @@
 	{
 		"name": "Singapore",
 		"adjective": ["Singaporean"],
-		"cityStateType": "Mercantile",
+		"nationType": { "CityState": "Mercantile"},
 
 		"declaringWar": "You leave us no choice. War it must be.",
 		"attacked": "Very well, this shall not be forgotten.",
@@ -936,8 +1242,8 @@
 	{
 		"name": "Tyre",
 		"adjective": ["Tyrian"],
-		"cityStateType": "Mercantile",
-		"alongOcean": true,
+		"nationType": { "CityState": "Mercantile"},
+		"startBias": "AlongOcean",
 
 		"declaringWar": "You leave us no choice. War it must be.",
 		"attacked": "Very well, this shall not be forgotten.",
@@ -949,7 +1255,7 @@
 	{
 		"name": "Zanzibar",
 		"adjective": ["Zanzibar"],
-		"cityStateType": "Mercantile",
+		"nationType": { "CityState": "Mercantile"},
 
 		"declaringWar": "You leave us no choice. War it must be.",
 		"attacked": "Very well, this shall not be forgotten.",
@@ -962,7 +1268,7 @@
 	{
 		"name": "Almaty",
 		"adjective": ["Almaty"],
-		"cityStateType": "Militaristic",
+		"nationType": { "CityState": "Militaristic"},
 
 		"declaringWar": "You leave us no choice. War it must be.",
 		"attacked": "Very well, this shall not be forgotten.",
@@ -974,7 +1280,7 @@
 	{
 		"name": "Belgrade",
 		"adjective": ["Belgrade"],
-		"cityStateType": "Militaristic",
+		"nationType": { "CityState": "Militaristic"},
 
 		"declaringWar": "Let's have a nice little War, shall we?",
 		"attacked": "If you need your nose bloodied, we'll happily serve.",
@@ -986,7 +1292,7 @@
 	{
 		"name": "Dublin",
 		"adjective": ["Dubliner"],
-		"cityStateType": "Militaristic",
+		"nationType": { "CityState": "Militaristic"},
 
 		"declaringWar": "War lingers in our hearts. Why carry on with a false peace?",
 		"attacked": "You gormless radger! You'll dine on your own teeth before you set foot in Ireland!",
@@ -999,7 +1305,7 @@
 	{
 		"name": "Edinburgh",
 		"adjective": ["Edinburghensian"],
-		"cityStateType": "Militaristic",
+		"nationType": { "CityState": "Militaristic"},
 
 		"declaringWar": "You shall stain this land no longer with your vileness! To arms, my countrymen - we ride to war!",
 		"attacked": "Traitorous man! The Celtic peoples will not stand for such wanton abuse and slander - I shall have your head!",
@@ -1012,7 +1318,7 @@
 	{
 		"name": "M'Banza-Kongo",
 		"adjective": ["M'Banza-Kongo"],
-		"cityStateType": "Militaristic",
+		"nationType": { "CityState": "Militaristic"},
 
 		"declaringWar": "Do you really think you can walk over us so easily? I will not let it happen. Not to Kongo - not to my people!",
 		"attacked": "We are no strangers to war. You have strayed from the right path, and now we will correct it.",
@@ -1024,7 +1330,7 @@
 	{
 		"name": "Sidon",
 		"adjective": ["Sidon"],
-		"cityStateType": "Militaristic",
+		"nationType": { "CityState": "Militaristic"},
 
 		"declaringWar": "You leave us no choice. War it must be.",
 		"attacked": "Very well, this shall not be forgotten.",
@@ -1036,7 +1342,7 @@
 	{
 		"name": "Valletta",
 		"adjective": ["maltese"],
-		"cityStateType": "Militaristic",
+		"nationType": { "CityState": "Militaristic"},
 
 		"declaringWar": "We don't like your face. To arms!",
 		"attacked": "You will see you have just bitten off more than you can chew.",
@@ -1045,11 +1351,50 @@
 		"innerColor": [0,102,102],
 		"cities": ["Valletta"]
 	},
-	
+
+	{
+		"name": "Bratislava",
+		"adjective": ["Bratislava"],
+		"nationType": { "CityState": "Religious"},
+
+		"declaringWar": "I didn't want to do this. We declare war.",
+		"attacked": "I will fear no evil. For god is with me!",
+		"defeated": "Why have you forsaken us my lord?",
+		"outerColor": [0, 0, 0],
+		"innerColor": [255,255,255],
+		"cities": ["Bratislava"]
+	},
+	{
+		"name": "Cahokia",
+		"adjective": ["Cahokia"],
+		"nationType": { "CityState": "Religious"},
+
+		"declaringWar": "We have wanted this for a LONG time. War it shall be.",
+		"attacked": "Very well, we will kick you back to the ancient era!",
+		"defeated": "This isn't how it is supposed to be!",
+		"outerColor": [0, 0, 0],
+		"innerColor": [203, 253, 232],
+		"cities": ["Cahokia"]
+	},
+	{
+		"name": "Jerusalem",
+		"adjective": ["Jerusalem"],
+		"nationType": { "CityState": "Religious"},
+
+		"declaringWar": "By god's grace we will not allow these atrocities to occur any longer. We declare war!",
+		"attacked": "May god have mercy on your evil soul.",
+		"defeated": "I for one welcome our new conquer overlord!",
+		"outerColor": [0, 0, 0],
+		"innerColor": [198,255,192],
+		"cities": ["Jerusalem"]
+	},
+
+
 
 	//Barbarian
 	{
 		"name": "Barbarians",
+		"nationType": "Barbarians",
 		"outerColor": [0,0,0],
 		"innerColor": [182,0,0],
 		"uniques": ["Can only heal by pillaging"]

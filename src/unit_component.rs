@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use civ_map_generator::nation::Nation;
+use civ_map_generator::ruleset::enums::Nation;
 
 #[derive(Component, Clone, Copy)]
 pub enum Owner {
