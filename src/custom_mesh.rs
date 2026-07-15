@@ -3,7 +3,7 @@ use bevy::{
     math::Vec3,
     mesh::{Indices, Mesh, PrimitiveTopology},
 };
-use civ_map_generator::grid::hex_grid::{Hex, HexGrid};
+use civ_map_generator::grid::{Hex, HexGrid};
 
 pub fn line_mesh(start: Vec3, end: Vec3, width: f32) -> Mesh {
     // Calculate direction vector from start to end points
