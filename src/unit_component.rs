@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use civ_map_generator::ruleset::enums::Nation;
+use civ_map_generator::ruleset::enums::{Nation, Unit};
 
 #[derive(Component, Clone, Copy)]
 pub enum Owner {
@@ -8,9 +8,9 @@ pub enum Owner {
 }
 
 #[derive(Component)]
-pub enum Unit {
-    Civilian(String),
-    Military(String),
+pub enum UnitComponent {
+    Civilian(Unit),
+    Military(Unit),
 }
 
 #[derive(Component)]

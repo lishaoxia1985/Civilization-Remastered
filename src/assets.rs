@@ -1,3 +1,9 @@
+mod custom_material;
+mod custom_mesh;
+
+pub use custom_material::*;
+pub use custom_mesh::*;
+
 use bevy::{platform::collections::HashMap, prelude::*};
 use bevy_asset_loader::{asset_collection::AssetCollection, mapped::AssetFileStem};
 

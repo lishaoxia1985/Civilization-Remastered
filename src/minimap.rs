@@ -36,8 +36,7 @@ use civ_map_generator::{grid::Grid, ruleset::enums::{BaseTerrain, EnumStr}, tile
 use enum_map::{EnumMap, enum_map};
 
 use crate::{
-    MainCamera, TileMapResource, assets::MaterialResource, custom_mesh::hex_mesh,
-    world_map::WorldTile,
+    MainCamera, TileMapResource, assets::{MaterialResource, hex_mesh}, world_map::WorldTile,
 };
 
 #[derive(Component)]

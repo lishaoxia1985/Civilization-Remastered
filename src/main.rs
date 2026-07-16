@@ -18,19 +18,13 @@ use bevy::{
 };
 
 use crate::{
-    custom_material::ColorReplaceMaterial,
-    generating_map::{check_map_generate_status, generate_tile_map},
-    minimap::{
+    assets::ColorReplaceMaterial, generating_map::{check_map_generate_status, generate_tile_map}, minimap::{
         DefaultFovIndicatorSize, handle_tile_click, minimap_fov_update, setup_info_panel,
         setup_minimap,
-    },
-    technology::setup_tech_button,
-    world_map::{setup_tile_map, show_main_camera_area},
+    }, technology::setup_tech_button, world_map::{setup_tile_map, show_main_camera_area},
 };
 
 mod assets;
-mod custom_material;
-mod custom_mesh;
 mod generating_map;
 mod minimap;
 mod technology;

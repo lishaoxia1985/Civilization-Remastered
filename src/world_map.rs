@@ -7,9 +7,8 @@ use civ_map_generator::{
 
 use crate::{
     ColorReplaceMaterial, MainCamera, MapSetting, TileMapResource,
-    assets::MaterialResource,
-    custom_mesh::{hex_mesh, line_mesh},
-    unit_component::{Owner, Unit},
+    assets::*,
+    unit_component::{Owner, UnitComponent},
 };
 
 use enum_map::{EnumMap, enum_map};
@@ -182,15 +181,15 @@ pub fn setup_tile_map(
                 unit.unique_to == civilization.as_str() && unit.replaces == "Warrior"
             });
             let military_unit = if let Some(unit) = replace_warrior_unit {
-                unit.name.clone()
+                Unit::from_str(&unit.name)
             } else {
-                "Warrior".to_string()
+                Unit::Warrior
             };
 
             // Spawn the military unit
             commands.entity(tile_entity).with_children(|parent| {
                 parent.spawn(unit_icon(
-                    Unit::Military(military_unit),
+                    UnitComponent::Military(military_unit),
                     Owner::Civilization(civilization),
                     ruleset,
                     inner_rectangle.clone(),
@@ -201,7 +200,7 @@ pub fn setup_tile_map(
                 ));
 
                 parent.spawn(unit_icon(
-                    Unit::Civilian("Settler".to_owned()),
+                    UnitComponent::Civilian(Unit::Settler),
                     Owner::Civilization(civilization),
                     ruleset,
                     inner_rectangle.clone(),
@@ -217,7 +216,7 @@ pub fn setup_tile_map(
         if let Some(&city_state) = tile_map.starting_tile_and_city_state.get(&tile) {
             commands.entity(tile_entity).with_children(|parent| {
                 parent.spawn(unit_icon(
-                    Unit::Civilian("Settler".to_owned()),
+                    UnitComponent::Civilian(Unit::Settler),
                     Owner::CityState(city_state),
                     ruleset,
                     inner_rectangle.clone(),
@@ -306,7 +305,7 @@ pub fn show_main_camera_area(
 }
 
 fn unit_icon(
-    unit: Unit,
+    unit: UnitComponent,
     owner: Owner,
     ruleset: &Ruleset,
     inner_rectangle: Handle<Mesh>,
@@ -316,8 +315,8 @@ fn unit_icon(
     tile_pixel_size: Vec2,
 ) -> impl Bundle {
     let (unit_name, transform_y, out_texture_name) = match &unit {
-        Unit::Civilian(unit) => (unit.to_owned(), -tile_pixel_size.y / 4., "sv_unitcitizen"),
-        Unit::Military(unit) => (unit.to_owned(), tile_pixel_size.y / 4., "sv_unitmilitary"),
+        UnitComponent::Civilian(unit) => (unit.as_str(), -tile_pixel_size.y / 4., "sv_unitcitizen"),
+        UnitComponent::Military(unit) => (unit.as_str(), tile_pixel_size.y / 4., "sv_unitmilitary"),
     };
 
     let nation = match owner {
