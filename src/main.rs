@@ -136,7 +136,8 @@ fn main() {
         .add_systems(OnEnter(AppState::MapGenerating), generate_tile_map)
         .add_systems(OnEnter(AppState::GameStart), setup_tech_button)
         .add_systems(OnEnter(AppState::GameStart), setup_tile_map)
-        .add_systems(OnEnter(AppState::GameStart), insert_civilizations)
+        .add_systems(OnExit(AppState::MapGenerating), insert_civilizations)
+        .add_systems(OnEnter(AppState::GameStart), move_camera_to_player_center)
         .run();
 }
 
@@ -250,6 +251,29 @@ fn zoom_main_camera_system(
 
         // Restrict zoom range
         orthographic.scale = orthographic.scale.clamp(0.3, 1.67);
+    }
+}
+
+fn move_camera_to_player_center(
+    mut query: Query<&mut Transform, With<MainCamera>>,
+    tile_map: Res<TileMapResource>,
+    civilization: Res<Civilizations>,
+) {
+    let grid = tile_map.0.world_grid.grid;
+    let player = civilization.player_nation;
+    let tile_and_civ = &tile_map.0.starting_tile_and_civilization;
+    let tile = tile_and_civ
+        .iter()
+        .find(|&(_, &c)| c == player)
+        .map(|(&tile, _)| tile)
+        .unwrap();
+
+    let offset_coordinate = tile.to_offset(grid);
+
+    let player_position = grid.offset_to_pixel(offset_coordinate);
+
+    for mut transform in query.iter_mut() {
+        [transform.translation.x, transform.translation.y] = player_position;
     }
 }
 

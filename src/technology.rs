@@ -93,7 +93,7 @@ pub fn handle_tech_click_system(
         let mut target = click.event_target();
 
         // Check if close button was clicked
-         if let Ok(close_button_entity) = close_tech_tree_button_query.get(target) {
+        if let Ok(close_button_entity) = close_tech_tree_button_query.get(target) {
             // Despawn all tech tree entities
             for (entity, _) in scrollable_query.iter() {
                 commands.entity(entity).despawn();
@@ -299,29 +299,29 @@ fn open_tech_tree(
                     });
             });
 
-            commands.spawn((
-                    Node {
-                        position_type: PositionType::Absolute,
-                        right: Val::Px(10.0),
-                        top: Val::Px(10.0),
-                        width: Val::Px(40.0),
-                        height: Val::Px(40.0),
-                        border: UiRect::all(Val::Px(2.0)),
-                        ..default()
-                    },
-                    BackgroundColor(Color::srgb(0.8, 0.2, 0.2)),
-                    BorderColor::all(Color::WHITE),
-                    CloseTechTreeButton,
-                    Pickable::default(),
-                    children![(
-                        Text::new("X"),
-                        TextFont {
-                            font_size: FontSize::Px(20.0),
-                            ..Default::default()
-                        },
-                        TextColor(Color::WHITE),
-                    )],
-                ));
+        commands.spawn((
+            Node {
+                position_type: PositionType::Absolute,
+                right: Val::Px(10.0),
+                top: Val::Px(10.0),
+                width: Val::Px(40.0),
+                height: Val::Px(40.0),
+                border: UiRect::all(Val::Px(2.0)),
+                ..default()
+            },
+            BackgroundColor(Color::srgb(0.8, 0.2, 0.2)),
+            BorderColor::all(Color::WHITE),
+            CloseTechTreeButton,
+            Pickable::default(),
+            children![(
+                Text::new("X"),
+                TextFont {
+                    font_size: FontSize::Px(20.0),
+                    ..Default::default()
+                },
+                TextColor(Color::WHITE),
+            )],
+        ));
     }
 }
 
