@@ -18,7 +18,7 @@ use bevy::{
 };
 
 use crate::{
-    assets::ColorReplaceMaterial,
+    assets::{ColorReplaceMaterial, ScreenState},
     combat::{
         advance_turn_system, ai_attack_system, handle_unit_attack, handle_unit_selection,
         setup_unit_info_panel, update_unit_info_panel,
@@ -51,6 +51,12 @@ struct MapSetting(Arc<MapParameters>);
 
 #[derive(Resource)]
 struct TileMapResource(TileMap);
+
+#[derive(SystemSet, Debug, Hash, PartialEq, Eq, Clone)]
+enum GameSystemSet {
+    PlayOnWorldMap,
+    PlayOnTechScreen,
+}
 
 fn main() {
     // Create map parameters resource
@@ -92,6 +98,18 @@ fn main() {
         .insert_resource(default_fov_indicator_size)
         .init_state::<AppState>()
         .init_state::<TurnPhase>()
+        .init_state::<ScreenState>()
+        .configure_sets(
+            Update,
+            (
+                GameSystemSet::PlayOnWorldMap
+                    .run_if(in_state(AppState::GameStart))
+                    .run_if(in_state(ScreenState::WorldMap)),
+                GameSystemSet::PlayOnTechScreen
+                    .run_if(in_state(AppState::GameStart))
+                    .run_if(in_state(ScreenState::TechTree)),
+            ),
+        )
         .add_loading_state(
             LoadingState::new(AppState::AssetLoading)
                 .continue_to_state(AppState::MapGenerating)
@@ -111,26 +129,29 @@ fn main() {
         .add_systems(
             Update,
             (
-                main_camera_movement,
-                cursor_drag_system,
-                zoom_main_camera_system,
-                minimap_fov_update.run_if(in_state(AppState::GameStart)),
-                handle_tile_click.run_if(in_state(AppState::GameStart)),
-                show_main_camera_area.run_if(in_state(AppState::GameStart)),
                 check_map_generate_status.run_if(in_state(AppState::MapGenerating)),
-                // 游戏状态UI更新
-                update_game_state_ui.run_if(in_state(AppState::GameStart)),
+                (
+                    main_camera_movement,
+                    cursor_drag_system,
+                    zoom_main_camera_system,
+                    minimap_fov_update,
+                    handle_tile_click,
+                    show_main_camera_area,
+                    // 游戏状态UI更新
+                    update_game_state_ui,
+                    // 单位选择与攻击
+                    handle_unit_selection,
+                    handle_unit_attack,
+                    update_unit_info_panel,
+                    // AI系统
+                    ai_research_system,
+                    ai_attack_system,
+                    // 回合推进系统
+                    advance_turn_system,
+                )
+                    .in_set(GameSystemSet::PlayOnWorldMap),
                 // 科技点击处理
-                handle_tech_click_system.run_if(in_state(AppState::GameStart)),
-                // 单位选择与攻击
-                handle_unit_selection.run_if(in_state(AppState::GameStart)),
-                handle_unit_attack.run_if(in_state(AppState::GameStart)),
-                update_unit_info_panel.run_if(in_state(AppState::GameStart)),
-                // AI系统
-                ai_research_system.run_if(in_state(AppState::GameStart)),
-                ai_attack_system.run_if(in_state(AppState::GameStart)),
-                // 回合推进系统
-                advance_turn_system.run_if(in_state(AppState::GameStart)),
+                handle_tech_click_system.in_set(GameSystemSet::PlayOnTechScreen),
             ),
         )
         .add_systems(OnEnter(AppState::MapGenerating), generate_tile_map)

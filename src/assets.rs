@@ -29,3 +29,10 @@ pub enum AppState {
     MapGenerating,
     GameStart,
 }
+
+#[derive(Clone, Eq, PartialEq, Debug, Hash, Default, States)]
+pub enum ScreenState {
+    #[default]
+    WorldMap,
+    TechTree,
+}

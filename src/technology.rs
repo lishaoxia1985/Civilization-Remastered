@@ -17,7 +17,11 @@ use bevy::{
 use civ_map_generator::ruleset::{Ruleset, enums::EnumStr};
 use std::collections::HashMap;
 
-use crate::{Civilizations, MapSetting, assets::MaterialResource, game_state::CivData};
+use crate::{
+    Civilizations, MapSetting,
+    assets::{MaterialResource, ScreenState},
+    game_state::CivData,
+};
 
 /// 科技按钮状态
 #[derive(Component)]
@@ -88,6 +92,7 @@ pub fn handle_tech_click_system(
     mut commands: Commands,
     close_tech_tree_button_query: Query<Entity, With<CloseTechTreeButton>>,
     scrollable_query: Query<(Entity, &ScrollableNode)>,
+    mut next_state: ResMut<NextState<ScreenState>>,
 ) {
     for click in click_events.read() {
         let mut target = click.event_target();
@@ -100,6 +105,8 @@ pub fn handle_tech_click_system(
             }
             // Despawn close button too
             commands.entity(close_button_entity).despawn();
+            // Set tech tree as closed
+            next_state.set(ScreenState::WorldMap);
             continue;
         }
 
@@ -158,6 +165,7 @@ fn open_tech_tree(
     map_setting: Res<MapSetting>,
     materials: Res<MaterialResource>,
     civs: Res<Civilizations>,
+    mut next_state: ResMut<NextState<ScreenState>>,
 ) {
     let ruleset = &map_setting.0.ruleset;
 
@@ -189,6 +197,8 @@ fn open_tech_tree(
     let column_tracks: Vec<GridTrack> = vec![GridTrack::px(400.0); column_count as usize];
 
     if matches!(drag.button, PointerButton::Primary) {
+        // Switch to the tech tree screen
+        next_state.set(ScreenState::TechTree);
         commands
             .spawn((
                 Node {
