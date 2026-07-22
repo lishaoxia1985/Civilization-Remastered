@@ -29,7 +29,7 @@ use crate::{
     generating_map::{check_map_generate_status, generate_tile_map},
     minimap::{
         DefaultFovIndicatorSize, handle_tile_click, minimap_fov_update, setup_info_panel,
-        setup_minimap,
+        setup_minimap, spawn_tile_map_for_minimap,
     },
     technology::{ai_research_system, handle_tech_click_system, setup_tech_button},
     world_map::{setup_tile_map, show_main_camera_area},
@@ -135,7 +135,10 @@ fn main() {
         )
         .add_systems(OnEnter(AppState::MapGenerating), generate_tile_map)
         .add_systems(OnEnter(AppState::GameStart), setup_tech_button)
-        .add_systems(OnEnter(AppState::GameStart), setup_tile_map)
+        .add_systems(
+            OnExit(AppState::MapGenerating),
+            (setup_tile_map, spawn_tile_map_for_minimap),
+        )
         .add_systems(OnExit(AppState::MapGenerating), insert_civilizations)
         .add_systems(OnEnter(AppState::GameStart), move_camera_to_player_center)
         .run();

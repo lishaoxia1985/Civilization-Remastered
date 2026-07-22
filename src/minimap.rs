@@ -63,42 +63,19 @@ pub struct DefaultFovIndicatorSize {
 
 pub fn setup_minimap(
     mut commands: Commands,
-    map: Option<Res<TileMapResource>>,
+    tile_map: Option<Res<TileMapResource>>,
     mut default_fov_indicator_size: ResMut<DefaultFovIndicatorSize>,
-    materials: Res<MaterialResource>,
-    mut meshes: ResMut<Assets<Mesh>>,
     mut images: ResMut<Assets<Image>>,
-    mut color_materials: ResMut<Assets<ColorMaterial>>,
     query_main_camera: Single<&Camera, With<MainCamera>>,
 ) {
-    if map.is_none() {
+    let Some(tile_map) = tile_map else {
         return;
     };
 
-    let tile_map = &map.unwrap().0;
+    let tile_map = &tile_map.0;
     let grid = tile_map.world_grid.grid;
 
     let minimap_grid = grid.with_resized_layout([10., 10.]);
-
-    let base_terrain_and_material: EnumMap<BaseTerrain, Handle<ColorMaterial>> = enum_map! {
-        base_terrain => color_materials.add(materials.texture_handle(base_terrain.as_str())),
-    };
-
-    let hex_mesh = meshes.add(hex_mesh(&minimap_grid));
-
-    for tile in tile_map.all_tiles() {
-        let offset_coordinate = tile.to_offset(minimap_grid);
-        let pixel_position = minimap_grid.offset_to_pixel(offset_coordinate);
-        commands.spawn((
-            Mesh2d(hex_mesh.clone()),
-            MeshMaterial2d(base_terrain_and_material[tile.base_terrain(tile_map)].clone()),
-            Transform {
-                translation: Vec3::from((pixel_position[0], pixel_position[1], 9.)),
-                ..Default::default()
-            },
-            RenderLayers::layer(1),
-        ));
-    }
 
     let minimap_center = minimap_grid.center();
     let minimap_width = minimap_center[0] * 2.0;
@@ -259,6 +236,45 @@ pub fn setup_minimap(
         });
 }
 
+/// Create a min tile map for minimap
+pub fn spawn_tile_map_for_minimap(
+    mut commands: Commands,
+    tile_map: Option<Res<TileMapResource>>,
+    materials: Res<MaterialResource>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut color_materials: ResMut<Assets<ColorMaterial>>,
+) {
+    let Some(tile_map) = tile_map else {
+        return;
+    };
+
+    let tile_map = &tile_map.0;
+
+    let grid = tile_map.world_grid.grid;
+
+    let base_terrain_and_material: EnumMap<BaseTerrain, Handle<ColorMaterial>> = enum_map! {
+        base_terrain => color_materials.add(materials.texture_handle(base_terrain.as_str())),
+    };
+
+    let minimap_grid = grid.with_resized_layout([10., 10.]);
+
+    let hex_mesh = meshes.add(hex_mesh(&minimap_grid));
+
+    for tile in tile_map.all_tiles() {
+        let offset_coordinate = tile.to_offset(minimap_grid);
+        let pixel_position = minimap_grid.offset_to_pixel(offset_coordinate);
+        commands.spawn((
+            Mesh2d(hex_mesh.clone()),
+            MeshMaterial2d(base_terrain_and_material[tile.base_terrain(tile_map)].clone()),
+            Transform {
+                translation: Vec3::from((pixel_position[0], pixel_position[1], 9.)),
+                ..Default::default()
+            },
+            RenderLayers::layer(1),
+        ));
+    }
+}
+
 fn minimap_click_handler(
     click: On<Pointer<Click>>,
     query_main_camera: Single<(&mut Transform, &Projection), With<MainCamera>>,
@@ -267,17 +283,18 @@ fn minimap_click_handler(
         &mut Node,
         (With<AuxiliaryFOVIndicator>, Without<FieldOfViewIndicator>),
     >,
-    map: Option<Res<TileMapResource>>,
+    tile_map: Option<Res<TileMapResource>>,
     default_fov_indicator_size: Res<DefaultFovIndicatorSize>,
 ) {
-    if map.is_none() {
+    let Some(tile_map) = tile_map else {
         return;
     };
+
+    let tile_map = &tile_map.0;
 
     let fov_width = default_fov_indicator_size.width;
     let fov_height = default_fov_indicator_size.height;
 
-    let tile_map = &map.unwrap().0;
     let grid = tile_map.world_grid.grid;
     let width = grid.center()[0] * 2.0;
     let height = grid.center()[1] * 2.0;
@@ -315,7 +332,7 @@ fn minimap_click_handler(
 
 pub fn minimap_fov_update(
     query_main_camera: Single<(&Transform, &Projection), (Changed<Camera>, With<MainCamera>)>,
-    map: Option<Res<TileMapResource>>,
+    tile_map: Option<Res<TileMapResource>>,
     query_minimap_indicator: Single<&mut Node, With<FieldOfViewIndicator>>,
     mut query_auxiliary_fov_indicators: Query<
         &mut Node,
@@ -323,11 +340,11 @@ pub fn minimap_fov_update(
     >,
     default_fov_indicator_size: Res<DefaultFovIndicatorSize>,
 ) {
-    if map.is_none() {
+    let Some(tile_map) = tile_map else {
         return;
-    }
+    };
 
-    let tile_map = &map.unwrap().0;
+    let tile_map = &tile_map.0;
     let grid = tile_map.world_grid.grid;
     let width = grid.center()[0] * 2.0;
     let height = grid.center()[1] * 2.0;

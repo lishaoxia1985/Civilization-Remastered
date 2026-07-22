@@ -89,10 +89,11 @@ pub fn handle_unit_attack(
     civs: Res<Civilizations>,
     tile_map: Option<Res<TileMapResource>>,
 ) {
-    if tile_map.is_none() {
+    let Some(tile_map) = tile_map else {
         return;
-    }
-    let tile_map = &tile_map.unwrap().0;
+    };
+
+    let tile_map = &tile_map.0;
 
     // 如果没有选中的单位，直接返回
     let Ok((
@@ -277,10 +278,11 @@ pub fn ai_attack_system(
     mut commands: Commands,
     tile_map: Option<Res<TileMapResource>>,
 ) {
-    if tile_map.is_none() {
+    let Some(tile_map) = tile_map else {
         return;
-    }
-    let tile_map = &tile_map.unwrap().0;
+    };
+
+    let tile_map = &tile_map.0;
     // 找到所有敌方选中的单位
     for (attacker_entity, attacker_owner, attacker_health, attacker_strength, attacker_tile) in
         selected_unit_query.iter()

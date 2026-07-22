@@ -22,17 +22,17 @@ pub struct WorldTile(pub Tile);
 pub fn setup_tile_map(
     mut commands: Commands,
     map_setting: Res<MapSetting>,
-    map: Option<Res<TileMapResource>>,
+    tile_map: Option<Res<TileMapResource>>,
     materials: Res<MaterialResource>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut color_materials: ResMut<Assets<ColorMaterial>>,
     mut custom_materials: ResMut<Assets<ColorReplaceMaterial>>,
 ) {
-    if map.is_none() {
+    let Some(tile_map) = tile_map else {
         return;
     };
 
-    let tile_map = &map.unwrap().0;
+    let tile_map = &tile_map.0;
 
     let grid = tile_map.world_grid.grid;
 
@@ -239,17 +239,17 @@ pub fn setup_tile_map(
 /// Non-visible areas are hidden to prevent visual confusion, with this mechanism supporting both wrap and non-wrap map projection modes.
 pub fn show_main_camera_area(
     query: Single<&mut Transform, With<MainCamera>>,
-    map: Option<Res<TileMapResource>>,
+    tilemap: Option<Res<TileMapResource>>,
     mut query_world_tile: Query<
         (&mut Visibility, &mut Transform, &WorldTile),
         (With<WorldTile>, Without<MainCamera>),
     >,
 ) {
-    if map.is_none() {
+    let Some(tile_map) = tilemap else {
         return;
     };
 
-    let tile_map = &map.unwrap().0;
+    let tile_map = &tile_map.0;
 
     let grid = tile_map.world_grid.grid;
 

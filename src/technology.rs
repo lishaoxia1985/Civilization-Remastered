@@ -197,6 +197,7 @@ fn open_tech_tree(
                     overflow: Overflow::scroll_x(),
                     ..Default::default()
                 },
+                ZIndex(1),
                 ScrollPosition(Vec2::ZERO),
                 ScrollableNode,
                 BackgroundColor(Color::srgb(0.1, 0.1, 0.1)),
@@ -309,6 +310,7 @@ fn open_tech_tree(
                 border: UiRect::all(Val::Px(2.0)),
                 ..default()
             },
+            ZIndex(2),
             BackgroundColor(Color::srgb(0.8, 0.2, 0.2)),
             BorderColor::all(Color::WHITE),
             CloseTechTreeButton,
