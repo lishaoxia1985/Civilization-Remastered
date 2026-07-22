@@ -2,7 +2,10 @@ use std::{collections::HashMap, f32::consts::FRAC_PI_2};
 
 use bevy::prelude::*;
 use civ_map_generator::{
-    grid::{Grid, Hex, HexOrientation, OffsetCoordinate}, ruleset::{Ruleset, enums::*}, tile::Tile, tile_map::RiverEdge,
+    grid::{Grid, Hex, HexOrientation, OffsetCoordinate},
+    ruleset::{Ruleset, enums::*},
+    tile::Tile,
+    tile_map::RiverEdge,
 };
 
 use crate::{

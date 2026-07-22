@@ -25,6 +25,7 @@ use bevy::{
     },
     render::render_resource::{Extent3d, TextureDimension, TextureFormat, TextureUsages},
     sprite_render::{ColorMaterial, MeshMaterial2d},
+    text::{FontSize, TextColor, TextFont},
     transform::components::Transform,
     ui::{
         BackgroundColor, BorderColor, Node, Overflow, OverflowAxis, PositionType, UiRect, Val,
@@ -32,11 +33,17 @@ use bevy::{
     },
     utils::default,
 };
-use civ_map_generator::{grid::Grid, ruleset::enums::{BaseTerrain, EnumStr}, tile::Tile};
+use civ_map_generator::{
+    grid::Grid,
+    ruleset::enums::{BaseTerrain, EnumStr},
+    tile::Tile,
+};
 use enum_map::{EnumMap, enum_map};
 
 use crate::{
-    MainCamera, TileMapResource, assets::{MaterialResource, hex_mesh}, world_map::WorldTile,
+    MainCamera, TileMapResource,
+    assets::{MaterialResource, hex_mesh},
+    world_map::WorldTile,
 };
 
 #[derive(Component)]
@@ -390,7 +397,12 @@ pub fn setup_info_panel(mut commands: Commands) {
         },
         BackgroundColor(Color::BLACK),
         BorderColor::all(Color::WHITE),
-        Text("info panel".to_string()),
+        Text::new("info panel"),
+        TextFont {
+            font_size: FontSize::Px(14.0),
+            ..Default::default()
+        },
+        TextColor(Color::WHITE),
         InfoPanel,
     ));
 }

@@ -14,9 +14,113 @@ use bevy::{
         percent, widget::Text,
     },
 };
-use civ_map_generator::ruleset::Ruleset;
+use civ_map_generator::ruleset::{Ruleset, enums::EnumStr};
+use std::collections::HashMap;
 
-use crate::{MapSetting, assets::MaterialResource};
+use crate::{Civilizations, MapSetting, assets::MaterialResource, game_state::CivData};
+
+/// 科技按钮状态
+#[derive(Component)]
+pub struct TechButton(pub String);
+
+/// 科技可用性状态
+#[derive(Component, Clone)]
+pub enum TechButtonState {
+    /// 可研究（前置科技已满足）
+    Available,
+    /// 正在研究中
+    InProgress,
+    /// 已完成研究
+    Researched,
+    /// 不可用（前置科技未满足）
+    Locked,
+}
+
+/// 判断科技状态
+fn determine_tech_state(
+    technology: &civ_map_generator::ruleset::Technology,
+    player: &CivData,
+) -> TechButtonState {
+    // 如果已经研究完成
+    if player.researched_technologies.contains(&technology.name) {
+        return TechButtonState::Researched;
+    }
+
+    // 如果正在研究中
+    if player.current_research.as_ref() == Some(&technology.name) {
+        return TechButtonState::InProgress;
+    }
+
+    // 检查前置科技是否满足
+    if !technology.prerequisites.is_empty() {
+        let has_prerequisite = technology
+            .prerequisites
+            .iter()
+            .any(|prereq| player.researched_technologies.contains(prereq));
+        if !has_prerequisite {
+            return TechButtonState::Locked;
+        }
+    }
+
+    // 可研究
+    TechButtonState::Available
+}
+
+/// AI自动选择科技研究
+pub fn ai_research_system(mut civs: ResMut<Civilizations>, map_setting: Res<MapSetting>) {
+    // 对所有敌方文明执行AI研究
+    for enemy_nation in &civs.enemy_nations.clone() {
+        if let Some(enemy) = civs.civs.get_mut(enemy_nation) {
+            enemy.ai_choose_research(&map_setting);
+            if let Some(completed) = enemy.advance_research(&map_setting) {
+                info!("Enemy {} researched: {}", enemy_nation.as_str(), completed);
+            }
+        }
+    }
+}
+
+/// 处理科技按钮点击 - 遍历父级查找 TechButton
+pub fn handle_tech_click_system(
+    mut click_events: MessageReader<Pointer<Click>>,
+    tech_button_query: Query<&TechButton>,
+    parent_query: Query<&ChildOf>,
+    mut civs: ResMut<Civilizations>,
+    mut commands: Commands,
+    close_tech_tree_button_query: Query<Entity, With<CloseTechTreeButton>>,
+    scrollable_query: Query<(Entity, &ScrollableNode)>,
+) {
+    for click in click_events.read() {
+        let mut target = click.event_target();
+
+        // Check if close button was clicked
+         if let Ok(close_button_entity) = close_tech_tree_button_query.get(target) {
+            // Despawn all tech tree entities
+            for (entity, _) in scrollable_query.iter() {
+                commands.entity(entity).despawn();
+            }
+            // Despawn close button too
+            commands.entity(close_button_entity).despawn();
+            continue;
+        }
+
+        // 向上遍历父级查找 TechButton
+        loop {
+            if let Ok(tech_button) = tech_button_query.get(target) {
+                let player = civs.player_mut();
+                player.start_research(tech_button.0.clone());
+                // Close tech tree after selecting a technology
+                for (entity, _) in scrollable_query.iter() {
+                    commands.entity(entity).despawn();
+                }
+                break;
+            }
+            match parent_query.get(target) {
+                Ok(parent) => target = parent.parent(),
+                Err(_) => break,
+            }
+        }
+    }
+}
 
 pub fn setup_tech_button(mut commands: Commands) {
     commands
@@ -32,21 +136,32 @@ pub fn setup_tech_button(mut commands: Commands) {
             },
             BackgroundColor(Color::BLACK),
             BorderColor::all(Color::WHITE),
-            Text("Open Tech Tree".to_string()),
+            Text::new("Open Tech Tree"),
+            TextFont {
+                font_size: FontSize::Px(14.0),
+                ..Default::default()
+            },
+            TextColor(Color::WHITE),
         ))
         .observe(open_tech_tree);
 }
 
 #[derive(Component)]
-struct ScrollableNode;
+pub struct ScrollableNode;
+
+#[derive(Component)]
+pub struct CloseTechTreeButton;
 
 fn open_tech_tree(
     drag: On<Pointer<Click>>,
     mut commands: Commands,
     map_setting: Res<MapSetting>,
     materials: Res<MaterialResource>,
+    civs: Res<Civilizations>,
 ) {
     let ruleset = &map_setting.0.ruleset;
+
+    // Calculate column count
     let column_count = ruleset
         .technologies
         .values()
@@ -62,6 +177,16 @@ fn open_tech_tree(
         .max()
         .unwrap() as i16
         + 1;
+
+    let mut row_tracks: Vec<GridTrack> = Vec::new();
+
+    row_tracks.push(GridTrack::percent(5.0));
+
+    for _ in 0..row_count {
+        row_tracks.push(GridTrack::fr(1.0));
+    }
+
+    let column_tracks: Vec<GridTrack> = vec![GridTrack::px(400.0); column_count as usize];
 
     if matches!(drag.button, PointerButton::Primary) {
         commands
@@ -82,8 +207,6 @@ fn open_tech_tree(
                     (&mut ScrollPosition, &Node, &ComputedNode),
                     With<ScrollableNode>,
                 >| {
-                    // We will edit the query in the future
-                    // `node` is unnessarily because we have known `node.overflow` before
                     if let Ok((mut scroll_position, node, computed)) =
                         scroll_position_query.single_mut()
                     {
@@ -91,7 +214,6 @@ fn open_tech_tree(
                             * computed.inverse_scale_factor();
                         let delta = drag.delta;
                         if node.overflow.x == OverflowAxis::Scroll && delta.x != 0. {
-                            // Is this node already scrolled all the way in the direction of the scroll?
                             let max = if delta.x > 0. {
                                 scroll_position.x >= max_offset.x
                             } else {
@@ -102,20 +224,6 @@ fn open_tech_tree(
                                 scroll_position.x += delta.x;
                             }
                         }
-
-                        // It's unnecessary to check because `node.overflow.y == OverflowAxis::Scroll` is always false in this example.
-                        /* if node.overflow.y == OverflowAxis::Scroll && delta.y != 0. {
-                            // Is this node already scrolled all the way in the direction of the scroll?
-                            let max = if delta.y > 0. {
-                                scroll_position.y >= max_offset.y
-                            } else {
-                                scroll_position.y <= 0.
-                            };
-
-                            if !max {
-                                scroll_position.y += delta.y;
-                            }
-                        } */
                     }
                 },
             )
@@ -123,18 +231,55 @@ fn open_tech_tree(
                 builder
                     .spawn(Node {
                         display: Display::Grid,
-                        grid_template_rows: RepeatedGridTrack::fr(row_count as u16, 1.),
-                        grid_template_columns: RepeatedGridTrack::px(column_count as i32, 400.),
+                        // Row 0 for era labels, rows 1+ for technologies
+                        grid_auto_rows: row_tracks,
+                        grid_auto_columns: column_tracks,
                         ..default()
                     })
                     .with_children(|builder| {
-                        ruleset.technologies.values().for_each(|technology| {
+                        // Calculate era spans
+                        let mut era_spans: HashMap<String, (i16, i16)> = HashMap::new();
+                        for technology in ruleset.technologies.values() {
+                            let entry = era_spans
+                                .entry(technology.era.clone())
+                                .or_insert((technology.column as i16, technology.column as i16));
+                            entry.0 = entry.0.min(technology.column as i16);
+                            entry.1 = entry.1.max(technology.column as i16);
+                        }
+
+                        // Spawn era labels in row 0
+                        for (era_name, (min_col, max_col)) in era_spans {
+                            let span = (max_col - min_col + 1) as u16;
                             builder.spawn((
                                 Node {
-                                    grid_row: GridPlacement::start(
-                                        technology.row as i16, // Notice: In json file, row starts from 1, maybe 0 in the future
-                                    ),
-                                    grid_column: GridPlacement::start(technology.column as i16 + 1), // Notice: In json file, column starts from 0
+                                    grid_row: GridPlacement::start(1),
+                                    grid_column: GridPlacement::start(min_col + 1).set_span(span),
+                                    border: UiRect::all(Val::Px(2.0)),
+                                    ..default()
+                                },
+                                BackgroundColor(Color::srgb(0.3, 0.3, 0.3)),
+                                BorderColor::all(Color::WHITE),
+                                children![(
+                                    Text::new(era_name),
+                                    TextFont {
+                                        font_size: FontSize::Px(16.0),
+                                        ..Default::default()
+                                    },
+                                    TextColor(Color::WHITE),
+                                )],
+                            ));
+                        }
+
+                        // Spawn technologies starting from row 1
+                        ruleset.technologies.values().for_each(|technology| {
+                            let player = civs.player();
+                            let tech_state = determine_tech_state(technology, player);
+
+                            builder.spawn((
+                                Node {
+                                    // Technologies start from row 1 (row + 1)
+                                    grid_row: GridPlacement::start(technology.row as i16 + 1),
+                                    grid_column: GridPlacement::start(technology.column as i16 + 1),
                                     border: UiRect::all(Val::Px(2.0)),
                                     ..default()
                                 },
@@ -142,15 +287,41 @@ fn open_tech_tree(
                                     should_block_lower: false,
                                     is_hoverable: true,
                                 },
+                                tech_state.clone(),
                                 children![technology_button(
                                     technology.name.clone(),
                                     &materials,
-                                    ruleset
+                                    ruleset,
+                                    tech_state
                                 )],
                             ));
                         });
                     });
             });
+
+            commands.spawn((
+                    Node {
+                        position_type: PositionType::Absolute,
+                        right: Val::Px(10.0),
+                        top: Val::Px(10.0),
+                        width: Val::Px(40.0),
+                        height: Val::Px(40.0),
+                        border: UiRect::all(Val::Px(2.0)),
+                        ..default()
+                    },
+                    BackgroundColor(Color::srgb(0.8, 0.2, 0.2)),
+                    BorderColor::all(Color::WHITE),
+                    CloseTechTreeButton,
+                    Pickable::default(),
+                    children![(
+                        Text::new("X"),
+                        TextFont {
+                            font_size: FontSize::Px(20.0),
+                            ..Default::default()
+                        },
+                        TextColor(Color::WHITE),
+                    )],
+                ));
     }
 }
 
@@ -158,17 +329,27 @@ fn technology_button(
     technology_name: String,
     materials: &MaterialResource,
     ruleset: &Ruleset,
+    tech_state: TechButtonState,
 ) -> impl Bundle {
+    let bg_color = match tech_state {
+        TechButtonState::Available => Color::srgb(0.2, 0.5, 0.2), // 绿色 - 可研究
+        TechButtonState::InProgress => Color::srgb(0.2, 0.4, 0.8), // 蓝色 - 研究中
+        TechButtonState::Researched => Color::srgb(0.5, 0.5, 0.5), // 灰色 - 已完成
+        TechButtonState::Locked => Color::NONE,                   // 透明 - 锁定
+    };
+
     (
         Node {
-            width: px(300),
-            height: px(60),
+            width: percent(70),
+            height: percent(90),
             border: UiRect::all(Val::Px(2.0)),
             border_radius: BorderRadius::all(Val::Px(10.0)),
             ..default()
         },
-        BackgroundColor(Color::NONE),
+        BackgroundColor(bg_color),
         BorderColor::all(Color::WHITE),
+        Pickable::default(),
+        TechButton(technology_name.clone()),
         children![(
             Node {
                 display: Display::Grid,
@@ -189,14 +370,15 @@ fn technology_button(
                         grid_row: GridPlacement::start(1).set_span(2),
                         align_items: AlignItems::Center,
                         justify_content: JustifyContent::Center,
-                        border: UiRect::all(Val::Px(2.0)),
+                        border: UiRect::all(Val::Percent(5.0)),
                         ..default()
                     },
                     children![(
                         Node {
-                            width: px(40),
-                            height: px(40),
-                            border: UiRect::all(Val::Px(10.0)),
+                            width: Val::Auto,
+                            height: percent(100),
+                            aspect_ratio: Some(1.0),
+                            border: UiRect::all(Val::Percent(5.0)),
                             border_radius: BorderRadius::all(px(f32::MAX)),
                             align_items: AlignItems::Center,
                             justify_content: JustifyContent::Center,
@@ -206,7 +388,7 @@ fn technology_button(
                             .with_color(RED.into()),
                         Outline {
                             width: px(2),
-                            offset: px(3),
+                            offset: px(0),
                             color: Color::WHITE,
                         },
                     ),],
@@ -218,11 +400,12 @@ fn technology_button(
                         border: UiRect::all(Val::Px(2.0)),
                         ..default()
                     },
-                    Text(technology_name.clone()),
+                    Text::new(technology_name.clone()),
                     TextFont {
                         font_size: FontSize::Px(12.0),
-                        ..default()
+                        ..Default::default()
                     },
+                    TextColor(Color::WHITE),
                 ),
                 (
                     Node {
@@ -231,16 +414,18 @@ fn technology_button(
                         border: UiRect::all(Val::Px(2.0)),
                         ..default()
                     },
-                    Text("5000 turns".to_string()),
+                    Text::new("5000 turns"),
                     TextFont {
                         font_size: FontSize::Px(12.0),
-                        ..default()
+                        ..Default::default()
                     },
+                    TextColor(Color::WHITE),
                 ),
                 (
                     Node {
                         grid_column: GridPlacement::start(2).set_span(2),
                         grid_row: GridPlacement::start(2),
+                        height: Val::Percent(90.0),
                         border: UiRect::all(Val::Px(1.0)),
                         border_radius: BorderRadius::all(Val::Px(10.0)),
                         margin: UiRect::all(Val::Px(1.0)),
@@ -255,10 +440,6 @@ fn technology_button(
     )
 }
 
-/// This function creates a list of tech unlock items for a given technology.
-///
-/// TODO: In original game, every civ has some unique buildings, units, improvements, etc.
-/// And they will replace the default ones when unlocked. This is not implemented yet.
 fn tech_unlock_item_list(
     technology_name: String,
     ruleset: &Ruleset,
@@ -302,8 +483,8 @@ fn tech_unlock_item_list(
 
     (
         Node {
-            width: Val::Percent(100.),
-            height: Val::Percent(100.),
+            width: Val::Percent(90.),
+            height: Val::Percent(90.),
             display: Display::Grid,
             grid_template_columns: RepeatedGridTrack::fr(5, 1.),
             ..default()
@@ -354,7 +535,7 @@ fn unit_or_building_or_tile_improvement_item(building_texture: Handle<Image>) ->
         BackgroundColor(WHITE.into()),
         Outline {
             width: px(1),
-            offset: px(3),
+            offset: px(0),
             color: Color::WHITE,
         },
     )
@@ -375,7 +556,7 @@ fn unique_item(texture: Handle<Image>) -> impl Bundle {
         BackgroundColor(WHITE.into()),
         Outline {
             width: px(1),
-            offset: px(3),
+            offset: px(0),
             color: Color::WHITE,
         },
     )
