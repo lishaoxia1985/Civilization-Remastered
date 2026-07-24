@@ -1,23 +1,17 @@
 use std::collections::HashMap;
 
 use bevy::prelude::*;
-use civ_map_generator::ruleset::enums::{EnumStr, Nation};
+use civ_map_generator::ruleset::enums::{EnumStr, Nation, Technology};
 
-use crate::MapSetting;
+use crate::{GameSetting, MapSetting, tech_manage::TechManagerMap};
 
-/// 单个文明的数据
-#[derive(Clone)]
 pub struct CivData {
     pub nation: Nation,
     pub gold: i32,
     pub gold_per_turn: i32,
-    pub science: i32,
     pub science_per_turn: i32,
     pub culture: i32,
     pub culture_per_turn: i32,
-    pub current_research: Option<String>,
-    pub researched_technologies: Vec<String>,
-    pub accumulated_science: i32,
     pub is_human: bool,
 }
 
@@ -27,78 +21,64 @@ impl CivData {
             nation,
             gold: if is_human { 500 } else { 500 },
             gold_per_turn: 0,
-            science: 0,
             science_per_turn: 3,
             culture: 0,
             culture_per_turn: 0,
-            current_research: None,
-            researched_technologies: Vec::new(),
-            accumulated_science: 0,
             is_human,
         }
     }
 
     pub fn end_turn(&mut self) {
         self.gold += self.gold_per_turn;
-        self.science += self.science_per_turn;
         self.culture += self.culture_per_turn;
     }
 
-    pub fn advance_research(&mut self, map_setting: &MapSetting) -> Option<String> {
-        if let Some(ref tech_name) = self.current_research.clone() {
-            self.accumulated_science += self.science_per_turn;
-            if let Some(technology) = map_setting.0.ruleset.technologies.get(tech_name) {
-                if self.accumulated_science >= technology.cost as i32 {
-                    self.researched_technologies.push(tech_name.clone());
-                    let completed = Some(tech_name.clone());
-                    self.current_research = None;
-                    self.accumulated_science = 0;
-                    return completed;
-                }
-            }
-        }
-        None
-    }
-
-    pub fn start_research(&mut self, tech_name: String) -> bool {
-        if self.researched_technologies.contains(&tech_name) {
-            return false;
-        }
-        self.current_research = Some(tech_name);
-        self.accumulated_science = 0;
+    pub fn start_research(&self, tech: Technology, tech_manager_map: &mut TechManagerMap) -> bool {
+        tech_manager_map.0.entry(self.nation).and_modify(|tm| {
+            // TODO: We have not implemented the queue yet.
+            // Now it always has only current researching tech in the queue.
+            tm.techs_to_research.clear();
+            tm.techs_to_research.push(tech)
+        });
         true
     }
 
-    /// AI自动选择可研究的科技（找最便宜的未研究科技）
-    pub fn ai_choose_research(&mut self, map_setting: &MapSetting) {
-        if self.current_research.is_some() {
-            return; // 已经在研究中
+    /// AI automatically selects technology to research (find cheapest unresearched technology)
+    pub fn ai_choose_research(
+        &mut self,
+        map_setting: &MapSetting,
+        tech_manager_map: &mut TechManagerMap,
+    ) {
+        let tech_manager = &tech_manager_map.0[&self.nation];
+
+        if tech_manager.current_researching_technology().is_some() {
+            return; // Already researching
         }
-        let mut available: Vec<(&String, i16)> = map_setting
+        let mut available: Vec<(Technology, i32)> = map_setting
             .0
             .ruleset
             .technologies
             .iter()
-            .filter(|(name, _)| !self.researched_technologies.contains(*name))
-            .map(|(name, tech)| (name, tech.cost))
+            .filter(|(tech, _)| tech_manager.can_be_researched(*tech, map_setting))
+            .map(|(tech, info)| (tech, info.cost))
             .collect();
         available.sort_by_key(|(_, cost)| *cost);
-        if let Some((tech_name, _)) = available.first() {
-            self.start_research(tech_name.to_string());
+        if let Some(&(tech, _)) = available.first() {
+            self.start_research(tech, tech_manager_map);
         }
     }
 }
 
-/// 所有文明的状态管理
+/// Manager states for all civilizations
 #[derive(Resource)]
-pub struct Civilizations {
+pub struct CivilizationStates {
     pub civs: HashMap<Nation, CivData>,
     pub turn: u32,
     pub player_nation: Nation,
     pub enemy_nations: Vec<Nation>,
 }
 
-impl Civilizations {
+impl CivilizationStates {
     pub fn new(player: Nation, enemies: Vec<Nation>) -> Self {
         let mut civs = HashMap::new();
         civs.insert(player, CivData::new(player, true));
@@ -113,12 +93,8 @@ impl Civilizations {
         }
     }
 
-    pub fn player(&self) -> &CivData {
+    pub fn player_data(&self) -> &CivData {
         &self.civs[&self.player_nation]
-    }
-
-    pub fn player_mut(&mut self) -> &mut CivData {
-        self.civs.get_mut(&self.player_nation).unwrap()
     }
 
     pub fn is_enemy(&self, nation: Nation) -> bool {
@@ -132,8 +108,6 @@ impl Civilizations {
         }
     }
 }
-
-// ============ UI组件 ============
 
 #[derive(Component)]
 pub struct TurnCounterText;
@@ -199,7 +173,8 @@ pub fn setup_game_state_ui(mut commands: Commands) {
 }
 
 pub fn update_game_state_ui(
-    civs: Res<Civilizations>,
+    civ_states: Res<CivilizationStates>,
+    tech_manager_map: Res<TechManagerMap>,
     mut turn_text: Single<
         &mut Text,
         (
@@ -236,27 +211,35 @@ pub fn update_game_state_ui(
             Without<ScienceText>,
         ),
     >,
+    game_settings: Res<GameSetting>,
     map_setting: Res<MapSetting>,
 ) {
-    let player = civs.player();
-    turn_text.0 = format!("Turn: {} (Player: {})", civs.turn, player.nation.as_str());
-    gold_text.0 = format!("Gold: {} ({:+})", player.gold, player.gold_per_turn);
-    science_text.0 = format!("Science: {}/turn", player.science_per_turn);
+    let player_nation = civ_states.player_nation;
+    let tech_manager = &tech_manager_map.0[&player_nation];
+    let player_data = civ_states.player_data();
+    turn_text.0 = format!(
+        "Turn: {} (Player: {})",
+        civ_states.turn,
+        player_data.nation.as_str()
+    );
+    gold_text.0 = format!(
+        "Gold: {} ({:+})",
+        player_data.gold, player_data.gold_per_turn
+    );
+    science_text.0 = format!("Science: {}/turn", player_data.science_per_turn);
 
-    if let Some(ref tech_name) = player.current_research {
-        if let Some(technology) = map_setting.0.ruleset.technologies.get(tech_name) {
-            let progress =
-                (player.accumulated_science as f32 / technology.cost as f32 * 100.0) as i32;
-            research_text.0 = format!("Researching: {} ({}%)", tech_name, progress.min(100));
-        } else {
-            research_text.0 = format!("Researching: {}", tech_name);
-        }
+    if let Some(tech) = tech_manager.current_researching_technology() {
+        let research_progress = tech_manager.research_progress(tech);
+        let cost_of_tech =
+            tech_manager.cost_of_tech(tech, player_data, &game_settings, &map_setting);
+        let progress = (research_progress as f32 / cost_of_tech as f32 * 100.0) as i32;
+        research_text.0 = format!("Researching: {} ({}%)", tech.as_str(), progress.min(100));
     } else {
         research_text.0 = "Research: None - Click a tech to start".to_string();
     }
 }
 
-// ============ 结束回合按钮 ============
+// ============ End Turn Button ============
 
 #[derive(Component)]
 pub struct EndTurnButton;
@@ -289,8 +272,37 @@ pub fn setup_end_turn_button(mut commands: Commands) {
         .observe(end_turn_click);
 }
 
-fn end_turn_click(_click: On<Pointer<Click>>, mut civs: ResMut<Civilizations>) {
-    civs.end_turn();
+fn end_turn_click(
+    _click: On<Pointer<Click>>,
+    mut civ_states: ResMut<CivilizationStates>,
+    mut tech_manager_map: ResMut<TechManagerMap>,
+    game_settings: Res<GameSetting>,
+    map_setting: Res<MapSetting>,
+) {
+    let player_nation = civ_states.player_nation;
+    if tech_manager_map.0[&player_nation]
+        .current_researching_technology()
+        .is_none()
+    {
+        println!("Ccurrently no technology being researched. Please choose one to research.");
+        return;
+    }
+    civ_states.end_turn();
+    // TODO: the turn is not true because turn has +1 when civ_states.end_turn() is called,
+    // the turn +1 should be at last when the turn is ended
+    tech_manager_map
+        .0
+        .iter_mut()
+        .for_each(|(nation, tech_manager)| {
+            let civ = &civ_states.civs[nation];
+            tech_manager.end_turn(
+                civ.science_per_turn,
+                civ,
+                civ_states.turn,
+                &game_settings,
+                &map_setting,
+            );
+        });
 }
 
 #[derive(States, Clone, Eq, PartialEq, Debug, Hash, Default)]

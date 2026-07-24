@@ -7,6 +7,7 @@ use bevy_asset_loader::loading_state::{
 use civ_map_generator::{
     grid::*,
     map_parameters::{MapParameters, MapParametersBuilder, WorldGrid},
+    ruleset::enums::{Difficulty, Era, Speed},
     tile_map::TileMap,
 };
 
@@ -24,14 +25,18 @@ use crate::{
         setup_unit_info_panel, update_unit_info_panel,
     },
     game_state::{
-        Civilizations, TurnPhase, setup_end_turn_button, setup_game_state_ui, update_game_state_ui,
+        CivilizationStates, TurnPhase, setup_end_turn_button, setup_game_state_ui,
+        update_game_state_ui,
     },
     generating_map::{check_map_generate_status, generate_tile_map},
     minimap::{
         DefaultFovIndicatorSize, handle_tile_click, minimap_fov_update, setup_info_panel,
         setup_minimap, spawn_tile_map_for_minimap,
     },
-    technology::{ai_research_system, handle_tech_click_system, setup_tech_button},
+    tech_manage::insert_tech_manager_map,
+    technology_screen::{
+        ai_research_system, handle_tech_click_system, setup_tech_button, spawn_technology_screen,
+    },
     world_map::{setup_tile_map, show_main_camera_area},
 };
 
@@ -42,7 +47,8 @@ mod combat;
 mod game_state;
 mod generating_map;
 mod minimap;
-mod technology;
+mod tech_manage;
+mod technology_screen;
 mod unit_component;
 mod world_map;
 
@@ -56,6 +62,23 @@ struct TileMapResource(TileMap);
 enum GameSystemSet {
     PlayOnWorldMap,
     PlayOnTechScreen,
+}
+
+#[derive(Resource)]
+pub struct GameSetting {
+    speed: Speed,
+    difficulty: Difficulty,
+    start_era: Era,
+}
+
+impl Default for GameSetting {
+    fn default() -> Self {
+        Self {
+            speed: Speed::Standard,
+            difficulty: Difficulty::Chieftain,
+            start_era: Era::AncientEra,
+        }
+    }
 }
 
 fn main() {
@@ -95,6 +118,7 @@ fn main() {
         .add_plugins(Material2dPlugin::<ColorReplaceMaterial>::default())
         .init_resource::<InputFocus>()
         .insert_resource(map_setting)
+        .insert_resource(GameSetting::default())
         .insert_resource(default_fov_indicator_size)
         .init_state::<AppState>()
         .init_state::<TurnPhase>()
@@ -137,20 +161,20 @@ fn main() {
                     minimap_fov_update,
                     handle_tile_click,
                     show_main_camera_area,
-                    // 游戏状态UI更新
+                    // Game state UI update
                     update_game_state_ui,
-                    // 单位选择与攻击
+                    // Unit selection and attack
                     handle_unit_selection,
                     handle_unit_attack,
                     update_unit_info_panel,
-                    // AI系统
+                    // AI systems
                     ai_research_system,
                     ai_attack_system,
-                    // 回合推进系统
+                    // Turn advancement system
                     advance_turn_system,
                 )
                     .in_set(GameSystemSet::PlayOnWorldMap),
-                // 科技点击处理
+                // Technology click handling
                 handle_tech_click_system.in_set(GameSystemSet::PlayOnTechScreen),
             ),
         )
@@ -161,7 +185,9 @@ fn main() {
             (setup_tile_map, spawn_tile_map_for_minimap),
         )
         .add_systems(OnExit(AppState::MapGenerating), insert_civilizations)
+        .add_systems(OnEnter(AppState::GameStart), insert_tech_manager_map)
         .add_systems(OnEnter(AppState::GameStart), move_camera_to_player_center)
+        .add_systems(OnEnter(ScreenState::TechTree), spawn_technology_screen)
         .run();
 }
 
@@ -281,7 +307,7 @@ fn zoom_main_camera_system(
 fn move_camera_to_player_center(
     mut query: Query<&mut Transform, With<MainCamera>>,
     tile_map: Res<TileMapResource>,
-    civilization: Res<Civilizations>,
+    civilization: Res<CivilizationStates>,
 ) {
     let grid = tile_map.0.world_grid.grid;
     let player = civilization.player_nation;
@@ -307,18 +333,18 @@ fn insert_civilizations(mut commands: Commands, map_setting: Res<MapSetting>) {
         panic!("Need at least 2 civilizations");
     }
 
-    // 随机选择玩家文明（使用简单的伪随机）
+    // Randomly select player civilization (using simple pseudo-random)
     let player_idx = (map_setting.0.seed % civ_list.len() as u64) as usize;
     let player_nation = civ_list[player_idx];
 
-    // 其余为敌方文明
+    // The rest are enemy civilizations
     let enemy_nations: Vec<Nation> = civ_list
         .iter()
         .filter(|&&c| c != player_nation)
         .copied()
         .collect();
 
-    commands.insert_resource(Civilizations::new(player_nation, enemy_nations));
+    commands.insert_resource(CivilizationStates::new(player_nation, enemy_nations));
 }
 
 /// Limit the main camera movement within the map boundary.

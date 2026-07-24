@@ -14,111 +14,113 @@ use bevy::{
         percent, widget::Text,
     },
 };
-use civ_map_generator::ruleset::{Ruleset, enums::EnumStr};
+use civ_map_generator::ruleset::{
+    Ruleset,
+    enums::{EnumStr, Technology},
+};
+use enum_map::EnumMap;
 use std::collections::HashMap;
 
 use crate::{
-    Civilizations, MapSetting,
-    assets::{MaterialResource, ScreenState},
+    CivilizationStates, GameSetting, MapSetting,
+    assets::{
+        MaterialResource,
+        ScreenState::{self, TechTree},
+    },
     game_state::CivData,
+    tech_manage::TechManagerMap,
 };
 
-/// 科技按钮状态
+/// Technology button state
 #[derive(Component)]
-pub struct TechButton(pub String);
+pub struct TechButton(pub Technology);
 
-/// 科技可用性状态
+/// Technology availability state
 #[derive(Component, Clone)]
 pub enum TechButtonState {
-    /// 可研究（前置科技已满足）
+    /// Available (prerequisites met)
     Available,
-    /// 正在研究中
+    /// Currently researching
     InProgress,
-    /// 已完成研究
+    /// Research completed
     Researched,
-    /// 不可用（前置科技未满足）
+    /// Unavailable (prerequisites not met)
     Locked,
 }
 
-/// 判断科技状态
+/// Determine technology state
 fn determine_tech_state(
-    technology: &civ_map_generator::ruleset::Technology,
+    technology: Technology,
     player: &CivData,
+    map_setting: &MapSetting,
+    tech_manager_map: &TechManagerMap,
 ) -> TechButtonState {
-    // 如果已经研究完成
-    if player.researched_technologies.contains(&technology.name) {
+    let play_nation = player.nation;
+    let tech_manager = &tech_manager_map.0[&play_nation];
+    // If already researched
+    if tech_manager.is_researched(technology) {
         return TechButtonState::Researched;
     }
 
-    // 如果正在研究中
-    if player.current_research.as_ref() == Some(&technology.name) {
+    // If currently researching
+    if tech_manager.current_researching_technology() == Some(technology) {
         return TechButtonState::InProgress;
     }
 
-    // 检查前置科技是否满足
-    if !technology.prerequisites.is_empty() {
-        let has_prerequisite = technology
-            .prerequisites
-            .iter()
-            .any(|prereq| player.researched_technologies.contains(prereq));
-        if !has_prerequisite {
-            return TechButtonState::Locked;
-        }
+    if !tech_manager.can_be_researched(technology, map_setting) {
+        return TechButtonState::Locked;
     }
 
-    // 可研究
+    // Available for research
     TechButtonState::Available
 }
 
-/// AI自动选择科技研究
-pub fn ai_research_system(mut civs: ResMut<Civilizations>, map_setting: Res<MapSetting>) {
-    // 对所有敌方文明执行AI研究
+/// AI automatically selects technology to research
+pub fn ai_research_system(
+    mut civs: ResMut<CivilizationStates>,
+    mut tech_manager_map: ResMut<TechManagerMap>,
+    map_setting: Res<MapSetting>,
+) {
+    // Execute AI research for all enemy civilizations
     for enemy_nation in &civs.enemy_nations.clone() {
         if let Some(enemy) = civs.civs.get_mut(enemy_nation) {
-            enemy.ai_choose_research(&map_setting);
-            if let Some(completed) = enemy.advance_research(&map_setting) {
-                info!("Enemy {} researched: {}", enemy_nation.as_str(), completed);
-            }
+            enemy.ai_choose_research(&map_setting, &mut tech_manager_map);
         }
     }
 }
 
-/// 处理科技按钮点击 - 遍历父级查找 TechButton
+/// Handle technology button click - traverse parent to find TechButton
 pub fn handle_tech_click_system(
     mut click_events: MessageReader<Pointer<Click>>,
     tech_button_query: Query<&TechButton>,
     parent_query: Query<&ChildOf>,
-    mut civs: ResMut<Civilizations>,
-    mut commands: Commands,
+    civs: Res<CivilizationStates>,
+    mut tech_manager_map: ResMut<TechManagerMap>,
+    map_setting: Res<MapSetting>,
     close_tech_tree_button_query: Query<Entity, With<CloseTechTreeButton>>,
-    scrollable_query: Query<(Entity, &ScrollableNode)>,
     mut next_state: ResMut<NextState<ScreenState>>,
 ) {
     for click in click_events.read() {
         let mut target = click.event_target();
 
         // Check if close button was clicked
-        if let Ok(close_button_entity) = close_tech_tree_button_query.get(target) {
-            // Despawn all tech tree entities
-            for (entity, _) in scrollable_query.iter() {
-                commands.entity(entity).despawn();
-            }
-            // Despawn close button too
-            commands.entity(close_button_entity).despawn();
-            // Set tech tree as closed
+        if close_tech_tree_button_query.get(target).is_ok() {
+            // Swith to screen state - world map, that will despawn tech tree screen
             next_state.set(ScreenState::WorldMap);
             continue;
         }
 
-        // 向上遍历父级查找 TechButton
         loop {
             if let Ok(tech_button) = tech_button_query.get(target) {
-                let player = civs.player_mut();
-                player.start_research(tech_button.0.clone());
-                // Close tech tree after selecting a technology
-                for (entity, _) in scrollable_query.iter() {
-                    commands.entity(entity).despawn();
+                let player_nation = civs.player_nation;
+                let tech_manager = &tech_manager_map.0[&player_nation];
+                if !tech_manager.can_be_researched(tech_button.0, &map_setting) {
+                    break;
                 }
+                civs.player_data()
+                    .start_research(tech_button.0, &mut tech_manager_map);
+                // Swith to screen state - world map, that will despawn tech tree screen
+                next_state.set(ScreenState::WorldMap);
                 break;
             }
             match parent_query.get(target) {
@@ -153,21 +155,41 @@ pub fn setup_tech_button(mut commands: Commands) {
         .observe(open_tech_tree);
 }
 
+fn open_tech_tree(drag: On<Pointer<Click>>, mut next_state: ResMut<NextState<ScreenState>>) {
+    if matches!(drag.button, PointerButton::Primary) {
+        // Switch to the tech tree screen
+        next_state.set(ScreenState::TechTree);
+    }
+}
+
 #[derive(Component)]
-pub struct ScrollableNode;
+pub struct TechTreeScrollableNode;
 
 #[derive(Component)]
 pub struct CloseTechTreeButton;
 
-fn open_tech_tree(
-    drag: On<Pointer<Click>>,
+pub fn spawn_technology_screen(
     mut commands: Commands,
+    game_setting: Res<GameSetting>,
     map_setting: Res<MapSetting>,
     materials: Res<MaterialResource>,
-    civs: Res<Civilizations>,
-    mut next_state: ResMut<NextState<ScreenState>>,
+    civs: Res<CivilizationStates>,
+    tech_manager_map: Res<TechManagerMap>,
 ) {
     let ruleset = &map_setting.0.ruleset;
+    let player_nation = civs.player_nation;
+    let player_data = civs.player_data();
+    let tech_manager = &tech_manager_map.0[&player_nation];
+
+    let tech_and_turns: EnumMap<Technology, String> = EnumMap::from_fn(|tech| {
+        tech_manager.turns_to_tech(
+            tech,
+            player_data.science_per_turn,
+            player_data,
+            &game_setting,
+            &map_setting,
+        )
+    });
 
     // Calculate column count
     let column_count = ruleset
@@ -196,101 +218,110 @@ fn open_tech_tree(
 
     let column_tracks: Vec<GridTrack> = vec![GridTrack::px(400.0); column_count as usize];
 
-    if matches!(drag.button, PointerButton::Primary) {
-        // Switch to the tech tree screen
-        next_state.set(ScreenState::TechTree);
-        commands
-            .spawn((
-                Node {
-                    width: percent(100),
-                    height: percent(100),
-                    overflow: Overflow::scroll_x(),
-                    ..Default::default()
-                },
-                ZIndex(1),
-                ScrollPosition(Vec2::ZERO),
-                ScrollableNode,
-                BackgroundColor(Color::srgb(0.1, 0.1, 0.1)),
-            ))
-            .observe(
-                |drag: On<Pointer<Drag>>,
-                 mut scroll_position_query: Query<
-                    (&mut ScrollPosition, &Node, &ComputedNode),
-                    With<ScrollableNode>,
-                >| {
-                    if let Ok((mut scroll_position, node, computed)) =
-                        scroll_position_query.single_mut()
-                    {
-                        let max_offset = (computed.content_size() - computed.size())
-                            * computed.inverse_scale_factor();
-                        let delta = drag.delta;
-                        if node.overflow.x == OverflowAxis::Scroll && delta.x != 0. {
-                            let max = if delta.x > 0. {
-                                scroll_position.x >= max_offset.x
-                            } else {
-                                scroll_position.x <= 0.
-                            };
+    commands
+        .spawn((
+            DespawnOnExit(TechTree),
+            Node {
+                width: percent(100),
+                height: percent(100),
+                overflow: Overflow::scroll_x(),
+                ..Default::default()
+            },
+            ZIndex(1),
+            ScrollPosition(Vec2::ZERO),
+            TechTreeScrollableNode,
+            BackgroundColor(Color::srgb(0.1, 0.1, 0.1)),
+        ))
+        .observe(
+            |drag: On<Pointer<Drag>>,
+             mut scroll_position_query: Query<
+                (&mut ScrollPosition, &Node, &ComputedNode),
+                With<TechTreeScrollableNode>,
+            >| {
+                if let Ok((mut scroll_position, node, computed)) =
+                    scroll_position_query.single_mut()
+                {
+                    let max_offset = (computed.content_size() - computed.size())
+                        * computed.inverse_scale_factor();
+                    let delta = drag.delta;
+                    if node.overflow.x == OverflowAxis::Scroll && delta.x != 0. {
+                        let max = if delta.x > 0. {
+                            scroll_position.x >= max_offset.x
+                        } else {
+                            scroll_position.x <= 0.
+                        };
 
-                            if !max {
-                                scroll_position.x += delta.x;
-                            }
+                        if !max {
+                            scroll_position.x += delta.x;
                         }
                     }
-                },
-            )
-            .with_children(|builder| {
-                builder
-                    .spawn(Node {
-                        display: Display::Grid,
-                        // Row 0 for era labels, rows 1+ for technologies
-                        grid_auto_rows: row_tracks,
-                        grid_auto_columns: column_tracks,
-                        ..default()
-                    })
-                    .with_children(|builder| {
-                        // Calculate era spans
-                        let mut era_spans: HashMap<String, (i16, i16)> = HashMap::new();
-                        for technology in ruleset.technologies.values() {
-                            let entry = era_spans
-                                .entry(technology.era.clone())
-                                .or_insert((technology.column as i16, technology.column as i16));
-                            entry.0 = entry.0.min(technology.column as i16);
-                            entry.1 = entry.1.max(technology.column as i16);
-                        }
+                }
+            },
+        )
+        .with_children(|builder| {
+            builder
+                .spawn(Node {
+                    display: Display::Grid,
+                    // Row 0 for era labels, rows 1+ for technologies
+                    grid_auto_rows: row_tracks,
+                    grid_auto_columns: column_tracks,
+                    ..default()
+                })
+                .with_children(|builder| {
+                    // Calculate era spans
+                    let mut era_spans: HashMap<String, (i16, i16)> = HashMap::new();
+                    for technology in ruleset.technologies.values() {
+                        let entry = era_spans
+                            .entry(technology.era.clone())
+                            .or_insert((technology.column as i16, technology.column as i16));
+                        entry.0 = entry.0.min(technology.column as i16);
+                        entry.1 = entry.1.max(technology.column as i16);
+                    }
 
-                        // Spawn era labels in row 0
-                        for (era_name, (min_col, max_col)) in era_spans {
-                            let span = (max_col - min_col + 1) as u16;
-                            builder.spawn((
-                                Node {
-                                    grid_row: GridPlacement::start(1),
-                                    grid_column: GridPlacement::start(min_col + 1).set_span(span),
-                                    border: UiRect::all(Val::Px(2.0)),
-                                    ..default()
+                    // Spawn era labels in row 0
+                    for (era_name, (min_col, max_col)) in era_spans {
+                        let span = (max_col - min_col + 1) as u16;
+                        builder.spawn((
+                            Node {
+                                grid_row: GridPlacement::start(1),
+                                grid_column: GridPlacement::start(min_col + 1).set_span(span),
+                                border: UiRect::all(Val::Px(2.0)),
+                                ..default()
+                            },
+                            BackgroundColor(Color::srgb(0.3, 0.3, 0.3)),
+                            BorderColor::all(Color::WHITE),
+                            children![(
+                                Text::new(era_name),
+                                TextFont {
+                                    font_size: FontSize::Px(16.0),
+                                    ..Default::default()
                                 },
-                                BackgroundColor(Color::srgb(0.3, 0.3, 0.3)),
-                                BorderColor::all(Color::WHITE),
-                                children![(
-                                    Text::new(era_name),
-                                    TextFont {
-                                        font_size: FontSize::Px(16.0),
-                                        ..Default::default()
-                                    },
-                                    TextColor(Color::WHITE),
-                                )],
-                            ));
-                        }
+                                TextColor(Color::WHITE),
+                            )],
+                        ));
+                    }
 
-                        // Spawn technologies starting from row 1
-                        ruleset.technologies.values().for_each(|technology| {
-                            let player = civs.player();
-                            let tech_state = determine_tech_state(technology, player);
+                    // Spawn technologies starting from row 1
+                    ruleset
+                        .technologies
+                        .iter()
+                        .for_each(|(technology, technology_info)| {
+                            let player = civs.player_data();
+                            let tech_state = determine_tech_state(
+                                technology,
+                                player,
+                                &map_setting,
+                                &tech_manager_map,
+                            );
+                            let tech_turn = &tech_and_turns[technology];
 
                             builder.spawn((
                                 Node {
                                     // Technologies start from row 1 (row + 1)
-                                    grid_row: GridPlacement::start(technology.row as i16 + 1),
-                                    grid_column: GridPlacement::start(technology.column as i16 + 1),
+                                    grid_row: GridPlacement::start(technology_info.row as i16 + 1),
+                                    grid_column: GridPlacement::start(
+                                        technology_info.column as i16 + 1,
+                                    ),
                                     border: UiRect::all(Val::Px(2.0)),
                                     ..default()
                                 },
@@ -300,54 +331,52 @@ fn open_tech_tree(
                                 },
                                 tech_state.clone(),
                                 children![technology_button(
-                                    technology.name.clone(),
-                                    &materials,
-                                    ruleset,
-                                    tech_state
+                                    technology, &materials, ruleset, tech_state, tech_turn
                                 )],
                             ));
                         });
-                    });
-            });
+                });
+        });
 
-        commands.spawn((
-            Node {
-                position_type: PositionType::Absolute,
-                right: Val::Px(10.0),
-                top: Val::Px(10.0),
-                width: Val::Px(40.0),
-                height: Val::Px(40.0),
-                border: UiRect::all(Val::Px(2.0)),
-                ..default()
+    commands.spawn((
+        DespawnOnExit(TechTree),
+        Node {
+            position_type: PositionType::Absolute,
+            right: Val::Px(10.0),
+            top: Val::Px(10.0),
+            width: Val::Px(40.0),
+            height: Val::Px(40.0),
+            border: UiRect::all(Val::Px(2.0)),
+            ..default()
+        },
+        ZIndex(2),
+        BackgroundColor(Color::srgb(0.8, 0.2, 0.2)),
+        BorderColor::all(Color::WHITE),
+        CloseTechTreeButton,
+        Pickable::default(),
+        children![(
+            Text::new("X"),
+            TextFont {
+                font_size: FontSize::Px(20.0),
+                ..Default::default()
             },
-            ZIndex(2),
-            BackgroundColor(Color::srgb(0.8, 0.2, 0.2)),
-            BorderColor::all(Color::WHITE),
-            CloseTechTreeButton,
-            Pickable::default(),
-            children![(
-                Text::new("X"),
-                TextFont {
-                    font_size: FontSize::Px(20.0),
-                    ..Default::default()
-                },
-                TextColor(Color::WHITE),
-            )],
-        ));
-    }
+            TextColor(Color::WHITE),
+        )],
+    ));
 }
 
 fn technology_button(
-    technology_name: String,
+    technology: Technology,
     materials: &MaterialResource,
     ruleset: &Ruleset,
     tech_state: TechButtonState,
+    tech_turn: &str,
 ) -> impl Bundle {
     let bg_color = match tech_state {
-        TechButtonState::Available => Color::srgb(0.2, 0.5, 0.2), // 绿色 - 可研究
-        TechButtonState::InProgress => Color::srgb(0.2, 0.4, 0.8), // 蓝色 - 研究中
-        TechButtonState::Researched => Color::srgb(0.5, 0.5, 0.5), // 灰色 - 已完成
-        TechButtonState::Locked => Color::NONE,                   // 透明 - 锁定
+        TechButtonState::Available => Color::srgb(0.2, 0.5, 0.2), // Green - Researchable
+        TechButtonState::InProgress => Color::srgb(0.2, 0.4, 0.8), // Blue - In Progress
+        TechButtonState::Researched => Color::srgb(0.5, 0.5, 0.5), // Gray - Researched
+        TechButtonState::Locked => Color::NONE,                   // Transparent - Locked
     };
 
     (
@@ -361,7 +390,7 @@ fn technology_button(
         BackgroundColor(bg_color),
         BorderColor::all(Color::WHITE),
         Pickable::default(),
-        TechButton(technology_name.clone()),
+        TechButton(technology),
         children![(
             Node {
                 display: Display::Grid,
@@ -396,7 +425,7 @@ fn technology_button(
                             justify_content: JustifyContent::Center,
                             ..default()
                         },
-                        ImageNode::new(materials.texture_handle(&technology_name))
+                        ImageNode::new(materials.texture_handle(technology.as_str()))
                             .with_color(RED.into()),
                         Outline {
                             width: px(2),
@@ -412,7 +441,7 @@ fn technology_button(
                         border: UiRect::all(Val::Px(2.0)),
                         ..default()
                     },
-                    Text::new(technology_name.clone()),
+                    Text::new(technology.as_str()),
                     TextFont {
                         font_size: FontSize::Px(12.0),
                         ..Default::default()
@@ -426,7 +455,7 @@ fn technology_button(
                         border: UiRect::all(Val::Px(2.0)),
                         ..default()
                     },
-                    Text::new("5000 turns"),
+                    Text::new(tech_turn),
                     TextFont {
                         font_size: FontSize::Px(12.0),
                         ..Default::default()
@@ -445,7 +474,7 @@ fn technology_button(
                     },
                     BackgroundColor(Color::NONE),
                     BorderColor::all(Color::WHITE),
-                    children![tech_unlock_item_list(technology_name, ruleset, materials)],
+                    children![tech_unlock_item_list(technology, ruleset, materials)],
                 )
             ]
         )],
@@ -453,30 +482,31 @@ fn technology_button(
 }
 
 fn tech_unlock_item_list(
-    technology_name: String,
+    technology: Technology,
     ruleset: &Ruleset,
     materials: &MaterialResource,
 ) -> impl Bundle {
     let units = &ruleset.units;
     let unlock_units = units
         .values()
-        .filter(|unit| unit.required_tech == technology_name && unit.unique_to.is_empty());
+        .filter(|unit| unit.required_tech == technology.as_str() && unit.unique_to.is_empty());
 
     let buildings = &ruleset.buildings;
     let unlock_buildings: Vec<_> = buildings
         .values()
         .filter(|building| {
-            building.required_tech == technology_name && building.unique_to.is_empty()
+            building.required_tech == technology.as_str() && building.unique_to.is_empty()
         })
         .map(|building| building.name.clone())
         .collect();
 
     let tile_improvements = &ruleset.tile_improvements;
     let unlock_tile_improvements = tile_improvements.values().filter(|tile_improvement| {
-        tile_improvement.required_tech == technology_name && tile_improvement.unique_to.is_empty()
+        tile_improvement.required_tech == technology.as_str()
+            && tile_improvement.unique_to.is_empty()
     });
 
-    let unlock_uniques = ruleset.technologies[&technology_name].uniques.clone();
+    let unlock_uniques = ruleset.technologies[technology].uniques.clone();
 
     let unit_materials: Vec<_> = unlock_units
         .map(|unit| materials.texture_handle(&unit.name))

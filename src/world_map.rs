@@ -323,7 +323,7 @@ fn unit_icon(
     };
 
     let nation = match owner {
-        Owner::Civilization(ref nation) | Owner::CityState(ref nation) => nation.as_str(),
+        Owner::Civilization(nation) | Owner::CityState(nation) => nation,
     };
 
     let outer_color = ruleset.nations[nation].outer_color;
