@@ -1,38 +1,51 @@
-mod custom_material;
-mod custom_mesh;
+//! 游戏资源模块
+//!
+//! 管理游戏中的所有资源加载、自定义材质和网格。
 
-pub use custom_material::*;
-pub use custom_mesh::*;
+mod material;
+mod mesh;
+
+pub use material::*;
+pub use mesh::*;
 
 use bevy::{platform::collections::HashMap, prelude::*};
 use bevy_asset_loader::{asset_collection::AssetCollection, mapped::AssetFileStem};
 
+/// 游戏资源集合
 #[derive(AssetCollection, Resource)]
-pub struct MaterialResource {
+pub struct GameAssets {
     #[asset(path = "Images", collection(typed, mapped))]
     textures: HashMap<AssetFileStem, Handle<Image>>,
 }
 
-impl MaterialResource {
+impl GameAssets {
+    /// 获取纹理句柄
     pub fn texture_handle(&self, name: &str) -> Handle<Image> {
         self.textures
             .get(name)
-            .unwrap_or_else(|| panic!("Can't find Image: {}", name))
+            .unwrap_or_else(|| panic!("找不到图片资源: {}", name))
             .clone()
     }
 }
 
+/// 应用状态
 #[derive(Clone, Eq, PartialEq, Debug, Hash, Default, States)]
 pub enum AppState {
     #[default]
+    /// 资源加载中
     AssetLoading,
+    /// 地图生成中
     MapGenerating,
+    /// 游戏开始
     GameStart,
 }
 
+/// 屏幕状态
 #[derive(Clone, Eq, PartialEq, Debug, Hash, Default, States)]
 pub enum ScreenState {
     #[default]
+    /// 世界地图
     WorldMap,
+    /// 科技树
     TechTree,
 }

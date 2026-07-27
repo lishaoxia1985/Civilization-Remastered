@@ -1,3 +1,7 @@
+//! 科技插件
+//!
+//! 管理科技树屏幕、科技按钮、AI研究选择和科技管理器注册。
+
 use bevy::{
     color::{
         Color,
@@ -22,90 +26,97 @@ use enum_map::EnumMap;
 use std::collections::HashMap;
 
 use crate::{
-    CivilizationStates, GameSetting, MapSetting,
-    assets::{
-        MaterialResource,
-        ScreenState::{self, TechTree},
-    },
-    game_state::CivData,
-    tech_manage::TechManagerMap,
+    assets::{GameAssets, ScreenState},
+    components::{CloseTechTreeButton, TechButton, TechButtonState, TechTreeScrollableNode},
+    resources::{CivilizationManager, GameSettings, MapParametersRes, TechManagerRegistry},
 };
 
-/// Technology button state
-#[derive(Component)]
-pub struct TechButton(pub Technology);
+/// 科技插件
+pub struct TechPlugin;
 
-/// Technology availability state
-#[derive(Component, Clone)]
-pub enum TechButtonState {
-    /// Available (prerequisites met)
-    Available,
-    /// Currently researching
-    InProgress,
-    /// Research completed
-    Researched,
-    /// Unavailable (prerequisites not met)
-    Locked,
+impl Plugin for TechPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_systems(
+            OnEnter(crate::assets::AppState::GameStart),
+            (setup_tech_button, insert_tech_manager_registry),
+        )
+        .add_systems(
+            Update,
+            ai_research_system.in_set(crate::resources::GameSystemGroup::PlayOnWorldMap),
+        )
+        .add_systems(
+            Update,
+            handle_tech_click_system.in_set(crate::resources::GameSystemGroup::PlayOnTechScreen),
+        )
+        .add_systems(OnEnter(ScreenState::TechTree), spawn_technology_screen);
+    }
 }
 
-/// Determine technology state
+/// 插入科技管理器注册表资源
+fn insert_tech_manager_registry(
+    mut commands: Commands,
+    game_settings: Res<GameSettings>,
+    civ_manager: Res<CivilizationManager>,
+) {
+    commands.insert_resource(TechManagerRegistry::new(
+        &civ_manager,
+        game_settings.start_era,
+    ));
+}
+
+/// 判断科技状态
 fn determine_tech_state(
     technology: Technology,
-    player: &CivData,
-    map_setting: &MapSetting,
-    tech_manager_map: &TechManagerMap,
+    player: &crate::resources::CivData,
+    map_params: &MapParametersRes,
+    tech_registry: &TechManagerRegistry,
 ) -> TechButtonState {
     let play_nation = player.nation;
-    let tech_manager = &tech_manager_map.0[&play_nation];
-    // If already researched
+    let tech_manager = &tech_registry.0[&play_nation];
+
     if tech_manager.is_researched(technology) {
         return TechButtonState::Researched;
     }
 
-    // If currently researching
     if tech_manager.current_researching_technology() == Some(technology) {
         return TechButtonState::InProgress;
     }
 
-    if !tech_manager.can_be_researched(technology, map_setting) {
+    if !tech_manager.can_be_researched(technology, map_params) {
         return TechButtonState::Locked;
     }
 
-    // Available for research
     TechButtonState::Available
 }
 
-/// AI automatically selects technology to research
-pub fn ai_research_system(
-    mut civs: ResMut<CivilizationStates>,
-    mut tech_manager_map: ResMut<TechManagerMap>,
-    map_setting: Res<MapSetting>,
+/// AI 自动选择要研究的科技
+fn ai_research_system(
+    mut civ_manager: ResMut<CivilizationManager>,
+    mut tech_registry: ResMut<TechManagerRegistry>,
+    map_params: Res<MapParametersRes>,
 ) {
-    // Execute AI research for all enemy civilizations
-    for enemy_nation in &civs.enemy_nations.clone() {
-        if let Some(enemy) = civs.civs.get_mut(enemy_nation) {
-            enemy.ai_choose_research(&map_setting, &mut tech_manager_map);
+    for enemy_nation in &civ_manager.enemy_nations.clone() {
+        if let Some(enemy) = civ_manager.civs.get_mut(enemy_nation) {
+            enemy.ai_choose_research(&map_params, &mut tech_registry);
         }
     }
 }
 
-/// Handle technology button click - traverse parent to find TechButton
-pub fn handle_tech_click_system(
+/// 处理科技按钮点击
+fn handle_tech_click_system(
     mut click_events: MessageReader<Pointer<Click>>,
     tech_button_query: Query<&TechButton>,
     parent_query: Query<&ChildOf>,
-    civs: Res<CivilizationStates>,
-    mut tech_manager_map: ResMut<TechManagerMap>,
-    map_setting: Res<MapSetting>,
+    civs: Res<CivilizationManager>,
+    mut tech_registry: ResMut<TechManagerRegistry>,
+    map_params: Res<MapParametersRes>,
     close_tech_tree_button_query: Query<Entity, With<CloseTechTreeButton>>,
     mut next_state: ResMut<NextState<ScreenState>>,
 ) {
     for click in click_events.read() {
         let mut target = click.event_target();
 
-        // Check if close button was clicked
         if close_tech_tree_button_query.get(target).is_ok() {
-            // Swith to screen state - world map, that will despawn tech tree screen
             next_state.set(ScreenState::WorldMap);
             continue;
         }
@@ -113,13 +124,12 @@ pub fn handle_tech_click_system(
         loop {
             if let Ok(tech_button) = tech_button_query.get(target) {
                 let player_nation = civs.player_nation;
-                let tech_manager = &tech_manager_map.0[&player_nation];
-                if !tech_manager.can_be_researched(tech_button.0, &map_setting) {
+                let tech_manager = &tech_registry.0[&player_nation];
+                if !tech_manager.can_be_researched(tech_button.0, &map_params) {
                     break;
                 }
                 civs.player_data()
-                    .start_research(tech_button.0, &mut tech_manager_map);
-                // Swith to screen state - world map, that will despawn tech tree screen
+                    .start_research(tech_button.0, &mut tech_registry);
                 next_state.set(ScreenState::WorldMap);
                 break;
             }
@@ -131,7 +141,8 @@ pub fn handle_tech_click_system(
     }
 }
 
-pub fn setup_tech_button(mut commands: Commands) {
+/// 设置打开科技树的按钮
+fn setup_tech_button(mut commands: Commands) {
     commands
         .spawn((
             Node {
@@ -155,43 +166,37 @@ pub fn setup_tech_button(mut commands: Commands) {
         .observe(open_tech_tree);
 }
 
+/// 打开科技树
 fn open_tech_tree(drag: On<Pointer<Click>>, mut next_state: ResMut<NextState<ScreenState>>) {
     if matches!(drag.button, PointerButton::Primary) {
-        // Switch to the tech tree screen
         next_state.set(ScreenState::TechTree);
     }
 }
 
-#[derive(Component)]
-pub struct TechTreeScrollableNode;
-
-#[derive(Component)]
-pub struct CloseTechTreeButton;
-
-pub fn spawn_technology_screen(
+/// 生成科技树屏幕
+fn spawn_technology_screen(
     mut commands: Commands,
-    game_setting: Res<GameSetting>,
-    map_setting: Res<MapSetting>,
-    materials: Res<MaterialResource>,
-    civs: Res<CivilizationStates>,
-    tech_manager_map: Res<TechManagerMap>,
+    game_settings: Res<GameSettings>,
+    map_params: Res<MapParametersRes>,
+    materials: Res<GameAssets>,
+    civs: Res<CivilizationManager>,
+    tech_registry: Res<TechManagerRegistry>,
 ) {
-    let ruleset = &map_setting.0.ruleset;
+    let ruleset = &map_params.0.ruleset;
     let player_nation = civs.player_nation;
     let player_data = civs.player_data();
-    let tech_manager = &tech_manager_map.0[&player_nation];
+    let tech_manager = &tech_registry.0[&player_nation];
 
     let tech_and_turns: EnumMap<Technology, String> = EnumMap::from_fn(|tech| {
         tech_manager.turns_to_tech(
             tech,
             player_data.science_per_turn,
             player_data,
-            &game_setting,
-            &map_setting,
+            &game_settings,
+            &map_params,
         )
     });
 
-    // Calculate column count
     let column_count = ruleset
         .technologies
         .values()
@@ -209,7 +214,6 @@ pub fn spawn_technology_screen(
         + 1;
 
     let mut row_tracks: Vec<GridTrack> = Vec::new();
-
     row_tracks.push(GridTrack::percent(5.0));
 
     for _ in 0..row_count {
@@ -220,7 +224,7 @@ pub fn spawn_technology_screen(
 
     commands
         .spawn((
-            DespawnOnExit(TechTree),
+            DespawnOnExit(ScreenState::TechTree),
             Node {
                 width: percent(100),
                 height: percent(100),
@@ -262,13 +266,11 @@ pub fn spawn_technology_screen(
             builder
                 .spawn(Node {
                     display: Display::Grid,
-                    // Row 0 for era labels, rows 1+ for technologies
                     grid_auto_rows: row_tracks,
                     grid_auto_columns: column_tracks,
                     ..default()
                 })
                 .with_children(|builder| {
-                    // Calculate era spans
                     let mut era_spans: HashMap<String, (i16, i16)> = HashMap::new();
                     for technology in ruleset.technologies.values() {
                         let entry = era_spans
@@ -278,7 +280,6 @@ pub fn spawn_technology_screen(
                         entry.1 = entry.1.max(technology.column as i16);
                     }
 
-                    // Spawn era labels in row 0
                     for (era_name, (min_col, max_col)) in era_spans {
                         let span = (max_col - min_col + 1) as u16;
                         builder.spawn((
@@ -301,7 +302,6 @@ pub fn spawn_technology_screen(
                         ));
                     }
 
-                    // Spawn technologies starting from row 1
                     ruleset
                         .technologies
                         .iter()
@@ -310,14 +310,13 @@ pub fn spawn_technology_screen(
                             let tech_state = determine_tech_state(
                                 technology,
                                 player,
-                                &map_setting,
-                                &tech_manager_map,
+                                &map_params,
+                                &tech_registry,
                             );
                             let tech_turn = &tech_and_turns[technology];
 
                             builder.spawn((
                                 Node {
-                                    // Technologies start from row 1 (row + 1)
                                     grid_row: GridPlacement::start(technology_info.row as i16 + 1),
                                     grid_column: GridPlacement::start(
                                         technology_info.column as i16 + 1,
@@ -339,7 +338,7 @@ pub fn spawn_technology_screen(
         });
 
     commands.spawn((
-        DespawnOnExit(TechTree),
+        DespawnOnExit(ScreenState::TechTree),
         Node {
             position_type: PositionType::Absolute,
             right: Val::Px(10.0),
@@ -365,18 +364,19 @@ pub fn spawn_technology_screen(
     ));
 }
 
+/// 创建科技按钮
 fn technology_button(
     technology: Technology,
-    materials: &MaterialResource,
+    materials: &GameAssets,
     ruleset: &Ruleset,
     tech_state: TechButtonState,
     tech_turn: &str,
 ) -> impl Bundle {
     let bg_color = match tech_state {
-        TechButtonState::Available => Color::srgb(0.2, 0.5, 0.2), // Green - Researchable
-        TechButtonState::InProgress => Color::srgb(0.2, 0.4, 0.8), // Blue - In Progress
-        TechButtonState::Researched => Color::srgb(0.5, 0.5, 0.5), // Gray - Researched
-        TechButtonState::Locked => Color::NONE,                   // Transparent - Locked
+        TechButtonState::Available => Color::srgb(0.2, 0.5, 0.2),
+        TechButtonState::InProgress => Color::srgb(0.2, 0.4, 0.8),
+        TechButtonState::Researched => Color::srgb(0.5, 0.5, 0.5),
+        TechButtonState::Locked => Color::NONE,
     };
 
     (
@@ -481,10 +481,11 @@ fn technology_button(
     )
 }
 
+/// 创建科技解锁物品列表
 fn tech_unlock_item_list(
     technology: Technology,
     ruleset: &Ruleset,
-    materials: &MaterialResource,
+    materials: &GameAssets,
 ) -> impl Bundle {
     let units = &ruleset.units;
     let unlock_units = units
@@ -562,7 +563,8 @@ fn tech_unlock_item_list(
     )
 }
 
-fn unit_or_building_or_tile_improvement_item(building_texture: Handle<Image>) -> impl Bundle {
+/// 创建单位/建筑/地块改良图标
+fn unit_or_building_or_tile_improvement_item(texture: Handle<Image>) -> impl Bundle {
     (
         Node {
             width: px(25),
@@ -573,7 +575,7 @@ fn unit_or_building_or_tile_improvement_item(building_texture: Handle<Image>) ->
             justify_content: JustifyContent::Center,
             ..default()
         },
-        ImageNode::new(building_texture).with_color(BLACK.into()),
+        ImageNode::new(texture).with_color(BLACK.into()),
         BackgroundColor(WHITE.into()),
         Outline {
             width: px(1),
@@ -583,6 +585,7 @@ fn unit_or_building_or_tile_improvement_item(building_texture: Handle<Image>) ->
     )
 }
 
+/// 创建独特能力图标
 fn unique_item(texture: Handle<Image>) -> impl Bundle {
     (
         Node {

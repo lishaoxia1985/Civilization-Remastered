@@ -1,3 +1,7 @@
+//! 自定义材质
+//!
+//! 定义游戏中使用的自定义着色器材质。
+
 use bevy::{
     asset::{Asset, Handle},
     color::LinearRgba,
@@ -8,14 +12,18 @@ use bevy::{
     sprite_render::{AlphaMode2d, Material2d},
 };
 
+/// 颜色替换材质 - 用于单位图标等需要动态着色的对象
 #[derive(AsBindGroup, Asset, TypePath, Debug, Clone)]
 pub struct ColorReplaceMaterial {
     #[uniform(0)]
+    /// 内部颜色
     pub inner_color: LinearRgba,
     #[uniform(1)]
+    /// 外部颜色
     pub outer_color: LinearRgba,
     #[texture(2)]
     #[sampler(3)]
+    /// 纹理
     pub texture: Handle<Image>,
 }
 

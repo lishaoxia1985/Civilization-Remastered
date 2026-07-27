@@ -1,3 +1,7 @@
+//! 小地图插件
+//!
+//! 管理小地图的创建、渲染、视野指示器和点击导航。
+
 use bevy::{
     asset::{Assets, Handle, RenderAssetUsages},
     camera::{
@@ -5,16 +9,6 @@ use bevy::{
         visibility::RenderLayers,
     },
     color::Color,
-    ecs::{
-        component::Component,
-        entity::Entity,
-        event::EntityEvent,
-        message::MessageReader,
-        observer::On,
-        query::{Changed, With, Without},
-        resource::Resource,
-        system::{Commands, Query, Res, ResMut, Single},
-    },
     image::Image,
     math::{Rect, Vec2, Vec3},
     mesh::{Mesh, Mesh2d},
@@ -23,10 +17,9 @@ use bevy::{
         events::{Click, Pointer},
         pointer::PointerButton,
     },
+    prelude::*,
     render::render_resource::{Extent3d, TextureDimension, TextureFormat, TextureUsages},
     sprite_render::{ColorMaterial, MeshMaterial2d},
-    text::{FontSize, TextColor, TextFont},
-    transform::components::Transform,
     ui::{
         BackgroundColor, BorderColor, Node, Overflow, OverflowAxis, PositionType, UiRect, Val,
         widget::{ImageNode, NodeImageMode, Text},
@@ -41,29 +34,39 @@ use civ_map_generator::{
 use enum_map::{EnumMap, enum_map};
 
 use crate::{
-    MainCamera, TileMapResource,
-    assets::{MaterialResource, hex_mesh},
-    world_map::WorldTile,
+    assets::{GameAssets, hex_mesh},
+    components::{AuxiliaryFOVIndicator, FieldOfViewIndicator, InfoPanel, MainCamera, WorldTile},
+    resources::{DefaultFovIndicatorSize, TileMapRes},
 };
-
-#[derive(Component)]
-pub struct FieldOfViewIndicator;
-
-#[derive(Component)]
-pub struct AuxiliaryFOVIndicator;
 
 const MINIMAP_WIDTH: f32 = 300.;
 const MINIMAP_HEIGHT: f32 = 200.;
 
-#[derive(Resource, Default)]
-pub struct DefaultFovIndicatorSize {
-    pub width: f32,
-    pub height: f32,
+/// 小地图插件
+pub struct MinimapPlugin;
+
+impl Plugin for MinimapPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_systems(
+            OnEnter(crate::assets::AppState::GameStart),
+            (setup_minimap, setup_info_panel),
+        )
+        .add_systems(
+            Update,
+            (minimap_fov_update, handle_tile_click)
+                .in_set(crate::resources::GameSystemGroup::PlayOnWorldMap),
+        )
+        .add_systems(
+            OnExit(crate::assets::AppState::MapGenerating),
+            spawn_tile_map_for_minimap,
+        );
+    }
 }
 
-pub fn setup_minimap(
+/// 设置小地图
+fn setup_minimap(
     mut commands: Commands,
-    tile_map: Option<Res<TileMapResource>>,
+    tile_map: Option<Res<TileMapRes>>,
     mut default_fov_indicator_size: ResMut<DefaultFovIndicatorSize>,
     mut images: ResMut<Assets<Image>>,
     query_main_camera: Single<&Camera, With<MainCamera>>,
@@ -236,11 +239,11 @@ pub fn setup_minimap(
         });
 }
 
-/// Create a min tile map for minimap
-pub fn spawn_tile_map_for_minimap(
+/// 为小地图创建地块渲染
+fn spawn_tile_map_for_minimap(
     mut commands: Commands,
-    tile_map: Option<Res<TileMapResource>>,
-    materials: Res<MaterialResource>,
+    tile_map: Option<Res<TileMapRes>>,
+    materials: Res<GameAssets>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut color_materials: ResMut<Assets<ColorMaterial>>,
 ) {
@@ -249,7 +252,6 @@ pub fn spawn_tile_map_for_minimap(
     };
 
     let tile_map = &tile_map.0;
-
     let grid = tile_map.world_grid.grid;
 
     let base_terrain_and_material: EnumMap<BaseTerrain, Handle<ColorMaterial>> = enum_map! {
@@ -257,7 +259,6 @@ pub fn spawn_tile_map_for_minimap(
     };
 
     let minimap_grid = grid.with_resized_layout([10., 10.]);
-
     let hex_mesh = meshes.add(hex_mesh(&minimap_grid));
 
     for tile in tile_map.all_tiles() {
@@ -275,6 +276,7 @@ pub fn spawn_tile_map_for_minimap(
     }
 }
 
+/// 小地图点击处理
 fn minimap_click_handler(
     click: On<Pointer<Click>>,
     query_main_camera: Single<(&mut Transform, &Projection), With<MainCamera>>,
@@ -283,7 +285,7 @@ fn minimap_click_handler(
         &mut Node,
         (With<AuxiliaryFOVIndicator>, Without<FieldOfViewIndicator>),
     >,
-    tile_map: Option<Res<TileMapResource>>,
+    tile_map: Option<Res<TileMapRes>>,
     default_fov_indicator_size: Res<DefaultFovIndicatorSize>,
 ) {
     let Some(tile_map) = tile_map else {
@@ -291,7 +293,6 @@ fn minimap_click_handler(
     };
 
     let tile_map = &tile_map.0;
-
     let fov_width = default_fov_indicator_size.width;
     let fov_height = default_fov_indicator_size.height;
 
@@ -307,7 +308,6 @@ fn minimap_click_handler(
         let scale = orthographic.scale;
 
         let drag_position = click.hit.position.unwrap().truncate();
-        // Invert the y-axis to match the world coordinate system
         let normalized_drag_position = Vec2::new(drag_position[0] + 0.5, -drag_position[1] + 0.5);
 
         camera_transform.translation.x = normalized_drag_position[0] * width;
@@ -330,9 +330,10 @@ fn minimap_click_handler(
     }
 }
 
-pub fn minimap_fov_update(
+/// 小地图视野更新
+fn minimap_fov_update(
     query_main_camera: Single<(&Transform, &Projection), (Changed<Camera>, With<MainCamera>)>,
-    tile_map: Option<Res<TileMapResource>>,
+    tile_map: Option<Res<TileMapRes>>,
     query_minimap_indicator: Single<&mut Node, With<FieldOfViewIndicator>>,
     mut query_auxiliary_fov_indicators: Query<
         &mut Node,
@@ -363,7 +364,6 @@ pub fn minimap_fov_update(
     let camera_position = camera_transform.translation.truncate().to_array();
     let mut camera_offset_coordinate = grid.pixel_to_offset(camera_position);
 
-    // clamp camera position to map bounds if map is not wrapping
     if !grid.wrap_x() {
         camera_offset_coordinate.0.x = camera_offset_coordinate
             .0
@@ -399,8 +399,7 @@ pub fn minimap_fov_update(
         });
 }
 
-#[derive(Component)]
-pub struct InfoPanel;
+/// 信息面板组件
 pub fn setup_info_panel(mut commands: Commands) {
     commands.spawn((
         Node {
@@ -424,7 +423,8 @@ pub fn setup_info_panel(mut commands: Commands) {
     ));
 }
 
-pub fn handle_tile_click(
+/// 处理地块点击事件
+fn handle_tile_click(
     mut click_events: MessageReader<Pointer<Click>>,
     query: Query<&WorldTile>,
     mut query_info_panel: Single<&mut Text, With<InfoPanel>>,

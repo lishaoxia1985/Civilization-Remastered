@@ -1,3 +1,7 @@
+//! 自定义网格
+//!
+//! 定义游戏中使用的各种网格生成函数。
+
 use bevy::{
     asset::RenderAssetUsages,
     math::Vec3,
@@ -5,17 +9,15 @@ use bevy::{
 };
 use civ_map_generator::grid::{Hex, HexGrid};
 
+/// 生成线段网格
 pub fn line_mesh(start: Vec3, end: Vec3, width: f32) -> Mesh {
-    // Calculate direction vector from start to end points
     let direction = end - start;
     let _length = direction.length();
     let normalized_direction = direction.normalize();
 
-    // Compute perpendicular vector to create the line width
     let perpendicular =
         Vec3::new(-normalized_direction.y, normalized_direction.x, 0.0).normalize() * width / 2.0;
 
-    // Create four vertices for the rectangle representing the line
     let vertices = vec![
         start + perpendicular,
         start - perpendicular,
@@ -36,6 +38,7 @@ pub fn line_mesh(start: Vec3, end: Vec3, width: f32) -> Mesh {
     mesh.with_inserted_indices(indices)
 }
 
+/// 生成六边形网格
 pub fn hex_mesh(grid: &HexGrid) -> Mesh {
     let hex_layout = &grid.layout;
     let vertices: Vec<[f32; 3]> = hex_layout
