@@ -6,6 +6,7 @@ use bevy::prelude::*;
 use civ_map_generator::ruleset::enums::EnumStr;
 
 use crate::{
+    AppState, ScreenState,
     components::{EndTurnButton, GoldText, ResearchStatusText, ScienceText, TurnCounterText},
     resources::{CivilizationManager, GameSettings, MapParametersRes, TechManagerRegistry},
 };
@@ -16,12 +17,12 @@ pub struct GameStatePlugin;
 impl Plugin for GameStatePlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
-            OnEnter(crate::assets::AppState::GameStart),
+            OnEnter(AppState::GameStart),
             (setup_game_state_ui, setup_end_turn_button),
         )
         .add_systems(
             Update,
-            update_game_state_ui.in_set(crate::resources::GameSystemGroup::PlayOnWorldMap),
+            update_game_state_ui.run_if(in_state(ScreenState::WorldMap)),
         );
     }
 }

@@ -27,25 +27,3 @@ impl GameAssets {
             .clone()
     }
 }
-
-/// 应用状态
-#[derive(Clone, Eq, PartialEq, Debug, Hash, Default, States)]
-pub enum AppState {
-    #[default]
-    /// 资源加载中
-    AssetLoading,
-    /// 地图生成中
-    MapGenerating,
-    /// 游戏开始
-    GameStart,
-}
-
-/// 屏幕状态
-#[derive(Clone, Eq, PartialEq, Debug, Hash, Default, States)]
-pub enum ScreenState {
-    #[default]
-    /// 世界地图
-    WorldMap,
-    /// 科技树
-    TechTree,
-}

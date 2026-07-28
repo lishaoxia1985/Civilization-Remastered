@@ -2,12 +2,18 @@
 //!
 //! 管理主相机的初始化、移动、缩放和边界限制。
 
+use std::collections::HashMap;
+
 use bevy::{camera::visibility::RenderLayers, input::mouse::MouseWheel, prelude::*};
-use civ_map_generator::grid::{Grid, WrapFlags};
+use civ_map_generator::{
+    grid::{Grid, OffsetCoordinate, WrapFlags},
+    tile::Tile,
+};
 
 use crate::{
-    components::MainCamera,
-    resources::{MapParametersRes, TileMapRes},
+    AppState, ScreenState,
+    components::{MainCamera, WorldTile},
+    resources::{MapParametersRes, TileEntityMap, TileMapRes},
 };
 
 /// 相机插件
@@ -15,23 +21,18 @@ pub struct CameraPlugin;
 
 impl Plugin for CameraPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(
-            OnEnter(crate::assets::AppState::AssetLoading),
-            setup_main_camera,
-        )
-        .add_systems(
-            Update,
-            (
-                main_camera_movement,
-                cursor_drag_system,
-                zoom_main_camera_system,
+        app.add_systems(OnEnter(AppState::AssetLoading), setup_main_camera)
+            .add_systems(
+                Update,
+                (
+                    main_camera_movement,
+                    cursor_drag_system,
+                    zoom_main_camera_system,
+                    show_main_camera_area,
+                )
+                    .run_if(in_state(ScreenState::WorldMap)),
             )
-                .in_set(crate::resources::GameSystemGroup::PlayOnWorldMap),
-        )
-        .add_systems(
-            OnEnter(crate::assets::AppState::GameStart),
-            move_camera_to_player_center,
-        );
+            .add_systems(OnEnter(AppState::GameStart), move_camera_to_player_center);
     }
 }
 
@@ -166,4 +167,75 @@ fn limit_main_camera_within_map_bounds(transform: &mut Transform, map_params: &M
     if !grid.wrap_flags.contains(WrapFlags::WrapY) {
         transform.translation.y = transform.translation.y.clamp(left_bottom[1], right_top[1]);
     }
+}
+
+/// 根据主相机的可视区域，处理当地图WrapX和WrapY时的显示边界
+///
+/// Notes: 在小地图的瓦片上没有WorldTile组件，因此`query_world_tile`不会查询到小地图上的瓦片。
+fn show_main_camera_area(
+    query: Single<&mut Transform, With<MainCamera>>,
+    tilemap: Option<Res<TileMapRes>>,
+    tile_entity_map: Res<TileEntityMap>,
+    mut query_world_tile: Query<&mut Transform, (With<WorldTile>, Without<MainCamera>)>,
+) {
+    let Some(tile_map) = tilemap else {
+        return;
+    };
+
+    let tile_map = &tile_map.0;
+    let grid = tile_map.world_grid.grid;
+
+    // If the grid is not wrapped both in x and y, we don't need to do anything
+    if !grid.wrap_x() && !grid.wrap_y() {
+        return;
+    }
+
+    const WIDTH_OF_VISIBLE_AREA: i32 = 37;
+    const HEIGHT_OF_VISIBLE_AREA: i32 = 21;
+
+    if grid.wrap_x() {
+        assert!(WIDTH_OF_VISIBLE_AREA < grid.width() as i32,
+        "In horizontal wrap mode, the visible area width MUST be strictly less than the grid width.\n
+        IF visible area width >= grid width, unrendered black borders will appear at window edges,\n
+        causing horizontal coordinate wrapping to fail (disconnected visual continuity).");
+    }
+
+    if grid.wrap_y() {
+        assert!(HEIGHT_OF_VISIBLE_AREA < grid.height() as i32,
+        "In vertical wrap mode, visible area height MUST be strictly less than the grid height.\n
+        IF visible area height >= grid height, unrendered black borders will appear at top/bottom edges,\n
+        causing horizontal coordinate wrapping to fail (disconnected visual continuity).");
+    }
+
+    let camera_position = query.into_inner().translation.truncate().to_array();
+    let camera_offset_coordinate = grid.pixel_to_offset(camera_position).to_array();
+
+    let (left_x, right_x) = if grid.wrap_x() {
+        (
+            camera_offset_coordinate[0] - WIDTH_OF_VISIBLE_AREA / 2,
+            camera_offset_coordinate[0] + WIDTH_OF_VISIBLE_AREA / 2,
+        )
+    } else {
+        (0, grid.width() as i32 - 1)
+    };
+
+    let (bottom_y, top_y) = if grid.wrap_y() {
+        (
+            camera_offset_coordinate[1] - HEIGHT_OF_VISIBLE_AREA / 2,
+            camera_offset_coordinate[1] + HEIGHT_OF_VISIBLE_AREA / 2,
+        )
+    } else {
+        (0, grid.height() as i32 - 1)
+    };
+
+    (left_x..=right_x)
+        .flat_map(|x| (bottom_y..=top_y).map(move |y| OffsetCoordinate::new(x, y)))
+        .for_each(|offset_coordinate| {
+            let tile = Tile::from_offset(offset_coordinate, grid);
+            let tile_entity = tile_entity_map.get(tile).expect("Can't find tile entity");
+            if let Ok(mut transform) = query_world_tile.get_mut(tile_entity) {
+                let pixel_position = grid.offset_to_pixel(offset_coordinate);
+                transform.translation = Vec3::from((pixel_position[0], pixel_position[1], 0.));
+            }
+        });
 }

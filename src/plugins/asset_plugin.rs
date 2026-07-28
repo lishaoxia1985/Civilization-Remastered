@@ -7,7 +7,7 @@ use bevy_asset_loader::loading_state::{
     LoadingState, LoadingStateAppExt, config::ConfigureLoadingState,
 };
 
-use crate::assets::{AppState, GameAssets};
+use crate::{AppState, assets::GameAssets};
 
 /// 资源加载插件
 pub struct AssetLoadingPlugin;

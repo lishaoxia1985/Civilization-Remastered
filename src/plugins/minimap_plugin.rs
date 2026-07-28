@@ -34,6 +34,7 @@ use civ_map_generator::{
 use enum_map::{EnumMap, enum_map};
 
 use crate::{
+    AppState, ScreenState,
     assets::{GameAssets, hex_mesh},
     components::{AuxiliaryFOVIndicator, FieldOfViewIndicator, InfoPanel, MainCamera, WorldTile},
     resources::TileMapRes,
@@ -48,18 +49,14 @@ pub struct MinimapPlugin;
 impl Plugin for MinimapPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
-            OnEnter(crate::assets::AppState::GameStart),
+            OnEnter(AppState::GameStart),
             (setup_minimap, setup_info_panel),
         )
         .add_systems(
             Update,
-            (minimap_fov_update, handle_tile_click)
-                .in_set(crate::resources::GameSystemGroup::PlayOnWorldMap),
+            (minimap_fov_update, handle_tile_click).run_if(in_state(ScreenState::WorldMap)),
         )
-        .add_systems(
-            OnExit(crate::assets::AppState::MapGenerating),
-            spawn_tile_map_for_minimap,
-        );
+        .add_systems(OnExit(AppState::MapGenerating), spawn_tile_map_for_minimap);
     }
 }
 

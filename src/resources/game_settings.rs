@@ -72,17 +72,6 @@ impl Default for GameSettings {
     }
 }
 
-// ============ 系统分组 ============
-
-/// 游戏系统分组
-#[derive(SystemSet, Debug, Hash, PartialEq, Eq, Clone)]
-pub enum GameSystemGroup {
-    /// 世界地图上的系统
-    PlayOnWorldMap,
-    /// 科技树屏幕上的系统
-    PlayOnTechScreen,
-}
-
 // ============ 文明状态 ============
 
 /// 单个文明的数据

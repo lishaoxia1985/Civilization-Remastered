@@ -26,7 +26,8 @@ use enum_map::EnumMap;
 use std::collections::HashMap;
 
 use crate::{
-    assets::{GameAssets, ScreenState},
+    AppState, ScreenState,
+    assets::GameAssets,
     components::{CloseTechTreeButton, TechButton, TechButtonState, TechTreeScrollableNode},
     resources::{CivilizationManager, GameSettings, MapParametersRes, TechManagerRegistry},
 };
@@ -37,16 +38,16 @@ pub struct TechPlugin;
 impl Plugin for TechPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
-            OnEnter(crate::assets::AppState::GameStart),
+            OnEnter(AppState::GameStart),
             (setup_tech_button, insert_tech_manager_registry),
         )
         .add_systems(
             Update,
-            ai_research_system.in_set(crate::resources::GameSystemGroup::PlayOnWorldMap),
+            ai_research_system.run_if(in_state(ScreenState::WorldMap)),
         )
         .add_systems(
             Update,
-            handle_tech_click_system.in_set(crate::resources::GameSystemGroup::PlayOnTechScreen),
+            handle_tech_click_system.run_if(in_state(ScreenState::TechTree)),
         )
         .add_systems(OnEnter(ScreenState::TechTree), spawn_technology_screen);
     }

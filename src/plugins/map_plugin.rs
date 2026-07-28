@@ -10,15 +10,16 @@ use bevy::{
 };
 use civ_map_generator::{
     generate_map,
-    grid::{Grid, Hex, HexOrientation, OffsetCoordinate},
+    grid::{Grid, Hex, HexOrientation},
     ruleset::{Ruleset, enums::*},
     tile::Tile,
     tile_map::RiverEdge,
 };
 
 use crate::{
+    AppState,
     assets::{ColorReplaceMaterial, GameAssets, hex_mesh, line_mesh},
-    components::{Health, MainCamera, Movement, Owner, Strength, UnitComponent, WorldTile},
+    components::{Health, Movement, Owner, Strength, UnitComponent, WorldTile},
     resources::{
         CivilizationManager, MapGeneratorTask, MapParametersRes, TileEntityMap, TileMapRes,
     },
@@ -29,22 +30,12 @@ pub struct MapPlugin;
 
 impl Plugin for MapPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(
-            OnEnter(crate::assets::AppState::MapGenerating),
-            generate_tile_map,
-        )
-        .add_systems(
-            Update,
-            check_map_generate_status.run_if(in_state(crate::assets::AppState::MapGenerating)),
-        )
-        .add_systems(
-            OnExit(crate::assets::AppState::MapGenerating),
-            (setup_tile_map,),
-        )
-        .add_systems(
-            Update,
-            show_main_camera_area.in_set(crate::resources::GameSystemGroup::PlayOnWorldMap),
-        );
+        app.add_systems(OnEnter(AppState::MapGenerating), generate_tile_map)
+            .add_systems(
+                Update,
+                check_map_generate_status.run_if(in_state(AppState::MapGenerating)),
+            )
+            .add_systems(OnExit(AppState::MapGenerating), setup_tile_map);
     }
 }
 
@@ -62,7 +53,7 @@ fn generate_tile_map(mut commands: Commands, map_params: Res<MapParametersRes>) 
 fn check_map_generate_status(
     mut commands: Commands,
     task: Option<ResMut<MapGeneratorTask>>,
-    mut next_state: ResMut<NextState<crate::assets::AppState>>,
+    mut next_state: ResMut<NextState<AppState>>,
 ) {
     let Some(mut task) = task else {
         return;
@@ -71,7 +62,7 @@ fn check_map_generate_status(
     if let Some(tile_map) = block_on(future::poll_once(&mut task.0)) {
         commands.insert_resource(TileMapRes(tile_map));
         commands.remove_resource::<MapGeneratorTask>();
-        next_state.set(crate::assets::AppState::GameStart);
+        next_state.set(AppState::GameStart);
     }
 }
 
@@ -148,7 +139,6 @@ fn setup_tile_map(
             .spawn((
                 Mesh2d(hex_mesh.clone()),
                 MeshMaterial2d(base_terrain_and_material[tile.base_terrain(tile_map)].clone()),
-                Visibility::Hidden,
                 Pickable::default(),
                 WorldTile(tile),
             ))
@@ -293,68 +283,6 @@ fn setup_tile_map(
     }
 
     commands.insert_resource(tile_entity_map);
-}
-
-/// 显示主相机的可视区域
-fn show_main_camera_area(
-    query: Single<&mut Transform, With<MainCamera>>,
-    tilemap: Option<Res<TileMapRes>>,
-    mut query_world_tile: Query<
-        (&mut Visibility, &mut Transform, &WorldTile),
-        (With<WorldTile>, Without<MainCamera>),
-    >,
-) {
-    let Some(tile_map) = tilemap else {
-        return;
-    };
-
-    let tile_map = &tile_map.0;
-    let grid = tile_map.world_grid.grid;
-
-    const WIDTH_OF_VISIBLE_AREA: i32 = 37;
-    const HEIGHT_OF_VISIBLE_AREA: i32 = 21;
-
-    if grid.wrap_x() {
-        assert!(WIDTH_OF_VISIBLE_AREA < grid.width() as i32);
-    }
-    if grid.wrap_y() {
-        assert!(HEIGHT_OF_VISIBLE_AREA < grid.height() as i32);
-    }
-
-    let camera_position = query.into_inner().translation.truncate().to_array();
-    let camera_offset_coordinate = grid.pixel_to_offset(camera_position).to_array();
-    let mut left_x = camera_offset_coordinate[0] - WIDTH_OF_VISIBLE_AREA / 2;
-    let mut right_x = camera_offset_coordinate[0] + WIDTH_OF_VISIBLE_AREA / 2;
-    if !grid.wrap_x() {
-        left_x = left_x.max(0);
-        right_x = right_x.min(grid.width() as i32 - 1);
-    }
-    let mut bottom_y = camera_offset_coordinate[1] - HEIGHT_OF_VISIBLE_AREA / 2;
-    let mut top_y = camera_offset_coordinate[1] + HEIGHT_OF_VISIBLE_AREA / 2;
-    if !grid.wrap_y() {
-        bottom_y = bottom_y.max(0);
-        top_y = top_y.min(grid.height() as i32 - 1);
-    }
-
-    let visible_tile_and_offset_list: HashMap<Tile, OffsetCoordinate> = (left_x..=right_x)
-        .flat_map(|x| (bottom_y..=top_y).map(move |y| OffsetCoordinate::new(x, y)))
-        .map(|offset_coordinate| {
-            (
-                Tile::from_offset(offset_coordinate, grid),
-                offset_coordinate,
-            )
-        })
-        .collect();
-
-    for (mut visibility, mut transform, world_tile) in query_world_tile.iter_mut() {
-        if let Some(&offset_coordinate) = visible_tile_and_offset_list.get(&world_tile.0) {
-            let pixel_position = grid.offset_to_pixel(offset_coordinate);
-            *visibility = Visibility::Visible;
-            transform.translation = Vec3::from((pixel_position[0], pixel_position[1], 0.));
-        } else {
-            *visibility = Visibility::Hidden;
-        }
-    }
 }
 
 /// 创建单位组（包含战斗系统所需的所有组件）

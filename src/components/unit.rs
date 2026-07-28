@@ -97,6 +97,7 @@ pub enum ActionButton {
 // ============ 世界地图组件 ============
 
 /// 世界地图上的地块组件
+/// Notes: 我们未在小地图上插入此组件
 #[derive(Component, Clone, Copy, Debug)]
 pub struct WorldTile(pub Tile);
 

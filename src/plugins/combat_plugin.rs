@@ -12,6 +12,7 @@ use civ_map_generator::{
 };
 
 use crate::{
+    AppState, ScreenState,
     components::{
         ActionButton, Health, MoveRangeHighlight, Movement, Owner, SelectedUnit, Strength,
         UnitActionMenu, UnitComponent, UnitInfoText, WorldTile,
@@ -25,7 +26,7 @@ pub struct CombatPlugin;
 impl Plugin for CombatPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
-            OnEnter(crate::assets::AppState::GameStart),
+            OnEnter(AppState::GameStart),
             (setup_unit_info_panel, setup_unit_action_menu),
         )
         .add_systems(
@@ -42,7 +43,7 @@ impl Plugin for CombatPlugin {
                 clear_move_range_on_deselect,
             )
                 .chain()
-                .in_set(crate::resources::GameSystemGroup::PlayOnWorldMap),
+                .run_if(in_state(ScreenState::WorldMap)),
         );
     }
 }

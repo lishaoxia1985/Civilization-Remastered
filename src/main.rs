@@ -16,18 +16,39 @@ use civ_map_generator::{
 };
 
 use crate::{
-    assets::{AppState, ColorReplaceMaterial, ScreenState},
+    assets::ColorReplaceMaterial,
     plugins::{
         AssetLoadingPlugin, CameraPlugin, CombatPlugin, GameStatePlugin, MapPlugin, MinimapPlugin,
         TechPlugin,
     },
-    resources::{CivilizationManager, GameSettings, GameSystemGroup, MapParametersRes},
+    resources::{CivilizationManager, GameSettings, MapParametersRes},
 };
 
 mod assets;
 mod components;
 mod plugins;
 mod resources;
+
+#[derive(Clone, Eq, PartialEq, Debug, Hash, Default, States)]
+pub enum AppState {
+    #[default]
+    AssetLoading,
+    MapGenerating,
+    GameStart,
+}
+
+#[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Hash, SubStates)]
+// And we need to add an attribute to let us know what the source state is
+// and what value it needs to have. This will ensure that unless we're
+// in [`AppState::GameStart`], the [`ScreenState`] state resource
+// will not exist.
+#[source(AppState = AppState::GameStart)]
+#[states(scoped_entities)]
+pub enum ScreenState {
+    #[default]
+    WorldMap,
+    TechTree,
+}
 
 fn main() {
     // 创建地图参数
@@ -74,24 +95,9 @@ fn main() {
         .insert_resource(GameSettings::default())
         // 初始化状态
         .init_state::<AppState>()
-        .init_state::<ScreenState>()
-        // 配置系统分组
-        .configure_sets(
-            Update,
-            (
-                GameSystemGroup::PlayOnWorldMap
-                    .run_if(in_state(AppState::GameStart))
-                    .run_if(in_state(ScreenState::WorldMap)),
-                GameSystemGroup::PlayOnTechScreen
-                    .run_if(in_state(AppState::GameStart))
-                    .run_if(in_state(ScreenState::TechTree)),
-            ),
-        )
+        .add_sub_state::<ScreenState>() // We set the substate up here.
         // 初始化文明
-        .add_systems(
-            OnExit(crate::assets::AppState::MapGenerating),
-            insert_civilizations,
-        )
+        .add_systems(OnExit(AppState::MapGenerating), insert_civilizations)
         .run();
 }
 
