@@ -104,40 +104,36 @@ fn ai_research_system(
 
 /// 处理科技按钮点击
 fn handle_tech_click_system(
-    mut click_events: MessageReader<Pointer<Click>>,
-    tech_button_query: Query<&TechButton>,
-    parent_query: Query<&ChildOf>,
+    tech_button_query: Query<(&Interaction, &TechButton)>,
+    close_button_query: Query<(&Interaction, &CloseTechTreeButton)>,
     civs: Res<CivilizationManager>,
     mut tech_registry: ResMut<TechManagerRegistry>,
     map_params: Res<MapParametersRes>,
-    close_tech_tree_button_query: Query<Entity, With<CloseTechTreeButton>>,
     mut next_state: ResMut<NextState<ScreenState>>,
 ) {
-    for click in click_events.read() {
-        let mut target = click.event_target();
-
-        if close_tech_tree_button_query.get(target).is_ok() {
+    // 处理关闭按钮
+    for (interaction, _) in &close_button_query {
+        if *interaction == Interaction::Pressed {
             next_state.set(ScreenState::WorldMap);
+            return;
+        }
+    }
+
+    // 处理科技按钮
+    for (interaction, tech_button) in &tech_button_query {
+        if *interaction != Interaction::Pressed {
             continue;
         }
 
-        loop {
-            if let Ok(tech_button) = tech_button_query.get(target) {
-                let player_nation = civs.player_nation;
-                let tech_manager = &tech_registry.0[&player_nation];
-                if !tech_manager.can_be_researched(tech_button.0, &map_params) {
-                    break;
-                }
-                civs.player_data()
-                    .start_research(tech_button.0, &mut tech_registry);
-                next_state.set(ScreenState::WorldMap);
-                break;
-            }
-            match parent_query.get(target) {
-                Ok(parent) => target = parent.parent(),
-                Err(_) => break,
-            }
+        let player_nation = civs.player_nation;
+        let tech_manager = &tech_registry.0[&player_nation];
+        if !tech_manager.can_be_researched(tech_button.0, &map_params) {
+            continue;
         }
+
+        civs.player_data()
+            .start_research(tech_button.0, &mut tech_registry);
+        next_state.set(ScreenState::WorldMap);
     }
 }
 
@@ -324,10 +320,6 @@ fn spawn_technology_screen(
                                     border: UiRect::all(Val::Px(2.0)),
                                     ..default()
                                 },
-                                Pickable {
-                                    should_block_lower: false,
-                                    is_hoverable: true,
-                                },
                                 tech_state.clone(),
                                 children![technology_button(
                                     technology, &materials, ruleset, tech_state, tech_turn
@@ -352,7 +344,7 @@ fn spawn_technology_screen(
         BackgroundColor(Color::srgb(0.8, 0.2, 0.2)),
         BorderColor::all(Color::WHITE),
         CloseTechTreeButton,
-        Pickable::default(),
+        Button,
         children![(
             Text::new("X"),
             TextFont {
@@ -389,7 +381,7 @@ fn technology_button(
         },
         BackgroundColor(bg_color),
         BorderColor::all(Color::WHITE),
-        Pickable::default(),
+        Button,
         TechButton(technology),
         children![(
             Node {

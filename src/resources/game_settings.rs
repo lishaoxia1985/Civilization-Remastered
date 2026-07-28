@@ -72,15 +72,6 @@ impl Default for GameSettings {
     }
 }
 
-/// 默认视野指示器尺寸
-#[derive(Resource, Default)]
-pub struct DefaultFovIndicatorSize {
-    /// 宽度
-    pub width: f32,
-    /// 高度
-    pub height: f32,
-}
-
 // ============ 系统分组 ============
 
 /// 游戏系统分组

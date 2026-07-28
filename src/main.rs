@@ -21,10 +21,7 @@ use crate::{
         AssetLoadingPlugin, CameraPlugin, CombatPlugin, GameStatePlugin, MapPlugin, MinimapPlugin,
         TechPlugin,
     },
-    resources::{
-        CivilizationManager, DefaultFovIndicatorSize, GameSettings, GameSystemGroup,
-        MapParametersRes,
-    },
+    resources::{CivilizationManager, GameSettings, GameSystemGroup, MapParametersRes},
 };
 
 mod assets;
@@ -49,9 +46,6 @@ fn main() {
 
     let map_parameters = MapParametersBuilder::new(world_grid).build();
     let map_params = MapParametersRes(Arc::new(map_parameters));
-
-    // 创建默认视野指示器尺寸
-    let default_fov_indicator_size = DefaultFovIndicatorSize::default();
 
     // 应用设置
     App::new()
@@ -78,7 +72,6 @@ fn main() {
         .init_resource::<InputFocus>()
         .insert_resource(map_params)
         .insert_resource(GameSettings::default())
-        .insert_resource(default_fov_indicator_size)
         // 初始化状态
         .init_state::<AppState>()
         .init_state::<ScreenState>()

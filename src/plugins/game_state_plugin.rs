@@ -172,7 +172,6 @@ fn setup_end_turn_button(mut commands: Commands) {
             },
             TextColor(Color::WHITE),
             EndTurnButton,
-            Pickable::default(),
         ))
         .observe(end_turn_click);
 }

@@ -36,7 +36,7 @@ use enum_map::{EnumMap, enum_map};
 use crate::{
     assets::{GameAssets, hex_mesh},
     components::{AuxiliaryFOVIndicator, FieldOfViewIndicator, InfoPanel, MainCamera, WorldTile},
-    resources::{DefaultFovIndicatorSize, TileMapRes},
+    resources::TileMapRes,
 };
 
 const MINIMAP_WIDTH: f32 = 300.;
@@ -67,7 +67,6 @@ impl Plugin for MinimapPlugin {
 fn setup_minimap(
     mut commands: Commands,
     tile_map: Option<Res<TileMapRes>>,
-    mut default_fov_indicator_size: ResMut<DefaultFovIndicatorSize>,
     mut images: ResMut<Assets<Image>>,
     query_main_camera: Single<&Camera, With<MainCamera>>,
 ) {
@@ -133,10 +132,12 @@ fn setup_minimap(
     let fov_indicator_width = logical_viewport_size.x / world_grid_width * MINIMAP_WIDTH;
     let fov_indicator_height = logical_viewport_size.y / world_grid_height * MINIMAP_HEIGHT;
 
-    *default_fov_indicator_size = DefaultFovIndicatorSize {
+    let default_fov_indicator_size = DefaultFovIndicatorSize {
         width: fov_indicator_width,
         height: fov_indicator_height,
     };
+
+    commands.insert_resource(default_fov_indicator_size);
 
     let minimap = commands
         .spawn((
@@ -434,4 +435,13 @@ fn handle_tile_click(
             query_info_panel.0 = format!("Tile clicked: {:?}", world_tile.0);
         }
     }
+}
+
+/// 默认视野指示器尺寸
+#[derive(Resource, Default)]
+struct DefaultFovIndicatorSize {
+    /// 宽度
+    pub width: f32,
+    /// 高度
+    pub height: f32,
 }

@@ -244,7 +244,7 @@ fn show_move_range(
     meshes: &mut ResMut<Assets<Mesh>>,
     materials: &mut ResMut<Assets<ColorMaterial>>,
 ) {
-    let highlight_mesh = meshes.add(Rectangle::new(10.0, 10.0));
+    let highlight_mesh = meshes.add(Circle::new(30.0));
     let highlight_material =
         materials.add(ColorMaterial::from_color(Color::srgba(0.0, 1.0, 0.0, 0.3)));
 
@@ -368,7 +368,6 @@ fn spawn_action_button(
             ..Default::default()
         },
         TextColor(Color::WHITE),
-        Pickable::default(),
         Button,
         action,
     ));
