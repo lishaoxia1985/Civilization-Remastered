@@ -2,8 +2,6 @@
 //!
 //! 管理主相机的初始化、移动、缩放和边界限制。
 
-use std::collections::HashMap;
-
 use bevy::{camera::visibility::RenderLayers, input::mouse::MouseWheel, prelude::*};
 use civ_map_generator::{
     grid::{Grid, OffsetCoordinate, WrapFlags},
@@ -13,7 +11,7 @@ use civ_map_generator::{
 use crate::{
     AppState, ScreenState,
     components::{MainCamera, WorldTile},
-    resources::{MapParametersRes, TileEntityMap, TileMapRes},
+    resources::{CivilizationManager, MapParametersRes, TileEntityMap, TileMapRes},
 };
 
 /// 相机插件
@@ -134,7 +132,7 @@ fn zoom_main_camera_system(
 fn move_camera_to_player_center(
     mut query: Query<&mut Transform, With<MainCamera>>,
     tile_map: Res<TileMapRes>,
-    civ_manager: Res<crate::resources::CivilizationManager>,
+    civ_manager: Res<CivilizationManager>,
 ) {
     let grid = tile_map.0.world_grid.grid;
     let player = civ_manager.player_nation;
@@ -173,10 +171,11 @@ fn limit_main_camera_within_map_bounds(transform: &mut Transform, map_params: &M
 ///
 /// Notes: 在小地图的瓦片上没有WorldTile组件，因此`query_world_tile`不会查询到小地图上的瓦片。
 fn show_main_camera_area(
-    query: Single<&mut Transform, With<MainCamera>>,
+    query: Single<&mut Transform, (With<MainCamera>, Changed<Transform>)>,
     tilemap: Option<Res<TileMapRes>>,
     tile_entity_map: Res<TileEntityMap>,
     mut query_world_tile: Query<&mut Transform, (With<WorldTile>, Without<MainCamera>)>,
+    mut previous_bounds: Local<Option<((i32, i32), (i32, i32))>>,
 ) {
     let Some(tile_map) = tilemap else {
         return;
@@ -228,14 +227,33 @@ fn show_main_camera_area(
         (0, grid.height() as i32 - 1)
     };
 
-    (left_x..=right_x)
-        .flat_map(|x| (bottom_y..=top_y).map(move |y| OffsetCoordinate::new(x, y)))
-        .for_each(|offset_coordinate| {
+    let new_bounds = ((left_x, right_x), (bottom_y, top_y));
+
+    // Only update tiles that are newly visible (outside previous bounds)
+    let tiles_to_update = (left_x..=right_x)
+        .flat_map(|x| (bottom_y..=top_y).map(move |y| (x, y)))
+        .filter(|&(x, y)| {
+            if let Some(((old_left_x, old_right_x), (old_bottom_y, old_top_y))) = *previous_bounds {
+                !(x >= old_left_x && x <= old_right_x && y >= old_bottom_y && y <= old_top_y)
+            } else {
+                true
+            }
+        })
+        .map(|(x, y)| {
+            let offset_coordinate = OffsetCoordinate::new(x, y);
             let tile = Tile::from_offset(offset_coordinate, grid);
-            let tile_entity = tile_entity_map.get(tile).expect("Can't find tile entity");
+            (offset_coordinate, tile)
+        });
+
+    for (offset_coordinate, tile) in tiles_to_update {
+        if let Some(tile_entity) = tile_entity_map.get(tile) {
             if let Ok(mut transform) = query_world_tile.get_mut(tile_entity) {
                 let pixel_position = grid.offset_to_pixel(offset_coordinate);
                 transform.translation = Vec3::from((pixel_position[0], pixel_position[1], 0.));
             }
-        });
+        }
+    }
+
+    // Update bounds cache
+    *previous_bounds = Some(new_bounds);
 }
