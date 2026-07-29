@@ -21,7 +21,7 @@ use crate::{
     assets::{ColorReplaceMaterial, GameAssets, hex_mesh, line_mesh},
     components::{Health, Movement, Owner, Strength, UnitComponent, WorldTile},
     resources::{
-        CivilizationManager, MapGeneratorTask, MapParametersRes, TileEntityMap, TileMapRes,
+         MapGeneratorTask, MapParametersRes, TileEntityMap, TileMapRes,
     },
 };
 
@@ -77,7 +77,6 @@ fn setup_tile_map(
     mut meshes: ResMut<Assets<Mesh>>,
     mut color_materials: ResMut<Assets<ColorMaterial>>,
     mut custom_materials: ResMut<Assets<ColorReplaceMaterial>>,
-    _civ_manager: Option<Res<CivilizationManager>>,
 ) {
     let Some(tile_map) = tile_map else {
         return;

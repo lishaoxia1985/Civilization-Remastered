@@ -12,12 +12,12 @@ use civ_map_generator::{
 };
 
 use crate::{
-    AppState, ScreenState,
+    AppState, Enemy, NationComponent, Player, ScreenState,
     components::{
         ActionButton, Health, MoveRangeHighlight, Movement, Owner, SelectedUnit, Strength,
         UnitActionMenu, UnitComponent, UnitInfoText, WorldTile,
     },
-    resources::{CivilizationManager, TileEntityMap, TileMapRes},
+    resources::{TileEntityMap, TileMapRes},
 };
 
 /// 战斗插件
@@ -106,10 +106,11 @@ fn handle_unit_selection(
     unit_query: Query<(Entity, &Owner, &UnitComponent, &ChildOf)>,
     world_tile_query: Query<&WorldTile>,
     mut commands: Commands,
-    civs: Res<CivilizationManager>,
+    query_player: Single<&NationComponent, With<Player>>,
     selected_unit_query: Query<Entity, With<SelectedUnit>>,
     mut clear_move_range: Local<bool>,
 ) {
+    let nation_component = query_player.into_inner();
     for click in click_events.read() {
         let Ok(clicked_tile) = world_tile_query.get(click.event_target()) else {
             continue;
@@ -118,7 +119,7 @@ fn handle_unit_selection(
         let mut units_on_tile: Vec<(Entity, &UnitComponent)> = Vec::new();
         for (entity, owner, unit_component, child_of) in unit_query.iter() {
             let is_players_unit = match owner {
-                Owner::Civilization(nation) => *nation == civs.player_nation,
+                Owner::Civilization(nation) => *nation == nation_component.0,
                 Owner::CityState(_) => false,
             };
             if !is_players_unit {
@@ -471,7 +472,6 @@ fn handle_unit_attack(
     selected_unit_query: Query<(Entity, &Owner, &Health, &Strength, &ChildOf), With<SelectedUnit>>,
     world_tile_query: Query<&WorldTile>,
     mut commands: Commands,
-    civs: Res<CivilizationManager>,
     tile_map: Option<Res<TileMapRes>>,
 ) {
     let Some(tile_map) = tile_map else {
@@ -540,7 +540,8 @@ fn handle_unit_attack(
                 0.5
             };
 
-            let mut rng = SimpleRng::new(civs.turn as u64);
+            // TODO: seed use turn as value should not always 1.
+            let mut rng = SimpleRng::new(1);
             let roll = rng.f32();
 
             if roll < attacker_win_chance {
@@ -654,13 +655,14 @@ fn advance_turn_system(mut unit_query: Query<&mut Movement>) {
 
 /// AI 攻击系统 - 敌方文明自动攻击
 fn ai_attack_system(
-    civs: Res<CivilizationManager>,
+    query_player: Single<&NationComponent, With<Enemy>>,
     unit_query: Query<(Entity, &Owner, &Strength, &Health, &ChildOf)>,
     selected_unit_query: Query<(Entity, &Owner, &Health, &Strength, &ChildOf), With<SelectedUnit>>,
     world_tile_query: Query<&WorldTile>,
     mut commands: Commands,
     tile_map: Option<Res<TileMapRes>>,
 ) {
+    let nation_component = query_player.into_inner();
     let Some(tile_map) = tile_map else {
         return;
     };
@@ -671,7 +673,7 @@ fn ai_attack_system(
         selected_unit_query.iter()
     {
         let is_enemy = match attacker_owner {
-            Owner::Civilization(nation) => civs.is_enemy(*nation),
+            Owner::Civilization(nation) => *nation == nation_component.0,
             Owner::CityState(_) => false,
         };
         if !is_enemy {
@@ -687,7 +689,7 @@ fn ai_attack_system(
             unit_query.iter()
         {
             let is_target_player = match target_owner {
-                Owner::Civilization(nation) => *nation == civs.player_nation,
+                Owner::Civilization(nation) => *nation != nation_component.0,
                 Owner::CityState(_) => false,
             };
             if !is_target_player {
@@ -712,7 +714,8 @@ fn ai_attack_system(
                 0.5
             };
 
-            let mut rng = SimpleRng::new(civs.turn as u64);
+            // TODO: seed use `turn` as value should not always 1.
+            let mut rng = SimpleRng::new(1);
             let roll = rng.f32();
 
             if roll < attacker_win_chance {

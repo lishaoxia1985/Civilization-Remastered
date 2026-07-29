@@ -6,9 +6,9 @@ use bevy::prelude::*;
 use civ_map_generator::ruleset::enums::EnumStr;
 
 use crate::{
-    AppState, ScreenState,
+    AppState, NationComponent, Player, SciencePerTurn, ScreenState,
     components::{EndTurnButton, GoldText, ResearchStatusText, ScienceText, TurnCounterText},
-    resources::{CivilizationManager, GameSettings, MapParametersRes, TechManagerRegistry},
+    resources::{ GameSettings, MapParametersRes, TechManager},
 };
 
 /// 游戏状态插件
@@ -81,8 +81,6 @@ fn setup_game_state_ui(mut commands: Commands) {
 
 /// 更新游戏状态 UI
 fn update_game_state_ui(
-    civ_manager: Res<CivilizationManager>,
-    tech_registry: Res<TechManagerRegistry>,
     mut turn_text: Single<
         &mut Text,
         (
@@ -121,25 +119,17 @@ fn update_game_state_ui(
     >,
     game_settings: Res<GameSettings>,
     map_params: Res<MapParametersRes>,
+    query_player: Single<(&NationComponent, &mut TechManager, &SciencePerTurn), With<Player>>,
 ) {
-    let player_nation = civ_manager.player_nation;
-    let tech_manager = &tech_registry.0[&player_nation];
-    let player_data = civ_manager.player_data();
-    turn_text.0 = format!(
-        "Turn: {} (Player: {})",
-        civ_manager.turn,
-        player_data.nation.as_str()
-    );
-    gold_text.0 = format!(
-        "Gold: {} ({:+})",
-        player_data.gold, player_data.gold_per_turn
-    );
-    science_text.0 = format!("Science: {}/turn", player_data.science_per_turn);
+    let (nation_component, tech_manager, science_per_turn) = query_player.into_inner();
+    // TODO: Should change turn when turn start, not always 1.
+    turn_text.0 = format!("Turn: {} (Player: {})", 1, nation_component.0.as_str());
+    gold_text.0 = format!("Gold: {} ({:+})", 3, 3);
+    science_text.0 = format!("Science: {}/turn", science_per_turn.0);
 
     if let Some(tech) = tech_manager.current_researching_technology() {
         let research_progress = tech_manager.research_progress(tech);
-        let cost_of_tech =
-            tech_manager.cost_of_tech(tech, player_data, &game_settings, &map_params);
+        let cost_of_tech = tech_manager.cost_of_tech(tech, true, &game_settings, &map_params);
         let progress = (research_progress as f32 / cost_of_tech as f32 * 100.0) as i32;
         research_text.0 = format!("Researching: {} ({}%)", tech.as_str(), progress.min(100));
     } else {
@@ -180,31 +170,15 @@ fn setup_end_turn_button(mut commands: Commands) {
 /// 结束回合点击处理
 fn end_turn_click(
     _click: On<Pointer<Click>>,
-    mut civ_manager: ResMut<CivilizationManager>,
-    mut tech_registry: ResMut<TechManagerRegistry>,
     game_settings: Res<GameSettings>,
     map_params: Res<MapParametersRes>,
+    query_player: Single<(&NationComponent, &mut TechManager, &SciencePerTurn), With<Player>>,
 ) {
-    let player_nation = civ_manager.player_nation;
-    if tech_registry.0[&player_nation]
-        .current_researching_technology()
-        .is_none()
-    {
+    let (nation_component, mut tech_manager, science_per_turn) = query_player.into_inner();
+    if tech_manager.current_researching_technology().is_none() {
         println!("当前没有正在研究的科技，请选择一项科技进行研究。");
         return;
     }
-    civ_manager.end_turn();
-    tech_registry
-        .0
-        .iter_mut()
-        .for_each(|(nation, tech_manager)| {
-            let civ = &civ_manager.civs[nation];
-            tech_manager.end_turn(
-                civ.science_per_turn,
-                civ,
-                civ_manager.turn,
-                &game_settings,
-                &map_params,
-            );
-        });
+    // TODO: Should edit `turn` and `is_player`
+    tech_manager.end_turn(science_per_turn.0, true, 1, &game_settings, &map_params);
 }

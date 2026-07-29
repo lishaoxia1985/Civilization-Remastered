@@ -9,9 +9,9 @@ use civ_map_generator::{
 };
 
 use crate::{
-    AppState, ScreenState,
+    AppState, NationComponent, Player, ScreenState,
     components::{MainCamera, WorldTile},
-    resources::{CivilizationManager, MapParametersRes, TileEntityMap, TileMapRes},
+    resources::{ MapParametersRes, TileEntityMap, TileMapRes},
 };
 
 /// 相机插件
@@ -132,10 +132,10 @@ fn zoom_main_camera_system(
 fn move_camera_to_player_center(
     mut query: Query<&mut Transform, With<MainCamera>>,
     tile_map: Res<TileMapRes>,
-    civ_manager: Res<CivilizationManager>,
+    query_player: Single<&NationComponent, With<Player>>,
 ) {
     let grid = tile_map.0.world_grid.grid;
-    let player = civ_manager.player_nation;
+    let player = query_player.into_inner().0;
     let tile_and_civ = &tile_map.0.starting_tile_and_civilization;
     let tile = tile_and_civ
         .iter()

@@ -112,7 +112,7 @@ impl CivData {
         self.culture += self.culture_per_turn;
     }
 
-    /// 开始研究科技
+    /* /// 开始研究科技
     pub fn start_research(
         &self,
         tech: Technology,
@@ -129,7 +129,6 @@ impl CivData {
     pub fn ai_choose_research(
         &mut self,
         map_params: &MapParametersRes,
-        tech_registry: &mut TechManagerRegistry,
     ) {
         let tech_manager = &tech_registry.0[&self.nation];
 
@@ -149,75 +148,12 @@ impl CivData {
         if let Some(&(tech, _)) = available.first() {
             self.start_research(tech, tech_registry);
         }
-    }
-}
-
-/// 文明管理器 - 管理所有文明的状态
-#[derive(Resource)]
-pub struct CivilizationManager {
-    /// 所有文明的映射
-    pub civs: HashMap<Nation, CivData>,
-    /// 当前回合数
-    pub turn: u32,
-    /// 玩家所属国家
-    pub player_nation: Nation,
-    /// 敌方国家列表
-    pub enemy_nations: Vec<Nation>,
-}
-
-impl CivilizationManager {
-    /// 创建新的文明管理器
-    pub fn new(player: Nation, enemies: Vec<Nation>) -> Self {
-        let mut civs = HashMap::new();
-        civs.insert(player, CivData::new(player, true));
-        for &enemy in &enemies {
-            civs.insert(enemy, CivData::new(enemy, false));
-        }
-        Self {
-            civs,
-            turn: 1,
-            player_nation: player,
-            enemy_nations: enemies,
-        }
-    }
-
-    /// 获取玩家数据
-    pub fn player_data(&self) -> &CivData {
-        &self.civs[&self.player_nation]
-    }
-
-    /// 判断是否为敌人
-    pub fn is_enemy(&self, nation: Nation) -> bool {
-        self.enemy_nations.contains(&nation)
-    }
-
-    /// 结束回合
-    pub fn end_turn(&mut self) {
-        self.turn += 1;
-        for civ in self.civs.values_mut() {
-            civ.end_turn();
-        }
-    }
+    } */
 }
 
 // ============ 科技管理 ============
 
-/// 科技管理器注册表 - 将国家映射到其科技管理器
-#[derive(Resource)]
-pub struct TechManagerRegistry(pub HashMap<Nation, TechManager>);
-
-impl TechManagerRegistry {
-    /// 创建新的科技管理器注册表
-    pub fn new(civ_manager: &CivilizationManager, era: Era) -> Self {
-        let tech_manager_map: HashMap<_, _> = civ_manager
-            .civs
-            .keys()
-            .map(|&nation| (nation, TechManager::new(era)))
-            .collect();
-        Self(tech_manager_map)
-    }
-}
-
+#[derive(Component)]
 /// 科技管理器 - 管理单个文明的科技研究状态
 pub struct TechManager {
     /// 当前时代
@@ -313,7 +249,7 @@ impl TechManager {
     pub fn cost_of_tech(
         &self,
         tech: Technology,
-        civ_data: &CivData,
+        is_player: bool,
         game_settings: &GameSettings,
         map_params: &MapParametersRes,
     ) -> i32 {
@@ -325,15 +261,16 @@ impl TechManager {
         let mut tech_cost = tech_info.cost as f32;
 
         // 玩家难度修正
-        if civ_data.is_human {
+        if is_player {
             tech_cost *= difficulty_info.research_cost_modifier;
         }
 
         // 游戏速度修正
         tech_cost *= speed_info.science_cost_modifier;
 
-        let science_modifier = self.science_modifier(tech, civ_data, map_params);
-        tech_cost /= science_modifier;
+        // TODO: 科技科技修正
+        // let science_modifier = self.science_modifier(tech, civ_data, map_params);
+        // tech_cost /= science_modifier;
 
         tech_cost as i32
     }
@@ -362,7 +299,7 @@ impl TechManager {
     pub fn remaining_science_to_tech(
         &self,
         tech: Technology,
-        civ_data: &CivData,
+        is_player: bool,
         game_settings: &GameSettings,
         map_params: &MapParametersRes,
     ) -> i32 {
@@ -372,7 +309,7 @@ impl TechManager {
             0
         };
 
-        let cost = self.cost_of_tech(tech, civ_data, game_settings, map_params);
+        let cost = self.cost_of_tech(tech, is_player, game_settings, map_params);
         let researched = self.research_progress(tech);
 
         cost - researched - spare_science
@@ -383,7 +320,7 @@ impl TechManager {
         &self,
         tech: Technology,
         science_per_turn: i32,
-        civ_data: &CivData,
+        is_player: bool,
         game_settings: &GameSettings,
         map_params: &MapParametersRes,
     ) -> String {
@@ -392,7 +329,7 @@ impl TechManager {
         }
 
         let remaining_cost =
-            self.remaining_science_to_tech(tech, civ_data, game_settings, map_params) as f32;
+            self.remaining_science_to_tech(tech, is_player, game_settings, map_params) as f32;
 
         if remaining_cost <= 0.0 {
             return String::new();
@@ -445,18 +382,23 @@ impl TechManager {
         &mut self,
         science: i32,
         current_tech: Technology,
-        civ_data: &CivData,
+        is_player: bool,
+        science_per_turn: i32,
         game_settings: &GameSettings,
         map_params: &MapParametersRes,
     ) {
-        let cost = self.cost_of_tech(current_tech, civ_data, game_settings, map_params);
+        let cost = self.cost_of_tech(current_tech, is_player, game_settings, map_params);
         let current = self.techs_in_progress.entry(current_tech).or_insert(0);
         *current += science;
 
         if *current >= cost {
             let extra_science = *current - cost;
-            self.overflow_science +=
-                self.limit_overflow_science(extra_science, current_tech, civ_data, map_params);
+            self.overflow_science += self.limit_overflow_science(
+                extra_science,
+                current_tech,
+                science_per_turn,
+                map_params,
+            );
             self.add_technology(current_tech);
         }
     }
@@ -466,12 +408,12 @@ impl TechManager {
         &self,
         overflow: i32,
         current_tech: Technology,
-        civ_data: &CivData,
+        science_per_turn: i32,
         map_params: &MapParametersRes,
     ) -> i32 {
         let ruleset = &map_params.0.ruleset;
         let tech_cost = ruleset.technologies[current_tech].cost;
-        min(overflow, max(civ_data.science_per_turn * 5, tech_cost))
+        min(overflow, max(science_per_turn * 5, tech_cost))
     }
 
     /// 完成科技研究时添加科技
@@ -496,20 +438,20 @@ impl TechManager {
     /// 在回合结束时更新
     pub fn end_turn(
         &mut self,
-        science_for_new_turn: i32,
-        civ_data: &CivData,
+        science_per_turn: i32,
+        is_player: bool,
         turn: u32,
         game_settings: &GameSettings,
         map_params: &MapParametersRes,
     ) {
-        self.science_of_last_8_turns[turn as usize % 8] = science_for_new_turn;
+        self.science_of_last_8_turns[turn as usize % 8] = science_per_turn;
 
         let current_tech = match self.current_researching_technology() {
             Some(tech) => tech,
             None => panic!("No technology is being researched"),
         };
 
-        let mut final_science = science_for_new_turn;
+        let mut final_science = science_per_turn;
 
         if self.science_from_research_agreements != 0 {
             let boost = self.science_from_research_agreements / 3;
@@ -525,7 +467,8 @@ impl TechManager {
         self.add_science(
             final_science,
             current_tech,
-            civ_data,
+            is_player,
+            science_per_turn,
             game_settings,
             map_params,
         );

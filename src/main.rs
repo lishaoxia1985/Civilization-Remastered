@@ -21,7 +21,7 @@ use crate::{
         AssetLoadingPlugin, CameraPlugin, CombatPlugin, GameStatePlugin, MapPlugin, MinimapPlugin,
         TechPlugin,
     },
-    resources::{CivilizationManager, GameSettings, MapParametersRes},
+    resources::{GameSettings, MapParametersRes, TechManager},
 };
 
 mod assets;
@@ -112,6 +112,8 @@ fn insert_civilizations(mut commands: Commands, map_params: Res<MapParametersRes
     let player_idx = (map_params.0.seed % civ_list.len() as u64) as usize;
     let player_nation = civ_list[player_idx];
 
+    commands.spawn((NationComponent(player_nation), Player, SciencePerTurn(3)));
+
     // 其余为敌方文明
     let enemy_nations: Vec<Nation> = civ_list
         .iter()
@@ -119,5 +121,19 @@ fn insert_civilizations(mut commands: Commands, map_params: Res<MapParametersRes
         .copied()
         .collect();
 
-    commands.insert_resource(CivilizationManager::new(player_nation, enemy_nations));
+    for &nation in enemy_nations.iter() {
+        commands.spawn((NationComponent(nation), Enemy, SciencePerTurn(3)));
+    }
 }
+
+#[derive(Component)]
+pub struct NationComponent(pub Nation);
+
+#[derive(Component)]
+pub struct Player;
+
+#[derive(Component)]
+pub struct Enemy;
+
+#[derive(Component)]
+pub struct SciencePerTurn(pub i32);

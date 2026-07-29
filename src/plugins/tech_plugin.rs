@@ -26,10 +26,10 @@ use enum_map::EnumMap;
 use std::collections::HashMap;
 
 use crate::{
-    AppState, ScreenState,
+    AppState, NationComponent, Player, SciencePerTurn, ScreenState,
     assets::GameAssets,
     components::{CloseTechTreeButton, TechButton, TechButtonState, TechTreeScrollableNode},
-    resources::{CivilizationManager, GameSettings, MapParametersRes, TechManagerRegistry},
+    resources::{GameSettings, MapParametersRes, TechManager},
 };
 
 /// 科技插件
@@ -39,12 +39,12 @@ impl Plugin for TechPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             OnEnter(AppState::GameStart),
-            (setup_tech_button, insert_tech_manager_registry),
+            (setup_tech_button, insert_tech_manager_for_every_nation),
         )
-        .add_systems(
+        /* .add_systems(
             Update,
             ai_research_system.run_if(in_state(ScreenState::WorldMap)),
-        )
+        ) */
         .add_systems(
             Update,
             handle_tech_click_system.run_if(in_state(ScreenState::TechTree)),
@@ -53,28 +53,25 @@ impl Plugin for TechPlugin {
     }
 }
 
-/// 插入科技管理器注册表资源
-fn insert_tech_manager_registry(
+/// 插入科技管理器资源
+fn insert_tech_manager_for_every_nation(
     mut commands: Commands,
     game_settings: Res<GameSettings>,
-    civ_manager: Res<CivilizationManager>,
+    query_nation: Query<Entity, With<NationComponent>>,
 ) {
-    commands.insert_resource(TechManagerRegistry::new(
-        &civ_manager,
-        game_settings.start_era,
-    ));
+    for entity in query_nation.iter() {
+        commands
+            .entity(entity)
+            .insert(TechManager::new(game_settings.start_era));
+    }
 }
 
 /// 判断科技状态
 fn determine_tech_state(
     technology: Technology,
-    player: &crate::resources::CivData,
     map_params: &MapParametersRes,
-    tech_registry: &TechManagerRegistry,
+    tech_manager: &TechManager,
 ) -> TechButtonState {
-    let play_nation = player.nation;
-    let tech_manager = &tech_registry.0[&play_nation];
-
     if tech_manager.is_researched(technology) {
         return TechButtonState::Researched;
     }
@@ -91,7 +88,7 @@ fn determine_tech_state(
 }
 
 /// AI 自动选择要研究的科技
-fn ai_research_system(
+/* fn ai_research_system(
     mut civ_manager: ResMut<CivilizationManager>,
     mut tech_registry: ResMut<TechManagerRegistry>,
     map_params: Res<MapParametersRes>,
@@ -101,14 +98,13 @@ fn ai_research_system(
             enemy.ai_choose_research(&map_params, &mut tech_registry);
         }
     }
-}
+} */
 
 /// 处理科技按钮点击
 fn handle_tech_click_system(
     tech_button_query: Query<(&Interaction, &TechButton)>,
     close_button_query: Query<(&Interaction, &CloseTechTreeButton)>,
-    civs: Res<CivilizationManager>,
-    mut tech_registry: ResMut<TechManagerRegistry>,
+    query_player: Single<&mut TechManager, With<Player>>,
     map_params: Res<MapParametersRes>,
     mut next_state: ResMut<NextState<ScreenState>>,
 ) {
@@ -120,20 +116,20 @@ fn handle_tech_click_system(
         }
     }
 
+    let mut tech_manager = query_player.into_inner();
+
     // 处理科技按钮
     for (interaction, tech_button) in &tech_button_query {
         if *interaction != Interaction::Pressed {
             continue;
         }
 
-        let player_nation = civs.player_nation;
-        let tech_manager = &tech_registry.0[&player_nation];
         if !tech_manager.can_be_researched(tech_button.0, &map_params) {
             continue;
         }
 
-        civs.player_data()
-            .start_research(tech_button.0, &mut tech_registry);
+        tech_manager.techs_to_research.clear();
+        tech_manager.techs_to_research.push(tech_button.0);
         next_state.set(ScreenState::WorldMap);
     }
 }
@@ -176,22 +172,17 @@ fn spawn_technology_screen(
     game_settings: Res<GameSettings>,
     map_params: Res<MapParametersRes>,
     materials: Res<GameAssets>,
-    civs: Res<CivilizationManager>,
-    tech_registry: Res<TechManagerRegistry>,
+    query_player: Single<(&NationComponent, &TechManager, &SciencePerTurn), With<Player>>,
 ) {
     let ruleset = &map_params.0.ruleset;
-    let player_nation = civs.player_nation;
-    let player_data = civs.player_data();
-    let tech_manager = &tech_registry.0[&player_nation];
+    /*  let player_nation  = query_player.into_inner().0.0;
+    let tech_manager = query_player.into_inner().1;
+    let science_per_turn = query_player.into_inner().2.0; */
+
+    let (player_nation, tech_manager, science_per_turn) = query_player.into_inner();
 
     let tech_and_turns: EnumMap<Technology, String> = EnumMap::from_fn(|tech| {
-        tech_manager.turns_to_tech(
-            tech,
-            player_data.science_per_turn,
-            player_data,
-            &game_settings,
-            &map_params,
-        )
+        tech_manager.turns_to_tech(tech, science_per_turn.0, true, &game_settings, &map_params)
     });
 
     let column_count = ruleset
@@ -303,13 +294,8 @@ fn spawn_technology_screen(
                         .technologies
                         .iter()
                         .for_each(|(technology, technology_info)| {
-                            let player = civs.player_data();
-                            let tech_state = determine_tech_state(
-                                technology,
-                                player,
-                                &map_params,
-                                &tech_registry,
-                            );
+                            let tech_state =
+                                determine_tech_state(technology, &map_params, &tech_manager);
                             let tech_turn = &tech_and_turns[technology];
 
                             builder.spawn((
