@@ -128,28 +128,6 @@ pub struct TechTreeScrollableNode;
 #[derive(Component)]
 pub struct CloseTechTreeButton;
 
-// ============ 游戏状态UI组件 ============
-
-/// 回合计数器文本
-#[derive(Component)]
-pub struct TurnCounterText;
-
-/// 金币文本
-#[derive(Component)]
-pub struct GoldText;
-
-/// 科技点数文本
-#[derive(Component)]
-pub struct ScienceText;
-
-/// 研究状态文本
-#[derive(Component)]
-pub struct ResearchStatusText;
-
-/// 结束回合按钮
-#[derive(Component)]
-pub struct EndTurnButton;
-
 // ============ 小地图组件 ============
 
 /// 视野指示器

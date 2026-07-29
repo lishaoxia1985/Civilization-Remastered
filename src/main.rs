@@ -18,10 +18,10 @@ use civ_map_generator::{
 use crate::{
     assets::ColorReplaceMaterial,
     plugins::{
-        AssetLoadingPlugin, CameraPlugin, CombatPlugin, GameStatePlugin, MapPlugin, MinimapPlugin,
-        TechPlugin,
+        AssetLoadingPlugin, CameraPlugin, CombatPlugin, MapPlugin, MinimapPlugin,
+        TechTreeScreenPlugin, TurnPlugin, UiPlugin,
     },
-    resources::{GameSettings, MapParametersRes, TechManager},
+    resources::{GameSettings, MapParametersRes},
 };
 
 mod assets;
@@ -40,14 +40,29 @@ pub enum AppState {
 #[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Hash, SubStates)]
 // And we need to add an attribute to let us know what the source state is
 // and what value it needs to have. This will ensure that unless we're
-// in [`AppState::GameStart`], the [`ScreenState`] state resource
-// will not exist.
+// in [`AppState::GameStart`], the [`ScreenState`] state will not exist.
 #[source(AppState = AppState::GameStart)]
 #[states(scoped_entities)]
 pub enum ScreenState {
     #[default]
     WorldMap,
     TechTree,
+}
+
+/// Turn phase state, used to control player interaction permissions and system execution conditions.
+///
+/// This state determines which phases in the current game loop allow player operations
+/// (where the player can interact) and which do not. By distinguishing between `PlayTurn`
+/// and `EnemyTurn`, you can precisely control when different system sets run:
+/// - Some systems (e.g., player input handling, UI interaction) only run during the `PlayTurn` phase.
+/// - Some systems (e.g., enemy AI logic) only run during the `EnemyTurn` phase.
+#[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Hash, SubStates)]
+#[source(AppState = AppState::GameStart)]
+#[states(scoped_entities)]
+pub enum TurnPhase {
+    #[default]
+    PlayTurn,
+    EnemyTurn,
 }
 
 fn main() {
@@ -85,10 +100,11 @@ fn main() {
         .add_plugins(AssetLoadingPlugin)
         .add_plugins(CameraPlugin)
         .add_plugins(CombatPlugin)
-        .add_plugins(GameStatePlugin)
+        .add_plugins(UiPlugin)
         .add_plugins(MapPlugin)
         .add_plugins(MinimapPlugin)
-        .add_plugins(TechPlugin)
+        .add_plugins(TechTreeScreenPlugin)
+        .add_plugins(TurnPlugin)
         // 初始化资源
         .init_resource::<InputFocus>()
         .insert_resource(map_params)
@@ -96,23 +112,32 @@ fn main() {
         // 初始化状态
         .init_state::<AppState>()
         .add_sub_state::<ScreenState>() // We set the substate up here.
+        .add_sub_state::<TurnPhase>()
         // 初始化文明
         .add_systems(OnExit(AppState::MapGenerating), insert_civilizations)
         .run();
 }
 
 /// 插入文明资源
-fn insert_civilizations(mut commands: Commands, map_params: Res<MapParametersRes>) {
+fn insert_civilizations(
+    mut commands: Commands,
+    map_params: Res<MapParametersRes>,
+    mut turn_manager: ResMut<TurnManager>,
+) {
     let civ_list = &map_params.0.civilization_list;
     if civ_list.len() < 2 {
         panic!("至少需要2个文明");
     }
 
-    // 随机选择玩家文明
+    // 随机选择玩家文明，同时初始化回合管理队列
     let player_idx = (map_params.0.seed % civ_list.len() as u64) as usize;
     let player_nation = civ_list[player_idx];
 
-    commands.spawn((NationComponent(player_nation), Player, SciencePerTurn(3)));
+    let player = commands
+        .spawn((NationComponent(player_nation), Player, SciencePerTurn(3)))
+        .id();
+
+    turn_manager.turn_queue.push(player);
 
     // 其余为敌方文明
     let enemy_nations: Vec<Nation> = civ_list
@@ -122,7 +147,10 @@ fn insert_civilizations(mut commands: Commands, map_params: Res<MapParametersRes
         .collect();
 
     for &nation in enemy_nations.iter() {
-        commands.spawn((NationComponent(nation), Enemy, SciencePerTurn(3)));
+        let enenmy = commands
+            .spawn((NationComponent(nation), Enemy, SciencePerTurn(3)))
+            .id();
+        turn_manager.turn_queue.push(enenmy);
     }
 }
 
@@ -137,3 +165,45 @@ pub struct Enemy;
 
 #[derive(Component)]
 pub struct SciencePerTurn(pub i32);
+
+#[derive(Resource, Default)]
+pub struct TurnManager {
+    pub turn_queue: Vec<Entity>,
+    pub current_index: usize,
+    pub turn_number: u32,
+}
+
+#[derive(Message)]
+pub struct TurnStartMessage {
+    pub entity: Entity,
+}
+
+#[derive(Message)]
+pub struct TurnEndMessage {
+    pub entity: Entity,
+}
+
+#[derive(Message)]
+pub struct TechResearchedMessage {
+    pub entity: Entity,
+}
+
+#[derive(Message)]
+pub struct BuildCompletedMessage {
+    pub entity: Entity,
+}
+
+/// 攻击请求事件：由玩家按键或AI逻辑触发
+#[derive(Message)]
+pub struct AttackRequestMessage {
+    pub attacker: Entity,
+    pub target: Entity,
+}
+
+// 定义结算顺序的 SystemSet
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub enum ResolutionPhase {
+    Science, // 第一阶段：科技
+    Production, // 第二阶段：产能
+             // Food,       // 第三阶段：食物（未来扩展）
+}

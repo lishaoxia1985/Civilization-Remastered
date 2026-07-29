@@ -8,10 +8,7 @@ use bevy::{
         palettes::css::{BLACK, RED, WHITE},
     },
     math::Vec2,
-    picking::{
-        events::{Click, Drag, Pointer},
-        pointer::PointerButton,
-    },
+    picking::events::{Drag, Pointer},
     prelude::*,
     ui::{
         BackgroundColor, BorderColor, Node, Overflow, PositionType, ScrollPosition, UiRect, Val,
@@ -33,13 +30,13 @@ use crate::{
 };
 
 /// 科技插件
-pub struct TechPlugin;
+pub struct TechTreeScreenPlugin;
 
-impl Plugin for TechPlugin {
+impl Plugin for TechTreeScreenPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             OnEnter(AppState::GameStart),
-            (setup_tech_button, insert_tech_manager_for_every_nation),
+            (insert_tech_manager_for_every_nation),
         )
         /* .add_systems(
             Update,
@@ -131,38 +128,6 @@ fn handle_tech_click_system(
         tech_manager.techs_to_research.clear();
         tech_manager.techs_to_research.push(tech_button.0);
         next_state.set(ScreenState::WorldMap);
-    }
-}
-
-/// 设置打开科技树的按钮
-fn setup_tech_button(mut commands: Commands) {
-    commands
-        .spawn((
-            Node {
-                position_type: PositionType::Absolute,
-                left: Val::Px(10.0),
-                top: Val::Px(10.0),
-                width: Val::Auto,
-                height: Val::Auto,
-                border: UiRect::all(Val::Px(2.0)),
-                ..Default::default()
-            },
-            BackgroundColor(Color::BLACK),
-            BorderColor::all(Color::WHITE),
-            Text::new("Open Tech Tree"),
-            TextFont {
-                font_size: FontSize::Px(14.0),
-                ..Default::default()
-            },
-            TextColor(Color::WHITE),
-        ))
-        .observe(open_tech_tree);
-}
-
-/// 打开科技树
-fn open_tech_tree(drag: On<Pointer<Click>>, mut next_state: ResMut<NextState<ScreenState>>) {
-    if matches!(drag.button, PointerButton::Primary) {
-        next_state.set(ScreenState::TechTree);
     }
 }
 

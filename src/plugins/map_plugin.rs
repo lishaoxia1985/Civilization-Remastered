@@ -20,9 +20,7 @@ use crate::{
     AppState,
     assets::{ColorReplaceMaterial, GameAssets, hex_mesh, line_mesh},
     components::{Health, Movement, Owner, Strength, UnitComponent, WorldTile},
-    resources::{
-         MapGeneratorTask, MapParametersRes, TileEntityMap, TileMapRes,
-    },
+    resources::{MapGeneratorTask, MapParametersRes, TileEntityMap, TileMapRes},
 };
 
 /// 地图插件

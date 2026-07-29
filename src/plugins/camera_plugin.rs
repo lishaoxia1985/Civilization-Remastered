@@ -11,7 +11,7 @@ use civ_map_generator::{
 use crate::{
     AppState, NationComponent, Player, ScreenState,
     components::{MainCamera, WorldTile},
-    resources::{ MapParametersRes, TileEntityMap, TileMapRes},
+    resources::{MapParametersRes, TileEntityMap, TileMapRes},
 };
 
 /// 相机插件
