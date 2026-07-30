@@ -3,8 +3,6 @@
 //! 包含游戏配置、文明状态、科技管理等全局资源。
 
 use std::{
-    cmp::max,
-    cmp::min,
     collections::{HashMap, HashSet},
     sync::Arc,
 };
@@ -13,7 +11,7 @@ use bevy::prelude::*;
 use bevy::tasks::Task;
 use civ_map_generator::{
     map_parameters::MapParameters,
-    ruleset::enums::{Difficulty, EnumStr, Era, Nation, Speed, Technology},
+    ruleset::enums::{Difficulty, EnumStr, Era, Speed, Technology},
     tile::Tile,
     tile_map::TileMap,
 };
@@ -72,89 +70,22 @@ impl Default for GameSettings {
     }
 }
 
-// ============ 文明状态 ============
-
-/// 单个文明的数据
-pub struct CivData {
-    /// 文明所属国家
-    pub nation: Nation,
-    /// 当前金币
-    pub gold: i32,
-    /// 每回合金币收入
-    pub gold_per_turn: i32,
-    /// 每回合科技产出
-    pub science_per_turn: i32,
-    /// 当前文化值
-    pub culture: i32,
-    /// 每回合文化产出
-    pub culture_per_turn: i32,
-    /// 是否为人类玩家
-    pub is_human: bool,
-}
-
-impl CivData {
-    /// 创建新的文明数据
-    pub fn new(nation: Nation, is_human: bool) -> Self {
-        Self {
-            nation,
-            gold: if is_human { 500 } else { 500 },
-            gold_per_turn: 0,
-            science_per_turn: 3,
-            culture: 0,
-            culture_per_turn: 0,
-            is_human,
-        }
-    }
-
-    /// 结束回合
-    pub fn end_turn(&mut self) {
-        self.gold += self.gold_per_turn;
-        self.culture += self.culture_per_turn;
-    }
-
-    /* /// 开始研究科技
-    pub fn start_research(
-        &self,
-        tech: Technology,
-        tech_registry: &mut TechManagerRegistry,
-    ) -> bool {
-        tech_registry.0.entry(self.nation).and_modify(|tm| {
-            tm.techs_to_research.clear();
-            tm.techs_to_research.push(tech)
-        });
-        true
-    }
-
-    /// AI 自动选择要研究的科技（选择最便宜的未研究科技）
-    pub fn ai_choose_research(
-        &mut self,
-        map_params: &MapParametersRes,
-    ) {
-        let tech_manager = &tech_registry.0[&self.nation];
-
-        if tech_manager.current_researching_technology().is_some() {
-            return; // 已经在研究中
-        }
-
-        let mut available: Vec<(Technology, i32)> = map_params
-            .0
-            .ruleset
-            .technologies
-            .iter()
-            .filter(|(tech, _)| tech_manager.can_be_researched(*tech, map_params))
-            .map(|(tech, info)| (tech, info.cost))
-            .collect();
-        available.sort_by_key(|(_, cost)| *cost);
-        if let Some(&(tech, _)) = available.first() {
-            self.start_research(tech, tech_registry);
-        }
-    } */
-}
-
 // ============ 科技管理 ============
 
-#[derive(Component)]
+/// 当前正在研发的科技
+///
+/// # Notes
+///
+/// TODO: 在Unciv项目中，使用科技队列来存储按先后顺序进行研发的科技，在队列中，第一个科技是正在研发的科技。
+/// 在当前实现中，我们不在TechManager中使用科技队列，
+/// 未来可能会在科技选择界面或AI选择科技的逻辑中实现科技队列功能。
+#[derive(Component, Default)]
+pub struct ResearchingTech(pub Option<Technology>);
+
 /// 科技管理器 - 管理单个文明的科技研究状态
+#[derive(Component)]
+#[require(ResearchingTech)]
+
 pub struct TechManager {
     /// 当前时代
     pub era: Era,
@@ -194,10 +125,6 @@ pub struct TechManager {
     /// 已研究科技集合
     pub techs_researched: HashSet<Technology>,
 
-    /// 待研究科技队列。
-    /// 当前正在研究的科技始终位于队列的第一个。
-    pub techs_to_research: Vec<Technology>,
-
     /// 溢出科技值
     pub overflow_science: i32,
 
@@ -228,7 +155,6 @@ impl TechManager {
             science_of_last_8_turns: [0; 8],
             science_from_research_agreements: 0,
             techs_researched: HashSet::new(),
-            techs_to_research: Vec::new(),
             overflow_science: 0,
             techs_in_progress: HashMap::new(),
             gold_percent_converted_to_science: 0.6,
@@ -276,18 +202,9 @@ impl TechManager {
     }
 
     /// 获取科技修正因子
-    fn science_modifier(
-        &self,
-        _tech: Technology,
-        _civ_data: &CivData,
-        _map_params: &MapParametersRes,
-    ) -> f32 {
+    /// TODO: 需要进一步完善
+    fn science_modifier() -> f32 {
         1.0
-    }
-
-    /// 获取当前正在研究的科技
-    pub fn current_researching_technology(&self) -> Option<Technology> {
-        self.techs_to_research.first().copied()
     }
 
     /// 获取科技的研究进度（已投入的科技点数）
@@ -375,109 +292,6 @@ impl TechManager {
     /// 检查所有科技是否已研究完毕
     pub fn all_techs_researched(&self) -> bool {
         self.all_techs_are_researched
-    }
-
-    /// 添加科技点
-    pub fn add_science(
-        &mut self,
-        science: i32,
-        current_tech: Technology,
-        is_player: bool,
-        science_per_turn: i32,
-        game_settings: &GameSettings,
-        map_params: &MapParametersRes,
-    ) {
-        let cost = self.cost_of_tech(current_tech, is_player, game_settings, map_params);
-        let current = self.techs_in_progress.entry(current_tech).or_insert(0);
-        *current += science;
-
-        if *current >= cost {
-            let extra_science = *current - cost;
-            self.overflow_science += self.limit_overflow_science(
-                extra_science,
-                current_tech,
-                science_per_turn,
-                map_params,
-            );
-            self.add_technology(current_tech);
-        }
-    }
-
-    /// 限制溢出科技点，防止过多结转到下一个科技
-    fn limit_overflow_science(
-        &self,
-        overflow: i32,
-        current_tech: Technology,
-        science_per_turn: i32,
-        map_params: &MapParametersRes,
-    ) -> i32 {
-        let ruleset = &map_params.0.ruleset;
-        let tech_cost = ruleset.technologies[current_tech].cost;
-        min(overflow, max(science_per_turn * 5, tech_cost))
-    }
-
-    /// 完成科技研究时添加科技
-    pub fn add_technology(&mut self, tech: Technology) {
-        let is_new = self.techs_researched.insert(tech);
-
-        self.techs_to_research.retain(|t| t != &tech);
-        self.techs_in_progress.remove(&tech);
-
-        self.update_transient_booleans();
-
-        if is_new {
-            // TODO: 添加弹窗通知
-        }
-    }
-
-    /// 更新瞬态布尔值
-    fn update_transient_booleans(&mut self) {
-        // TODO: 实现独特能力检查
-    }
-
-    /// 在回合结束时更新
-    pub fn end_turn(
-        &mut self,
-        science_per_turn: i32,
-        is_player: bool,
-        turn: u32,
-        game_settings: &GameSettings,
-        map_params: &MapParametersRes,
-    ) {
-        self.science_of_last_8_turns[turn as usize % 8] = science_per_turn;
-
-        let current_tech = match self.current_researching_technology() {
-            Some(tech) => tech,
-            None => panic!("No technology is being researched"),
-        };
-
-        let mut final_science = science_per_turn;
-
-        if self.science_from_research_agreements != 0 {
-            let boost = self.science_from_research_agreements / 3;
-            final_science += boost;
-            self.science_from_research_agreements = 0;
-        }
-
-        if self.overflow_science != 0 {
-            final_science += self.overflow_science;
-            self.overflow_science = 0;
-        }
-
-        self.add_science(
-            final_science,
-            current_tech,
-            is_player,
-            science_per_turn,
-            game_settings,
-            map_params,
-        );
-    }
-
-    /// 设置瞬态数据
-    pub fn set_transients(&mut self, _map_params: &MapParametersRes) {
-        self.update_era();
-        self.update_transient_booleans();
     }
 
     /// 更新时代

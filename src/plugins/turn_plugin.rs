@@ -14,11 +14,14 @@ impl Plugin for TurnPlugin {
             // 定义收到开始回合事件时的执行顺序：Science -> Production （非必须 你需要将那些处理事件的系统分别放到对应的系统集中，然后这些系统可以根据此顺序执行）
             .configure_sets(
                 Update,
-                (ResolutionPhase::Science, ResolutionPhase::Production)
+                (
+                    ResolutionPhase::Science,
+                    ResolutionPhase::Production,
+                    ResolutionPhase::AiSelectTech.run_if(in_state(TurnPhase::EnemyTurn)),
+                )
                     .chain()
                     .run_if(in_state(AppState::GameStart)),
             )
-            //.add_systems(Update, start_turn_resolution) // TODO: 应当将该系统在所有系统之前执行
             .add_systems(
                 Update,
                 auto_end_enemy_turn

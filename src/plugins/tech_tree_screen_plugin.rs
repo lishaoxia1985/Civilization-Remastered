@@ -23,10 +23,10 @@ use enum_map::EnumMap;
 use std::collections::HashMap;
 
 use crate::{
-    AppState, NationComponent, Player, SciencePerTurn, ScreenState,
+    NationComponent, Player, SciencePerTurn, ScreenState,
     assets::GameAssets,
     components::{CloseTechTreeButton, TechButton, TechButtonState, TechTreeScrollableNode},
-    resources::{GameSettings, MapParametersRes, TechManager},
+    resources::{GameSettings, MapParametersRes, ResearchingTech, TechManager},
 };
 
 /// 科技插件
@@ -34,32 +34,16 @@ pub struct TechTreeScreenPlugin;
 
 impl Plugin for TechTreeScreenPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(
-            OnEnter(AppState::GameStart),
-            (insert_tech_manager_for_every_nation),
-        )
-        /* .add_systems(
-            Update,
-            ai_research_system.run_if(in_state(ScreenState::WorldMap)),
-        ) */
-        .add_systems(
-            Update,
-            handle_tech_click_system.run_if(in_state(ScreenState::TechTree)),
-        )
-        .add_systems(OnEnter(ScreenState::TechTree), spawn_technology_screen);
-    }
-}
-
-/// 插入科技管理器资源
-fn insert_tech_manager_for_every_nation(
-    mut commands: Commands,
-    game_settings: Res<GameSettings>,
-    query_nation: Query<Entity, With<NationComponent>>,
-) {
-    for entity in query_nation.iter() {
-        commands
-            .entity(entity)
-            .insert(TechManager::new(game_settings.start_era));
+        app
+            /* .add_systems(
+                Update,
+                ai_research_system.run_if(in_state(ScreenState::WorldMap)),
+            ) */
+            .add_systems(
+                Update,
+                handle_tech_click_system.run_if(in_state(ScreenState::TechTree)),
+            )
+            .add_systems(OnEnter(ScreenState::TechTree), spawn_technology_screen);
     }
 }
 
@@ -67,13 +51,14 @@ fn insert_tech_manager_for_every_nation(
 fn determine_tech_state(
     technology: Technology,
     map_params: &MapParametersRes,
+    researching_tech: Option<Technology>,
     tech_manager: &TechManager,
 ) -> TechButtonState {
     if tech_manager.is_researched(technology) {
         return TechButtonState::Researched;
     }
 
-    if tech_manager.current_researching_technology() == Some(technology) {
+    if researching_tech == Some(technology) {
         return TechButtonState::InProgress;
     }
 
@@ -101,7 +86,7 @@ fn determine_tech_state(
 fn handle_tech_click_system(
     tech_button_query: Query<(&Interaction, &TechButton)>,
     close_button_query: Query<(&Interaction, &CloseTechTreeButton)>,
-    query_player: Single<&mut TechManager, With<Player>>,
+    query_player: Single<(&mut ResearchingTech, &mut TechManager), With<Player>>,
     map_params: Res<MapParametersRes>,
     mut next_state: ResMut<NextState<ScreenState>>,
 ) {
@@ -113,7 +98,7 @@ fn handle_tech_click_system(
         }
     }
 
-    let mut tech_manager = query_player.into_inner();
+    let (mut researching_tech, mut tech_manager) = query_player.into_inner();
 
     // 处理科技按钮
     for (interaction, tech_button) in &tech_button_query {
@@ -125,8 +110,7 @@ fn handle_tech_click_system(
             continue;
         }
 
-        tech_manager.techs_to_research.clear();
-        tech_manager.techs_to_research.push(tech_button.0);
+        researching_tech.0 = Some(tech_button.0);
         next_state.set(ScreenState::WorldMap);
     }
 }
@@ -137,14 +121,23 @@ fn spawn_technology_screen(
     game_settings: Res<GameSettings>,
     map_params: Res<MapParametersRes>,
     materials: Res<GameAssets>,
-    query_player: Single<(&NationComponent, &TechManager, &SciencePerTurn), With<Player>>,
+    query_player: Single<
+        (
+            &NationComponent,
+            &ResearchingTech,
+            &TechManager,
+            &SciencePerTurn,
+        ),
+        With<Player>,
+    >,
 ) {
     let ruleset = &map_params.0.ruleset;
     /*  let player_nation  = query_player.into_inner().0.0;
     let tech_manager = query_player.into_inner().1;
     let science_per_turn = query_player.into_inner().2.0; */
 
-    let (player_nation, tech_manager, science_per_turn) = query_player.into_inner();
+    let (player_nation, researching_tech, tech_manager, science_per_turn) =
+        query_player.into_inner();
 
     let tech_and_turns: EnumMap<Technology, String> = EnumMap::from_fn(|tech| {
         tech_manager.turns_to_tech(tech, science_per_turn.0, true, &game_settings, &map_params)
@@ -259,8 +252,12 @@ fn spawn_technology_screen(
                         .technologies
                         .iter()
                         .for_each(|(technology, technology_info)| {
-                            let tech_state =
-                                determine_tech_state(technology, &map_params, &tech_manager);
+                            let tech_state = determine_tech_state(
+                                technology,
+                                &map_params,
+                                researching_tech.0,
+                                &tech_manager,
+                            );
                             let tech_turn = &tech_and_turns[technology];
 
                             builder.spawn((

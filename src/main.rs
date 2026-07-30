@@ -12,14 +12,14 @@ use bevy::{
 use civ_map_generator::{
     grid::*,
     map_parameters::{MapParametersBuilder, WorldGrid},
-    ruleset::enums::Nation,
+    ruleset::enums::{Nation, Technology},
 };
 
 use crate::{
     assets::ColorReplaceMaterial,
     plugins::{
-        AssetLoadingPlugin, CameraPlugin, CombatPlugin, MapPlugin, MinimapPlugin,
-        TechTreeScreenPlugin, TurnPlugin, UiPlugin,
+        AiPlugin, AssetLoadingPlugin, CameraPlugin, CombatPlugin, MapPlugin, MinimapPlugin,
+        TechPlugin, TechTreeScreenPlugin, TurnPlugin, UiPlugin,
     },
     resources::{GameSettings, MapParametersRes},
 };
@@ -105,6 +105,8 @@ fn main() {
         .add_plugins(MinimapPlugin)
         .add_plugins(TechTreeScreenPlugin)
         .add_plugins(TurnPlugin)
+        .add_plugins(TechPlugin)
+        .add_plugins(AiPlugin)
         // 初始化资源
         .init_resource::<InputFocus>()
         .insert_resource(map_params)
@@ -183,9 +185,10 @@ pub struct TurnEndMessage {
     pub entity: Entity,
 }
 
+/// When complete to research a technology, this message is sent.
 #[derive(Message)]
 pub struct TechResearchedMessage {
-    pub entity: Entity,
+    pub tech: Technology,
 }
 
 #[derive(Message)]
@@ -203,7 +206,8 @@ pub struct AttackRequestMessage {
 // 定义结算顺序的 SystemSet
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ResolutionPhase {
-    Science, // 第一阶段：科技
+    Science,    // 第一阶段：科技
     Production, // 第二阶段：产能
-             // Food,       // 第三阶段：食物（未来扩展）
+    // Food,       // 第三阶段：食物（未来扩展）
+    AiSelectTech,
 }

@@ -8,7 +8,7 @@ use civ_map_generator::ruleset::enums::EnumStr;
 use crate::{
     AppState, NationComponent, Player, SciencePerTurn, ScreenState, TurnEndMessage, TurnManager,
     TurnPhase,
-    resources::{GameSettings, MapParametersRes, TechManager},
+    resources::{GameSettings, MapParametersRes, ResearchingTech, TechManager},
 };
 
 /// 游戏状态插件
@@ -152,9 +152,18 @@ fn update_game_state_ui(
     game_settings: Res<GameSettings>,
     map_params: Res<MapParametersRes>,
     turn_manager: Res<TurnManager>,
-    query_player: Single<(&NationComponent, &mut TechManager, &SciencePerTurn), With<Player>>,
+    query_player: Single<
+        (
+            &NationComponent,
+            &ResearchingTech,
+            &mut TechManager,
+            &SciencePerTurn,
+        ),
+        With<Player>,
+    >,
 ) {
-    let (nation_component, tech_manager, science_per_turn) = query_player.into_inner();
+    let (nation_component, researching_tech, tech_manager, science_per_turn) =
+        query_player.into_inner();
     turn_text.0 = format!(
         "Turn: {} (Player: {})",
         turn_manager.turn_number,
@@ -163,7 +172,7 @@ fn update_game_state_ui(
     gold_text.0 = format!("Gold: {} ({:+})", 3, 3);
     science_text.0 = format!("Science: {}/turn", science_per_turn.0);
 
-    if let Some(tech) = tech_manager.current_researching_technology() {
+    if let Some(tech) = researching_tech.0 {
         let research_progress = tech_manager.research_progress(tech);
         let cost_of_tech = tech_manager.cost_of_tech(tech, true, &game_settings, &map_params);
         let progress = (research_progress as f32 / cost_of_tech as f32 * 100.0) as i32;
@@ -205,33 +214,22 @@ fn setup_end_turn_button(mut commands: Commands) {
 }
 
 /// 结束回合点击处理,只针对Player
-/// TODO: 当前按钮全程有效，实际应当只针对Player有效
 fn end_turn_click(
     _click: On<Pointer<Click>>,
-    game_settings: Res<GameSettings>,
-    map_params: Res<MapParametersRes>,
-    query_player: Single<(Entity, &mut TechManager, &SciencePerTurn), With<Player>>,
+    query_player: Single<(Entity, &ResearchingTech), With<Player>>,
     turn_manager: Res<TurnManager>,
     mut turn_end_messages: MessageWriter<TurnEndMessage>,
 ) {
-    let (entity, mut tech_manager, science_per_turn) = query_player.into_inner();
+    let (entity, researching_tech) = query_player.into_inner();
     if turn_manager.turn_queue[turn_manager.current_index] != entity {
         return;
     }
-    if tech_manager.current_researching_technology().is_none() {
+    if researching_tech.0.is_none() {
         println!("当前没有正在研究的科技，请选择一项科技进行研究。");
         return;
     }
     // TODO: Should edit `turn` and `is_player`
     turn_end_messages.write(TurnEndMessage { entity });
-
-    tech_manager.end_turn(
-        science_per_turn.0,
-        true,
-        turn_manager.turn_number,
-        &game_settings,
-        &map_params,
-    );
 }
 
 fn update_end_turn_button(
