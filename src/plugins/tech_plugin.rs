@@ -5,7 +5,7 @@ use civ_map_generator::ruleset::enums::Technology;
 
 use crate::{
     AppState, NationComponent, Player, ResolutionPhase, SciencePerTurn, TechResearchedMessage,
-    TurnManager, TurnStartMessage,
+    TurnManager, TurnState,
     resources::{GameSettings, MapParametersRes, ResearchingTech, TechManager},
 };
 
@@ -19,7 +19,7 @@ impl Plugin for TechPlugin {
                 insert_tech_manager_for_every_nation,
             )
             .add_systems(
-                Update,
+                OnEnter(TurnState::Start),
                 process_science_on_turn_start.in_set(ResolutionPhase::Science),
             );
     }
@@ -39,7 +39,6 @@ fn insert_tech_manager_for_every_nation(
 }
 
 fn process_science_on_turn_start(
-    mut turn_start_messages: MessageReader<TurnStartMessage>,
     manager: Res<TurnManager>,
     mut query: Query<(
         &mut ResearchingTech,
@@ -56,77 +55,71 @@ fn process_science_on_turn_start(
         // 第0回合不处理科技，即开始游戏的回合暂时不处理科技
         return;
     }
-    for message in turn_start_messages.read() {
-        let entity = message.entity;
-        if let Ok((mut researching_tech, mut tech_manager, science_per_turn, player)) =
-            query.get_mut(entity)
-        {
-            let is_player = player.is_some();
 
-            let science_per_turn = science_per_turn.0;
+    let entity = manager.current_nation_entity();
+    if let Ok((mut researching_tech, mut tech_manager, science_per_turn, player)) =
+        query.get_mut(entity)
+    {
+        let is_player = player.is_some();
 
-            // 存储最近8回合的科技值
-            // TODO: 用于计算消耗大科学家时获得的科技值,我们暂时没有实现
-            tech_manager.science_of_last_8_turns[turn as usize % 8] = science_per_turn;
+        let science_per_turn = science_per_turn.0;
 
-            let current_tech = match researching_tech.0 {
-                Some(tech) => tech,
-                None => panic!("No technology is being researched"),
-            };
+        // 存储最近8回合的科技值
+        // TODO: 用于计算消耗大科学家时获得的科技值,我们暂时没有实现
+        tech_manager.science_of_last_8_turns[turn as usize % 8] = science_per_turn;
 
-            // 获取文明当前回合的科技值产出
-            let mut final_science = science_per_turn;
-
-            // TODO: 添加研究协议提供的科技值,当前未实现研究协议相关逻辑
-            if tech_manager.science_from_research_agreements != 0 {
-                let boost = tech_manager.science_from_research_agreements / 3;
-                final_science += boost;
-                tech_manager.science_from_research_agreements = 0;
-            }
-
-            // 处理上次科技研发成功时溢出的科技值, 添加到当前科技值中
-            if tech_manager.overflow_science != 0 {
-                final_science += tech_manager.overflow_science;
-                tech_manager.overflow_science = 0;
-            }
-
-            let cost =
-                tech_manager.cost_of_tech(current_tech, is_player, &game_settings, &map_params);
-
-            // 获取当前科技的进度，即其已投入的科技点数
-            let current = tech_manager
-                .techs_in_progress
-                .entry(current_tech)
-                .or_insert(0);
-
-            // 计算最终投入该科技的科技点数
-            *current += final_science;
-
-            // 如果已投入的科技点数达到科技消耗，则完成当前科技的研究
-            if *current >= cost {
-                // 获取当前科技研发成功后溢出的科技值
-                let extra_science = *current - cost;
-                tech_manager.overflow_science += limit_overflow_science(
-                    extra_science,
-                    current_tech,
-                    science_per_turn,
-                    &map_params,
-                );
-
-                // 删除该科技的研发进度
-                tech_manager.techs_in_progress.remove(&current_tech);
-                // 清除当前研发的科技
-                researching_tech.0 = None;
-
-                // 添加科技, 如果科技是`Technology::FutureTech`, 且已经添加过, 则此处添加失败，
-                // 如此我们无需再发送科技研发成功消息？
-                // TODO: 或许`Technology::FutureTech`研发过，我们照样需要发送消息，读取该消息来更新胜利分数
-                if tech_manager.techs_researched.insert(current_tech) {
-                    tech_complete_messages.write(TechResearchedMessage { tech: current_tech });
-                }
-            }
+        let current_tech = match researching_tech.0 {
+            Some(tech) => tech,
+            None => panic!("No technology is being researched"),
         };
-    }
+
+        // 获取文明当前回合的科技值产出
+        let mut final_science = science_per_turn;
+
+        // TODO: 添加研究协议提供的科技值,当前未实现研究协议相关逻辑
+        if tech_manager.science_from_research_agreements != 0 {
+            let boost = tech_manager.science_from_research_agreements / 3;
+            final_science += boost;
+            tech_manager.science_from_research_agreements = 0;
+        }
+
+        // 处理上次科技研发成功时溢出的科技值, 添加到当前科技值中
+        if tech_manager.overflow_science != 0 {
+            final_science += tech_manager.overflow_science;
+            tech_manager.overflow_science = 0;
+        }
+
+        let cost = tech_manager.cost_of_tech(current_tech, is_player, &game_settings, &map_params);
+
+        // 获取当前科技的进度，即其已投入的科技点数
+        let current = tech_manager
+            .techs_in_progress
+            .entry(current_tech)
+            .or_insert(0);
+
+        // 计算最终投入该科技的科技点数
+        *current += final_science;
+
+        // 如果已投入的科技点数达到科技消耗，则完成当前科技的研究
+        if *current >= cost {
+            // 获取当前科技研发成功后溢出的科技值
+            let extra_science = *current - cost;
+            tech_manager.overflow_science +=
+                limit_overflow_science(extra_science, current_tech, science_per_turn, &map_params);
+
+            // 删除该科技的研发进度
+            tech_manager.techs_in_progress.remove(&current_tech);
+            // 清除当前研发的科技
+            researching_tech.0 = None;
+
+            // 添加科技, 如果科技是`Technology::FutureTech`, 且已经添加过, 则此处添加失败，
+            // 如此我们无需再发送科技研发成功消息？
+            // TODO: 或许`Technology::FutureTech`研发过，我们照样需要发送消息，读取该消息来更新胜利分数
+            if tech_manager.techs_researched.insert(current_tech) {
+                tech_complete_messages.write(TechResearchedMessage { tech: current_tech });
+            }
+        }
+    };
 }
 
 /// 限制溢出科技点，防止过多结转到下一个科技

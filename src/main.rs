@@ -61,8 +61,19 @@ pub enum ScreenState {
 #[states(scoped_entities)]
 pub enum TurnPhase {
     #[default]
+    Uninitialized,
     PlayTurn,
     EnemyTurn,
+}
+
+#[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Hash, SubStates)]
+#[source(AppState = AppState::GameStart)]
+#[states(scoped_entities)]
+pub enum TurnState {
+    #[default]
+    Uninitialized,
+    Start,
+    End,
 }
 
 fn main() {
@@ -115,17 +126,14 @@ fn main() {
         .init_state::<AppState>()
         .add_sub_state::<ScreenState>() // We set the substate up here.
         .add_sub_state::<TurnPhase>()
+        .add_sub_state::<TurnState>()
         // 初始化文明
-        .add_systems(OnExit(AppState::MapGenerating), insert_civilizations)
+        .add_systems(OnExit(AppState::MapGenerating), insert_nations)
         .run();
 }
 
 /// 插入文明资源
-fn insert_civilizations(
-    mut commands: Commands,
-    map_params: Res<MapParametersRes>,
-    mut turn_manager: ResMut<TurnManager>,
-) {
+fn insert_nations(mut commands: Commands, map_params: Res<MapParametersRes>) {
     let civ_list = &map_params.0.civilization_list;
     if civ_list.len() < 2 {
         panic!("至少需要2个文明");
@@ -135,11 +143,7 @@ fn insert_civilizations(
     let player_idx = (map_params.0.seed % civ_list.len() as u64) as usize;
     let player_nation = civ_list[player_idx];
 
-    let player = commands
-        .spawn((NationComponent(player_nation), Player, SciencePerTurn(3)))
-        .id();
-
-    turn_manager.turn_queue.push(player);
+    commands.spawn((NationComponent(player_nation), Player, SciencePerTurn(3)));
 
     // 其余为敌方文明
     let enemy_nations: Vec<Nation> = civ_list
@@ -149,10 +153,7 @@ fn insert_civilizations(
         .collect();
 
     for &nation in enemy_nations.iter() {
-        let enenmy = commands
-            .spawn((NationComponent(nation), Enemy, SciencePerTurn(3)))
-            .id();
-        turn_manager.turn_queue.push(enenmy);
+        commands.spawn((NationComponent(nation), Enemy, SciencePerTurn(3)));
     }
 }
 
@@ -168,21 +169,17 @@ pub struct Enemy;
 #[derive(Component)]
 pub struct SciencePerTurn(pub i32);
 
-#[derive(Resource, Default)]
+#[derive(Resource)]
 pub struct TurnManager {
     pub turn_queue: Vec<Entity>,
     pub current_index: usize,
     pub turn_number: u32,
 }
 
-#[derive(Message)]
-pub struct TurnStartMessage {
-    pub entity: Entity,
-}
-
-#[derive(Message)]
-pub struct TurnEndMessage {
-    pub entity: Entity,
+impl TurnManager {
+    pub fn current_nation_entity(&self) -> Entity {
+        self.turn_queue[self.current_index]
+    }
 }
 
 /// When complete to research a technology, this message is sent.
@@ -210,4 +207,5 @@ pub enum ResolutionPhase {
     Production, // 第二阶段：产能
     // Food,       // 第三阶段：食物（未来扩展）
     AiSelectTech,
+    AutoEndTurn, // 只有敌人回合时才会运行此系统集中的系统
 }

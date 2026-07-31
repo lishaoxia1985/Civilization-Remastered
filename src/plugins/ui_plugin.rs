@@ -6,8 +6,8 @@ use bevy::prelude::*;
 use civ_map_generator::ruleset::enums::EnumStr;
 
 use crate::{
-    AppState, NationComponent, Player, SciencePerTurn, ScreenState, TurnEndMessage, TurnManager,
-    TurnPhase,
+    AppState, NationComponent, Player, SciencePerTurn, ScreenState, TurnManager, TurnPhase,
+    TurnState,
     resources::{GameSettings, MapParametersRes, ResearchingTech, TechManager},
 };
 
@@ -218,18 +218,18 @@ fn end_turn_click(
     _click: On<Pointer<Click>>,
     query_player: Single<(Entity, &ResearchingTech), With<Player>>,
     turn_manager: Res<TurnManager>,
-    mut turn_end_messages: MessageWriter<TurnEndMessage>,
+    mut next_turn_state: ResMut<NextState<TurnState>>,
 ) {
     let (entity, researching_tech) = query_player.into_inner();
     if turn_manager.turn_queue[turn_manager.current_index] != entity {
+        info!("当前不是你的回合");
         return;
     }
     if researching_tech.0.is_none() {
         println!("当前没有正在研究的科技，请选择一项科技进行研究。");
         return;
     }
-    // TODO: Should edit `turn` and `is_player`
-    turn_end_messages.write(TurnEndMessage { entity });
+    next_turn_state.set(TurnState::End);
 }
 
 fn update_end_turn_button(
