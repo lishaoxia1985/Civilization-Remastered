@@ -16,16 +16,23 @@ use civ_map_generator::{
 };
 
 use crate::{
+    ai::AiCombatPlugin,
+    ai::AiTechPlugin,
     assets::ColorReplaceMaterial,
+    interaction::TechTreeScreenPlugin,
+    interaction::UiPlugin,
+    interaction::UnitInteractionPlugin,
     plugins::{
-        AiPlugin, AssetLoadingPlugin, CameraPlugin, CombatPlugin, MapPlugin, MinimapPlugin,
-        TechPlugin, TechTreeScreenPlugin, TurnPlugin, UiPlugin,
+        AssetLoadingPlugin, CameraPlugin, CombatPlugin, MapPlugin, MinimapPlugin, TechPlugin,
+        TurnPlugin,
     },
     resources::{GameSettings, MapParametersRes},
 };
 
+mod ai;
 mod assets;
 mod components;
+mod interaction;
 mod plugins;
 mod resources;
 
@@ -111,13 +118,15 @@ fn main() {
         .add_plugins(AssetLoadingPlugin)
         .add_plugins(CameraPlugin)
         .add_plugins(CombatPlugin)
+        .add_plugins(UnitInteractionPlugin)
         .add_plugins(UiPlugin)
         .add_plugins(MapPlugin)
         .add_plugins(MinimapPlugin)
         .add_plugins(TechTreeScreenPlugin)
         .add_plugins(TurnPlugin)
         .add_plugins(TechPlugin)
-        .add_plugins(AiPlugin)
+        .add_plugins(AiTechPlugin)
+        .add_plugins(AiCombatPlugin)
         // 初始化资源
         .init_resource::<InputFocus>()
         .insert_resource(map_params)
@@ -194,7 +203,7 @@ pub struct BuildCompletedMessage {
 }
 
 /// 攻击请求事件：由玩家按键或AI逻辑触发
-#[derive(Message)]
+#[derive(Event)]
 pub struct AttackRequestMessage {
     pub attacker: Entity,
     pub target: Entity,

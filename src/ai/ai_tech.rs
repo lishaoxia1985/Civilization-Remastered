@@ -1,3 +1,7 @@
+//! AI 科技选择插件
+//!
+//! 管理 AI 文明自动选择要研究的科技。
+
 use bevy::prelude::*;
 use civ_map_generator::ruleset::enums::Technology;
 
@@ -6,9 +10,10 @@ use crate::{
     resources::{MapParametersRes, ResearchingTech, TechManager},
 };
 
-pub struct AiPlugin;
+/// AI 科技选择插件
+pub struct AiTechPlugin;
 
-impl Plugin for AiPlugin {
+impl Plugin for AiTechPlugin {
     fn build(&self, app: &mut App) {
         // AI 只在敌方回合激活
         app.add_systems(

@@ -36,12 +36,20 @@ use enum_map::{EnumMap, enum_map};
 use crate::{
     AppState, ScreenState,
     assets::{GameAssets, hex_mesh},
-    components::{AuxiliaryFOVIndicator, FieldOfViewIndicator, InfoPanel, MainCamera, WorldTile},
+    components::{InfoPanel, MainCamera, WorldTile},
     resources::TileMapRes,
 };
 
 const MINIMAP_WIDTH: f32 = 300.;
 const MINIMAP_HEIGHT: f32 = 200.;
+
+/// 视野指示器
+#[derive(Component)]
+struct FieldOfViewIndicator;
+
+/// 辅助视野指示器（用于地图环绕显示）
+#[derive(Component)]
+struct AuxiliaryFovIndicator;
 
 /// 小地图插件
 pub struct MinimapPlugin;
@@ -192,7 +200,7 @@ fn setup_minimap(
                         ..Default::default()
                     },
                     BorderColor::all(Color::WHITE),
-                    AuxiliaryFOVIndicator,
+                    AuxiliaryFovIndicator,
                 ));
                 parent.spawn((
                     Node {
@@ -204,7 +212,7 @@ fn setup_minimap(
                         ..Default::default()
                     },
                     BorderColor::all(Color::WHITE),
-                    AuxiliaryFOVIndicator,
+                    AuxiliaryFovIndicator,
                 ));
             }
 
@@ -219,7 +227,7 @@ fn setup_minimap(
                         ..Default::default()
                     },
                     BorderColor::all(Color::WHITE),
-                    AuxiliaryFOVIndicator,
+                    AuxiliaryFovIndicator,
                 ));
                 parent.spawn((
                     Node {
@@ -231,7 +239,7 @@ fn setup_minimap(
                         ..Default::default()
                     },
                     BorderColor::all(Color::WHITE),
-                    AuxiliaryFOVIndicator,
+                    AuxiliaryFovIndicator,
                 ));
             }
         });
@@ -281,7 +289,7 @@ fn minimap_click_handler(
     query_minimap_indicator: Single<&mut Node, With<FieldOfViewIndicator>>,
     mut query_auxiliary_fov_indicators: Query<
         &mut Node,
-        (With<AuxiliaryFOVIndicator>, Without<FieldOfViewIndicator>),
+        (With<AuxiliaryFovIndicator>, Without<FieldOfViewIndicator>),
     >,
     tile_map: Option<Res<TileMapRes>>,
     default_fov_indicator_size: Res<DefaultFovIndicatorSize>,
@@ -335,7 +343,7 @@ fn minimap_fov_update(
     query_minimap_indicator: Single<&mut Node, With<FieldOfViewIndicator>>,
     mut query_auxiliary_fov_indicators: Query<
         &mut Node,
-        (With<AuxiliaryFOVIndicator>, Without<FieldOfViewIndicator>),
+        (With<AuxiliaryFovIndicator>, Without<FieldOfViewIndicator>),
     >,
     default_fov_indicator_size: Res<DefaultFovIndicatorSize>,
 ) {

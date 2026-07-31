@@ -16,7 +16,7 @@ use bevy::{
     },
 };
 use civ_map_generator::ruleset::{
-    Ruleset,
+    Ruleset, TechnologyInfo,
     enums::{EnumStr, Technology},
 };
 use enum_map::EnumMap;
@@ -29,21 +29,26 @@ use crate::{
     resources::{GameSettings, MapParametersRes, ResearchingTech, TechManager},
 };
 
+/// 科技树列宽（像素）
+const COLUMN_WIDTH: f32 = 400.0;
+/// 时代头高度百分比
+const ERA_HEADER_PERCENT: f32 = 5.0;
+const LINE_COLOR: Color = Color::srgb(0.4, 0.4, 0.4);
+const LINE_WIDTH: f32 = 2.0;
+
+#[derive(Component)]
+struct TechTree;
+
 /// 科技插件
 pub struct TechTreeScreenPlugin;
 
 impl Plugin for TechTreeScreenPlugin {
     fn build(&self, app: &mut App) {
-        app
-            /* .add_systems(
-                Update,
-                ai_research_system.run_if(in_state(ScreenState::WorldMap)),
-            ) */
-            .add_systems(
-                Update,
-                handle_tech_click_system.run_if(in_state(ScreenState::TechTree)),
-            )
-            .add_systems(OnEnter(ScreenState::TechTree), spawn_technology_screen);
+        app.add_systems(
+            Update,
+            handle_tech_click_system.run_if(in_state(ScreenState::TechTree)),
+        )
+        .add_systems(OnEnter(ScreenState::TechTree), spawn_technology_screen);
     }
 }
 
@@ -69,19 +74,6 @@ fn determine_tech_state(
     TechButtonState::Available
 }
 
-/// AI 自动选择要研究的科技
-/* fn ai_research_system(
-    mut civ_manager: ResMut<CivilizationManager>,
-    mut tech_registry: ResMut<TechManagerRegistry>,
-    map_params: Res<MapParametersRes>,
-) {
-    for enemy_nation in &civ_manager.enemy_nations.clone() {
-        if let Some(enemy) = civ_manager.civs.get_mut(enemy_nation) {
-            enemy.ai_choose_research(&map_params, &mut tech_registry);
-        }
-    }
-} */
-
 /// 处理科技按钮点击
 fn handle_tech_click_system(
     tech_button_query: Query<(&Interaction, &TechButton)>,
@@ -98,7 +90,7 @@ fn handle_tech_click_system(
         }
     }
 
-    let (mut researching_tech, mut tech_manager) = query_player.into_inner();
+    let (mut researching_tech, tech_manager) = query_player.into_inner();
 
     // 处理科技按钮
     for (interaction, tech_button) in &tech_button_query {
@@ -113,6 +105,17 @@ fn handle_tech_click_system(
         researching_tech.0 = Some(tech_button.0);
         next_state.set(ScreenState::WorldMap);
     }
+}
+
+/// 获取科技在网格中的坐标（中心点）
+/// 返回 (x像素, y百分比)，y 基于行高百分比（每行 100/row_count%）
+fn get_tech_position(tech_info: &TechnologyInfo, row_height_of_tech_nodes: f32) -> (f32, f32) {
+    let x = (tech_info.column as f32) * COLUMN_WIDTH + COLUMN_WIDTH / 2.0;
+    let row_height_percent = row_height_of_tech_nodes;
+    let y = ERA_HEADER_PERCENT
+        + (tech_info.row as f32 - 1.) * row_height_percent
+        + row_height_percent / 2.0;
+    (x, y)
 }
 
 /// 生成科技树屏幕
@@ -132,17 +135,17 @@ fn spawn_technology_screen(
     >,
 ) {
     let ruleset = &map_params.0.ruleset;
-    /*  let player_nation  = query_player.into_inner().0.0;
-    let tech_manager = query_player.into_inner().1;
-    let science_per_turn = query_player.into_inner().2.0; */
 
-    let (player_nation, researching_tech, tech_manager, science_per_turn) =
+    let (_player_nation, researching_tech, tech_manager, science_per_turn) =
         query_player.into_inner();
 
     let tech_and_turns: EnumMap<Technology, String> = EnumMap::from_fn(|tech| {
         tech_manager.turns_to_tech(tech, science_per_turn.0, true, &game_settings, &map_params)
     });
 
+    // The total number of columns which tech button will be placed in the grid layout
+    // Notes: the column number starts at 0 in ruleset,
+    // so the total columns which the tech tree has will be the maximum column number + 1.
     let column_count = ruleset
         .technologies
         .values()
@@ -151,22 +154,35 @@ fn spawn_technology_screen(
         .unwrap() as i16
         + 1;
 
+    // The total number of rows which tech button will be placed in the grid layout
+    // Notes: the row number starts from 1,
+    // so the total rows which the tech tree has will be the maximum row number.
     let row_count = ruleset
         .technologies
         .values()
         .map(|technology| technology.row)
         .max()
-        .unwrap() as i16
-        + 1;
+        .unwrap() as i16;
 
-    let mut row_tracks: Vec<GridTrack> = Vec::new();
-    row_tracks.push(GridTrack::percent(5.0));
-
-    for _ in 0..row_count {
-        row_tracks.push(GridTrack::fr(1.0));
+    // 收集所有连接关系（前置科技 -> 后续科技）
+    let mut connections: Vec<(Technology, Technology)> = Vec::new();
+    for (tech, tech_info) in ruleset.technologies.iter() {
+        for prereq_name in &tech_info.prerequisites {
+            connections.push((Technology::from_str(prereq_name), tech));
+        }
     }
 
-    let column_tracks: Vec<GridTrack> = vec![GridTrack::px(400.0); column_count as usize];
+    let row_height_of_tech_nodes = (100. - ERA_HEADER_PERCENT) / row_count as f32;
+    // 第一行是时代头，占据 `ERA_HEADER_PERCENT` 百分比高度
+    // 后续每行是科技节点，占据 `row_height_of_tech_nodes` 百分比高度
+    let row_tracks = std::iter::once(GridTrack::percent(ERA_HEADER_PERCENT))
+        .chain(
+            std::iter::repeat(GridTrack::percent(row_height_of_tech_nodes))
+                .take(row_count as usize),
+        )
+        .collect::<Vec<_>>();
+
+    let column_tracks: Vec<GridTrack> = vec![GridTrack::px(COLUMN_WIDTH); column_count as usize];
 
     commands
         .spawn((
@@ -210,13 +226,34 @@ fn spawn_technology_screen(
         )
         .with_children(|builder| {
             builder
-                .spawn(Node {
-                    display: Display::Grid,
-                    grid_auto_rows: row_tracks,
-                    grid_auto_columns: column_tracks,
-                    ..default()
-                })
+                .spawn((
+                    Node {
+                        display: Display::Grid,
+                        height: percent(100),
+                        grid_auto_rows: row_tracks,
+                        grid_auto_columns: column_tracks,
+                        ..default()
+                    },
+                    TechTree,
+                ))
                 .with_children(|builder| {
+                    // ============ 绘制连接线 ============
+                    for &(prereq_tech, tech) in &connections {
+                        let (prereq_tech_info, tech_info) = (
+                            &ruleset.technologies[prereq_tech],
+                            &ruleset.technologies[tech],
+                        );
+
+                        let (x1, y1) =
+                            get_tech_position(&prereq_tech_info, row_height_of_tech_nodes);
+                        let (x2, y2) = get_tech_position(&tech_info, row_height_of_tech_nodes);
+
+                        // 绘制从前置科技到后续科技的连线
+                        // 使用正交线（直角弯折）风格，类似文明5
+                        draw_tech_connection(builder, x1, y1, x2, y2);
+                    }
+
+                    // ============ 绘制时代头 ============
                     let mut era_spans: HashMap<String, (i16, i16)> = HashMap::new();
                     for technology in ruleset.technologies.values() {
                         let entry = era_spans
@@ -232,6 +269,8 @@ fn spawn_technology_screen(
                             Node {
                                 grid_row: GridPlacement::start(1),
                                 grid_column: GridPlacement::start(min_col + 1).set_span(span),
+                                align_items: AlignItems::Center,
+                                justify_content: JustifyContent::Center,
                                 border: UiRect::all(Val::Px(2.0)),
                                 ..default()
                             },
@@ -240,7 +279,7 @@ fn spawn_technology_screen(
                             children![(
                                 Text::new(era_name),
                                 TextFont {
-                                    font_size: FontSize::Px(16.0),
+                                    font_size: FontSize::Vh(3.0),
                                     ..Default::default()
                                 },
                                 TextColor(Color::WHITE),
@@ -248,6 +287,7 @@ fn spawn_technology_screen(
                         ));
                     }
 
+                    // ============ 绘制科技节点 ============
                     ruleset
                         .technologies
                         .iter()
@@ -266,6 +306,8 @@ fn spawn_technology_screen(
                                     grid_column: GridPlacement::start(
                                         technology_info.column as i16 + 1,
                                     ),
+                                    align_items: AlignItems::Center,
+                                    justify_content: JustifyContent::Center,
                                     border: UiRect::all(Val::Px(2.0)),
                                     ..default()
                                 },
@@ -278,6 +320,7 @@ fn spawn_technology_screen(
                 });
         });
 
+    // 关闭按钮
     commands.spawn((
         DespawnOnExit(ScreenState::TechTree),
         Node {
@@ -302,6 +345,69 @@ fn spawn_technology_screen(
             },
             TextColor(Color::WHITE),
         )],
+    ));
+}
+
+/// 绘制两个科技节点之间的连接线
+/// 使用正交线风格（先水平、再垂直、再水平），类似文明5
+fn draw_tech_connection(builder: &mut ChildSpawnerCommands, x1: f32, y1: f32, x2: f32, y2: f32) {
+    let mid_x = (x1 + x2) / 2.0;
+
+    // 水平线1：从起点到中点
+    create_horizontal_line(builder, x1, mid_x, y1);
+    // 垂直线：从中点到目标高度
+    create_vertical_line(builder, mid_x, y1, y2);
+    // 水平线2：从中点到目标
+    create_horizontal_line(builder, mid_x, x2, y2);
+}
+
+/// 创建水平线
+/// x 为像素坐标（列宽固定），y 为百分比坐标（行高为百分比）
+fn create_horizontal_line(builder: &mut ChildSpawnerCommands, x1: f32, x2: f32, y: f32) {
+    let start_x = x1.min(x2);
+    let end_x = x1.max(x2);
+    let width = (end_x - start_x).max(1.0);
+
+    if width < 2.0 {
+        return; // 忽略太短的线
+    }
+
+    builder.spawn((
+        Node {
+            position_type: PositionType::Absolute,
+            left: Val::Px(start_x),
+            top: Val::Percent(y),
+            width: Val::Px(width),
+            height: Val::Px(LINE_WIDTH),
+            ..Default::default()
+        },
+        BackgroundColor(LINE_COLOR),
+        ZIndex(0),
+    ));
+}
+
+/// 创建垂直线
+/// x 为像素坐标（列宽固定），y 为百分比坐标（行高为百分比）
+fn create_vertical_line(builder: &mut ChildSpawnerCommands, x: f32, y1: f32, y2: f32) {
+    let start_y = y1.min(y2);
+    let end_y = y1.max(y2);
+    let height = (end_y - start_y).max(0.1);
+
+    if height < 0.2 {
+        return; // 忽略太短的线
+    }
+
+    builder.spawn((
+        Node {
+            position_type: PositionType::Absolute,
+            left: Val::Px(x - LINE_WIDTH / 2.0),
+            top: Val::Percent(start_y),
+            width: Val::Px(LINE_WIDTH),
+            height: Val::Percent(height),
+            ..Default::default()
+        },
+        BackgroundColor(LINE_COLOR),
+        ZIndex(0),
     ));
 }
 
@@ -384,7 +490,7 @@ fn technology_button(
                     },
                     Text::new(technology.as_str()),
                     TextFont {
-                        font_size: FontSize::Px(12.0),
+                        font_size: FontSize::Vh(1.5),
                         ..Default::default()
                     },
                     TextColor(Color::WHITE),
@@ -393,12 +499,13 @@ fn technology_button(
                     Node {
                         grid_column: GridPlacement::start(3),
                         grid_row: GridPlacement::start(1),
+                        justify_content: JustifyContent::End,
                         border: UiRect::all(Val::Px(2.0)),
                         ..default()
                     },
                     Text::new(tech_turn),
                     TextFont {
-                        font_size: FontSize::Px(12.0),
+                        font_size: FontSize::Vh(1.5),
                         ..Default::default()
                     },
                     TextColor(Color::WHITE),
@@ -482,6 +589,7 @@ fn tech_unlock_item_list(
                     .map(|building_name| {
                         (
                             Node {
+                                height: Val::Percent(100.0),
                                 align_items: AlignItems::Center,
                                 justify_content: JustifyContent::Center,
                                 ..default()
@@ -493,6 +601,7 @@ fn tech_unlock_item_list(
             SpawnIter(unlock_uniques.into_iter().map(move |_| {
                 (
                     Node {
+                        height: Val::Percent(100.0),
                         align_items: AlignItems::Center,
                         justify_content: JustifyContent::Center,
                         ..default()
@@ -508,8 +617,8 @@ fn tech_unlock_item_list(
 fn unit_or_building_or_tile_improvement_item(texture: Handle<Image>) -> impl Bundle {
     (
         Node {
-            width: px(25),
-            height: px(25),
+            height: Val::Percent(80.0),
+            aspect_ratio: Some(1.0),
             border: UiRect::all(Val::Px(2.0)),
             border_radius: BorderRadius::all(px(f32::MAX)),
             align_items: AlignItems::Center,
@@ -530,8 +639,8 @@ fn unit_or_building_or_tile_improvement_item(texture: Handle<Image>) -> impl Bun
 fn unique_item(texture: Handle<Image>) -> impl Bundle {
     (
         Node {
-            width: px(25),
-            height: px(25),
+            height: Val::Percent(80.0),
+            aspect_ratio: Some(1.0),
             border: UiRect::all(Val::Px(2.0)),
             border_radius: BorderRadius::all(px(f32::MAX)),
             align_items: AlignItems::Center,

@@ -130,14 +130,6 @@ pub struct CloseTechTreeButton;
 
 // ============ 小地图组件 ============
 
-/// 视野指示器
-#[derive(Component)]
-pub struct FieldOfViewIndicator;
-
-/// 辅助视野指示器（用于地图环绕显示）
-#[derive(Component)]
-pub struct AuxiliaryFOVIndicator;
-
 /// 信息面板
 #[derive(Component)]
 pub struct InfoPanel;
