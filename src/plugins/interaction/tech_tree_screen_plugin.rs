@@ -329,6 +329,8 @@ fn spawn_technology_screen(
             top: Val::Px(10.0),
             width: Val::Px(40.0),
             height: Val::Px(40.0),
+            align_items: AlignItems::Center,
+            justify_content: JustifyContent::Center,
             border: UiRect::all(Val::Px(2.0)),
             ..default()
         },

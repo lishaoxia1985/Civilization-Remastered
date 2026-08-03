@@ -9,6 +9,7 @@ mod map_plugin;
 mod minimap_plugin;
 mod tech_plugin;
 mod turn_plugin;
+mod interaction;
 
 pub use asset_plugin::AssetLoadingPlugin;
 pub use camera_plugin::CameraPlugin;
@@ -17,3 +18,4 @@ pub use map_plugin::MapPlugin;
 pub use minimap_plugin::MinimapPlugin;
 pub use tech_plugin::TechPlugin;
 pub use turn_plugin::TurnPlugin;
+pub use interaction::*;

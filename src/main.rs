@@ -16,23 +16,14 @@ use civ_map_generator::{
 };
 
 use crate::{
-    ai::AiCombatPlugin,
-    ai::AiTechPlugin,
-    assets::ColorReplaceMaterial,
-    interaction::TechTreeScreenPlugin,
-    interaction::UiPlugin,
-    interaction::UnitInteractionPlugin,
-    plugins::{
-        AssetLoadingPlugin, CameraPlugin, CombatPlugin, MapPlugin, MinimapPlugin, TechPlugin,
-        TurnPlugin,
-    },
-    resources::{GameSettings, MapParametersRes},
+    ai::{AiCombatPlugin, AiTechPlugin}, assets::ColorReplaceMaterial, plugins::{
+        AssetLoadingPlugin, CameraPlugin, CombatPlugin, MapPlugin, MinimapPlugin, TechPlugin, TechTreeScreenPlugin, TurnPlugin, UiPlugin, UnitInteractionPlugin,
+    }, resources::{GameSettings, MapParametersRes},
 };
 
 mod ai;
 mod assets;
 mod components;
-mod interaction;
 mod plugins;
 mod resources;
 
