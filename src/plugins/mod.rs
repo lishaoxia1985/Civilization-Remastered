@@ -2,20 +2,22 @@
 //!
 //! 所有游戏功能被组织为 Bevy Plugin，按功能领域划分。
 
+mod ai;
 mod asset_plugin;
 mod camera_plugin;
 mod combat_plugin;
+mod interaction;
 mod map_plugin;
 mod minimap_plugin;
 mod tech_plugin;
 mod turn_plugin;
-mod interaction;
 
+pub use ai::*;
 pub use asset_plugin::AssetLoadingPlugin;
 pub use camera_plugin::CameraPlugin;
 pub use combat_plugin::CombatPlugin;
+pub use interaction::*;
 pub use map_plugin::MapPlugin;
 pub use minimap_plugin::MinimapPlugin;
 pub use tech_plugin::TechPlugin;
 pub use turn_plugin::TurnPlugin;
-pub use interaction::*;

@@ -7,7 +7,7 @@ use civ_map_generator::ruleset::enums::Technology;
 
 use crate::{
     Enemy, ResolutionPhase, TurnManager, TurnState,
-    resources::{MapParametersRes, ResearchingTech, TechManager},
+    resources::{MapParametersRes, ResearchedTechList, ResearchingTech, TechManager},
 };
 
 /// AI 科技选择插件
@@ -25,11 +25,15 @@ impl Plugin for AiTechPlugin {
 
 fn ai_select_tech(
     manager: Res<TurnManager>,
-    mut enemy_query: Query<(&mut ResearchingTech, &mut TechManager), With<Enemy>>,
+    mut enemy_query: Query<
+        (&mut ResearchingTech, &mut TechManager, &ResearchedTechList),
+        With<Enemy>,
+    >,
     map_params: Res<MapParametersRes>,
 ) {
     let entity = manager.current_nation_entity();
-    let Ok((mut researching_tech, tech_manager)) = enemy_query.get_mut(entity) else {
+    let Ok((mut researching_tech, tech_manager, researched_techs)) = enemy_query.get_mut(entity)
+    else {
         unreachable!("Enemy tech manager not found")
     };
     if researching_tech.0.is_some() {
@@ -41,7 +45,7 @@ fn ai_select_tech(
         .ruleset
         .technologies
         .iter()
-        .filter(|(tech, _)| tech_manager.can_be_researched(*tech, &map_params))
+        .filter(|(tech, _)| tech_manager.can_be_researched(*tech, researched_techs, &map_params))
         .map(|(tech, info)| (tech, info.cost))
         .collect();
     available.sort_by_key(|(_, cost)| *cost);

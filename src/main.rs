@@ -16,12 +16,15 @@ use civ_map_generator::{
 };
 
 use crate::{
-    ai::{AiCombatPlugin, AiTechPlugin}, assets::ColorReplaceMaterial, plugins::{
-        AssetLoadingPlugin, CameraPlugin, CombatPlugin, MapPlugin, MinimapPlugin, TechPlugin, TechTreeScreenPlugin, TurnPlugin, UiPlugin, UnitInteractionPlugin,
-    }, resources::{GameSettings, MapParametersRes},
+    assets::ColorReplaceMaterial,
+    plugins::{
+        AiCombatPlugin, AiTechPlugin, AssetLoadingPlugin, CameraPlugin, CombatPlugin, MapPlugin,
+        MinimapPlugin, TechPlugin, TechTreeScreenPlugin, TurnPlugin, UiPlugin,
+        UnitInteractionPlugin,
+    },
+    resources::{GameSettings, MapParametersRes},
 };
 
-mod ai;
 mod assets;
 mod components;
 mod plugins;
@@ -185,6 +188,9 @@ impl TurnManager {
 /// When complete to research a technology, this message is sent.
 #[derive(Message)]
 pub struct TechResearchedMessage {
+    // The entity of the nation that has completed the technology.
+    pub nation: Entity,
+    /// The technology that was completed.
     pub tech: Technology,
 }
 

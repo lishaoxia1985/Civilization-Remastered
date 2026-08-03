@@ -33,23 +33,36 @@ fn initialize_turn_system(
     mut commands: Commands,
     mut next_turn_state: ResMut<NextState<TurnState>>,
     mut next_turn_phase: ResMut<NextState<TurnPhase>>,
-    query_nations: Query<Entity, With<NationComponent>>,
-    player_query: Single<Entity, With<Player>>,
+    nation_query: Query<(Entity, Option<&Player>), With<NationComponent>>,
 ) {
-    let player_entity = player_query.into_inner();
-    let turn_queue: Vec<_> = query_nations.iter().sort::<Entity>().collect();
-    let entity = *&turn_queue[0];
+    // 收集所有国家实体并按实体 ID 排序
+    let mut turn_queue: Vec<Entity> = nation_query.iter().map(|(entity, _)| entity).collect();
+    // 按实体 ID 排序
+    // TODO: 或许应当基于一个由确定seed的随机数生成器生成一个随机顺序
+    turn_queue.sort();
+
+    // 若没有国家，提前返回（根据需求处理）
+    let Some(&first_entity) = turn_queue.first() else {
+        // 无国家时可能直接设置状态并返回
+        return;
+    };
+
     commands.insert_resource(TurnManager {
         turn_queue,
         current_index: 0,
         turn_number: 0,
     });
     next_turn_state.set(TurnState::Start);
-    if player_entity == entity {
-        next_turn_phase.set(TurnPhase::PlayTurn);
+
+    // 获取首个国家的 Player 组件
+    // 以此判断是否为玩家国家
+    let (_, player) = nation_query.get(first_entity).expect("实体应存在于查询中");
+    let phase = if player.is_some() {
+        TurnPhase::PlayTurn
     } else {
-        next_turn_phase.set(TurnPhase::EnemyTurn);
-    }
+        TurnPhase::EnemyTurn
+    };
+    next_turn_phase.set(phase);
 }
 
 fn auto_end_enemy_turn(

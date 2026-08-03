@@ -82,15 +82,50 @@ impl Default for GameSettings {
 #[derive(Component, Default)]
 pub struct ResearchingTech(pub Option<Technology>);
 
+/// 已经研发的科技list
+#[derive(Component, Default)]
+pub struct ResearchedTechList(pub HashSet<Technology>);
+
+/// 进行中的科技，只有已经研究且有科研值积累但尚未完成的科技存储在此。
+/// 值为已投入的科技点数，不可能为 `0`。
+#[derive(Component, Default)]
+pub struct TechProgress(pub HashMap<Technology, i32>);
+
+/// 溢出的科研值
+///
+/// 当研发某项科技时，如果投入的科研值超过了该科技的成本，超出的部分会被存储在此资源中，
+/// 并在下一项科技的研发中继续使用。
+#[derive(Component, Default)]
+pub struct OverflowScience(pub i32);
+
+/// 科研协议提供的科技值
+///
+/// TODO: 目前还没有实现科研协议的功能，因此这个组件暂时没有被使用。
+///       科研协议和外交相关，科研协议提供的科技值在科研协议完成后一次性添加到完成那回合初的科技研发计算中。
+#[derive(Component, Default)]
+pub struct ScienceFromResearchAgreements(pub i32);
+
+/// 存储最近8个回合的科技值
+///
+/// TODO: 用于计算消耗大科学家时获得的科技值, 但目前还没有实现消耗大科学家的功能。
+///       此组件应当在管理大科学家、大工程师的组件中定义和插入，
+///       当前暂时将其作为TechManager的必须组件
+#[derive(Component, Default)]
+pub struct ScienceOfLast8Turns(pub [i32; 8]);
+
 /// 科技管理器 - 管理单个文明的科技研究状态
 #[derive(Component)]
-#[require(ResearchingTech)]
-
+#[require(
+    ResearchingTech,
+    TechProgress,
+    ResearchedTechList,
+    OverflowScience,
+    ScienceOfLast8Turns,
+    ScienceFromResearchAgreements
+)]
 pub struct TechManager {
     /// 当前时代
     pub era: Era,
-    /// 已研究科技列表
-    pub researched_technologies: Vec<Technology>,
     /// 科技独特能力
     pub tech_uniques: HashMap<String, Vec<String>>,
 
@@ -117,21 +152,6 @@ pub struct TechManager {
     /// 重复科技研究次数
     pub repeating_techs_researched: i32,
 
-    /// 最近8回合的科技值
-    pub science_of_last_8_turns: [i32; 8],
-    /// 研究协议提供的科技值
-    pub science_from_research_agreements: i32,
-
-    /// 已研究科技集合
-    pub techs_researched: HashSet<Technology>,
-
-    /// 溢出科技值
-    pub overflow_science: i32,
-
-    /// 进行中的科技，只有正在研究但尚未完成的科技存储在此。
-    /// 值为已投入的科技点数，不能为 `0`。
-    pub techs_in_progress: HashMap<Technology, i32>,
-
     /// 金币转科技比率
     pub gold_percent_converted_to_science: f32,
 }
@@ -141,7 +161,6 @@ impl TechManager {
     pub fn new(era: Era) -> Self {
         Self {
             era,
-            researched_technologies: Vec::new(),
             tech_uniques: HashMap::new(),
             units_can_embark: false,
             embarked_units_can_enter_ocean: false,
@@ -152,23 +171,8 @@ impl TechManager {
             all_techs_are_researched: false,
             free_techs: 0,
             repeating_techs_researched: 0,
-            science_of_last_8_turns: [0; 8],
-            science_from_research_agreements: 0,
-            techs_researched: HashSet::new(),
-            overflow_science: 0,
-            techs_in_progress: HashMap::new(),
             gold_percent_converted_to_science: 0.6,
         }
-    }
-
-    /// 获取已研究科技数量
-    pub fn researched_count(&self) -> i32 {
-        self.techs_researched.len() as i32
-    }
-
-    /// 获取溢出科技值
-    pub fn overflow_science_value(&self) -> i32 {
-        self.overflow_science
     }
 
     /// 计算科技成本
@@ -208,8 +212,8 @@ impl TechManager {
     }
 
     /// 获取科技的研究进度（已投入的科技点数）
-    pub fn research_progress(&self, tech: Technology) -> i32 {
-        self.techs_in_progress.get(&tech).copied().unwrap_or(0)
+    pub fn research_progress(&self, tech: Technology, tech_progress: &TechProgress) -> i32 {
+        tech_progress.0.get(&tech).copied().unwrap_or(0)
     }
 
     /// 计算完成科技还需要的剩余科技点数
@@ -217,17 +221,20 @@ impl TechManager {
         &self,
         tech: Technology,
         is_player: bool,
+        tech_progress: &TechProgress,
+        researched_techs: &ResearchedTechList,
+        overflow_science: &OverflowScience,
         game_settings: &GameSettings,
         map_params: &MapParametersRes,
     ) -> i32 {
-        let spare_science = if self.can_be_researched(tech, map_params) {
-            self.overflow_science
+        let spare_science = if self.can_be_researched(tech, researched_techs, map_params) {
+            overflow_science.0
         } else {
             0
         };
 
         let cost = self.cost_of_tech(tech, is_player, game_settings, map_params);
-        let researched = self.research_progress(tech);
+        let researched = self.research_progress(tech, tech_progress);
 
         cost - researched - spare_science
     }
@@ -238,15 +245,25 @@ impl TechManager {
         tech: Technology,
         science_per_turn: i32,
         is_player: bool,
+        tech_progress: &TechProgress,
+        researched_techs: &ResearchedTechList,
+        overflow_science: &OverflowScience,
         game_settings: &GameSettings,
         map_params: &MapParametersRes,
     ) -> String {
-        if self.is_researched(tech) && tech != Technology::FutureTech {
+        if self.is_researched(tech, researched_techs) && tech != Technology::FutureTech {
             return String::new();
         }
 
-        let remaining_cost =
-            self.remaining_science_to_tech(tech, is_player, game_settings, map_params) as f32;
+        let remaining_cost = self.remaining_science_to_tech(
+            tech,
+            is_player,
+            tech_progress,
+            researched_techs,
+            overflow_science,
+            game_settings,
+            map_params,
+        ) as f32;
 
         if remaining_cost <= 0.0 {
             return String::new();
@@ -261,12 +278,17 @@ impl TechManager {
     }
 
     /// 检查科技是否已研究
-    pub fn is_researched(&self, tech: Technology) -> bool {
-        self.techs_researched.contains(&tech)
+    pub fn is_researched(&self, tech: Technology, researched_techs: &ResearchedTechList) -> bool {
+        researched_techs.0.contains(&tech)
     }
 
     /// 检查科技是否可以研究
-    pub fn can_be_researched(&self, tech: Technology, map_params: &MapParametersRes) -> bool {
+    pub fn can_be_researched(
+        &self,
+        tech: Technology,
+        researched_techs: &ResearchedTechList,
+        map_params: &MapParametersRes,
+    ) -> bool {
         let ruleset = &map_params.0.ruleset;
         let tech_info = &ruleset.technologies[tech];
 
@@ -274,14 +296,14 @@ impl TechManager {
             .uniques
             .contains(&"Can be continually researched".to_string());
 
-        if self.is_researched(tech) && !is_continually_researchable {
+        if self.is_researched(tech, researched_techs) && !is_continually_researchable {
             return false;
         }
 
         tech_info
             .prerequisites
             .iter()
-            .all(|prereq| self.is_researched(Technology::from_str(prereq)))
+            .all(|prereq| self.is_researched(Technology::from_str(prereq), researched_techs))
     }
 
     /// 检查科技是否不可研究
@@ -292,14 +314,6 @@ impl TechManager {
     /// 检查所有科技是否已研究完毕
     pub fn all_techs_researched(&self) -> bool {
         self.all_techs_are_researched
-    }
-
-    /// 更新时代
-    fn update_era(&mut self) {
-        if self.techs_researched.is_empty() {
-            return;
-        }
-        // TODO: 实现时代更新逻辑
     }
 }
 
