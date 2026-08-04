@@ -8,13 +8,13 @@ use civ_map_generator::ruleset::enums::EnumStr;
 use crate::{
     AppState, NationComponent, Player, SciencePerTurn, ScreenState, TurnManager, TurnPhase,
     TurnState,
-    resources::{GameSettings, MapParametersRes, ResearchingTech, TechManager, TechProgress},
+    resources::{GameSettings, MapParametersRes, ResearchingTech, TechProgress, cost_of_tech},
 };
 
 /// 游戏状态插件
-pub struct UiPlugin;
+pub struct WorldScreenUiPlugin;
 
-impl Plugin for UiPlugin {
+impl Plugin for WorldScreenUiPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             OnEnter(AppState::GameStart),
@@ -156,14 +156,13 @@ fn update_game_state_ui(
         (
             &NationComponent,
             &ResearchingTech,
-            &mut TechManager,
             &TechProgress,
             &SciencePerTurn,
         ),
         With<Player>,
     >,
 ) {
-    let (nation_component, researching_tech, tech_manager, tech_progress, science_per_turn) =
+    let (nation_component, researching_tech, tech_progress, science_per_turn) =
         query_player.into_inner();
     turn_text.0 = format!(
         "Turn: {} (Player: {})",
@@ -175,7 +174,7 @@ fn update_game_state_ui(
 
     if let Some(tech) = researching_tech.0 {
         let research_progress = tech_progress.0.get(&tech).copied().unwrap_or(0);
-        let cost_of_tech = tech_manager.cost_of_tech(tech, true, &game_settings, &map_params);
+        let cost_of_tech = cost_of_tech(tech, true, &game_settings, &map_params);
         let progress = (research_progress as f32 / cost_of_tech as f32 * 100.0) as i32;
         research_text.0 = format!("Researching: {} ({}%)", tech.as_str(), progress.min(100));
     } else {

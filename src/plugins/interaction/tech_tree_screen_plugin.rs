@@ -28,7 +28,7 @@ use crate::{
     components::{CloseTechTreeButton, TechButton, TechButtonState, TechTreeScrollableNode},
     resources::{
         GameSettings, MapParametersRes, OverflowScience, ResearchedTechList, ResearchingTech,
-        TechManager, TechProgress,
+        TechProgress, can_be_researched, is_researched, remaining_science_to_tech,
     },
 };
 
@@ -60,10 +60,9 @@ fn determine_tech_state(
     technology: Technology,
     map_params: &MapParametersRes,
     researching_tech: Option<Technology>,
-    tech_manager: &TechManager,
     researched_techs: &ResearchedTechList,
 ) -> TechButtonState {
-    if tech_manager.is_researched(technology, &researched_techs) {
+    if is_researched(technology, &researched_techs) {
         return TechButtonState::Researched;
     }
 
@@ -71,7 +70,7 @@ fn determine_tech_state(
         return TechButtonState::InProgress;
     }
 
-    if !tech_manager.can_be_researched(technology, researched_techs, &map_params) {
+    if !can_be_researched(technology, researched_techs, &map_params) {
         return TechButtonState::Locked;
     }
 
@@ -82,10 +81,7 @@ fn determine_tech_state(
 fn handle_tech_click_system(
     tech_button_query: Query<(&Interaction, &TechButton)>,
     close_button_query: Query<(&Interaction, &CloseTechTreeButton)>,
-    query_player: Single<
-        (&mut ResearchingTech, &mut TechManager, &ResearchedTechList),
-        With<Player>,
-    >,
+    query_player: Single<(&mut ResearchingTech, &ResearchedTechList), With<Player>>,
     map_params: Res<MapParametersRes>,
     mut next_state: ResMut<NextState<ScreenState>>,
 ) {
@@ -97,7 +93,7 @@ fn handle_tech_click_system(
         }
     }
 
-    let (mut researching_tech, tech_manager, researched_techs) = query_player.into_inner();
+    let (mut researching_tech, researched_techs) = query_player.into_inner();
 
     // 处理科技按钮
     for (interaction, tech_button) in &tech_button_query {
@@ -105,7 +101,7 @@ fn handle_tech_click_system(
             continue;
         }
 
-        if !tech_manager.can_be_researched(tech_button.0, researched_techs, &map_params) {
+        if !can_be_researched(tech_button.0, researched_techs, &map_params) {
             continue;
         }
 
@@ -135,7 +131,6 @@ fn spawn_technology_screen(
         (
             &NationComponent,
             &ResearchingTech,
-            &TechManager,
             &TechProgress,
             &ResearchedTechList,
             &OverflowScience,
@@ -149,7 +144,6 @@ fn spawn_technology_screen(
     let (
         _player_nation,
         researching_tech,
-        tech_manager,
         tech_progress,
         researshed_techs,
         overflow_science,
@@ -157,7 +151,7 @@ fn spawn_technology_screen(
     ) = query_player.into_inner();
 
     let tech_and_turns: EnumMap<Technology, String> = EnumMap::from_fn(|tech| {
-        tech_manager.turns_to_tech(
+        turns_to_tech(
             tech,
             science_per_turn.0,
             true,
@@ -322,7 +316,6 @@ fn spawn_technology_screen(
                                 technology,
                                 &map_params,
                                 researching_tech.0,
-                                &tech_manager,
                                 researshed_techs,
                             );
                             let tech_turn = &tech_and_turns[technology];
@@ -684,4 +677,41 @@ fn unique_item(texture: Handle<Image>) -> impl Bundle {
             color: Color::WHITE,
         },
     )
+}
+
+/// 计算完成科技还需要的回合数
+pub fn turns_to_tech(
+    tech: Technology,
+    science_per_turn: i32,
+    is_player: bool,
+    tech_progress: &TechProgress,
+    researched_techs: &ResearchedTechList,
+    overflow_science: &OverflowScience,
+    game_settings: &GameSettings,
+    map_params: &MapParametersRes,
+) -> String {
+    if is_researched(tech, researched_techs) && tech != Technology::FutureTech {
+        return String::new();
+    }
+
+    let remaining_cost = remaining_science_to_tech(
+        tech,
+        is_player,
+        tech_progress,
+        researched_techs,
+        overflow_science,
+        game_settings,
+        map_params,
+    ) as f32;
+
+    if remaining_cost <= 0.0 {
+        return String::new();
+    }
+
+    if science_per_turn <= 0 {
+        return "∞ turns".to_string();
+    }
+
+    let turns = (remaining_cost / science_per_turn as f32).ceil() as i32;
+    format!("{} turns", turns.max(1))
 }

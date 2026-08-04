@@ -12,7 +12,7 @@ use crate::{
     TurnManager, TurnState,
     resources::{
         GameSettings, MapParametersRes, OverflowScience, ResearchedTechList, ResearchingTech,
-        ScienceFromResearchAgreements, ScienceOfLast8Turns, TechManager, TechProgress,
+        ScienceFromResearchAgreements, ScienceOfLast8Turns, TechProgress, TechSystem, cost_of_tech,
     },
 };
 
@@ -56,10 +56,9 @@ fn insert_tech_manager_for_every_nation(
     }
 
     for entity in query_nation.iter() {
-        commands.entity(entity).insert((
-            TechManager::new(start_era),
-            ResearchedTechList(pre_start_era_techs.clone()),
-        ));
+        commands
+            .entity(entity)
+            .insert((TechSystem, ResearchedTechList(pre_start_era_techs.clone())));
     }
 }
 
@@ -68,7 +67,6 @@ fn process_science_on_turn_start(
     mut query: Query<(
         Entity,
         &mut ResearchingTech,
-        &mut TechManager,
         &mut TechProgress,
         &mut ResearchedTechList,
         &mut OverflowScience,
@@ -91,7 +89,6 @@ fn process_science_on_turn_start(
     if let Ok((
         entity,
         mut researching_tech,
-        tech_manager,
         mut tech_progress,
         mut researched_techs,
         mut overflow_science,
@@ -130,7 +127,7 @@ fn process_science_on_turn_start(
             overflow_science.0 = 0;
         }
 
-        let cost = tech_manager.cost_of_tech(current_tech, is_player, &game_settings, &map_params);
+        let cost = cost_of_tech(current_tech, is_player, &game_settings, &map_params);
 
         // 获取当前科技的进度，即其已投入的科技点数
         let current = tech_progress.0.entry(current_tech).or_insert(0);

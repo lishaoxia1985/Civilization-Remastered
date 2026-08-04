@@ -19,8 +19,8 @@ use crate::{
     assets::ColorReplaceMaterial,
     plugins::{
         AiCombatPlugin, AiTechPlugin, AssetLoadingPlugin, CameraPlugin, CombatPlugin, EraPlugin,
-        MapPlugin, MinimapPlugin, TechPlugin, TechTreeScreenPlugin, TurnPlugin, UiPlugin,
-        UnitInteractionPlugin,
+        MapPlugin, MinimapPlugin, TechPlugin, TechTreeScreenPlugin, TurnPlugin,
+        UnitInteractionPlugin, WorldScreenUiPlugin,
     },
     resources::{GameSettings, MapParametersRes},
 };
@@ -113,7 +113,7 @@ fn main() {
         .add_plugins(CameraPlugin)
         .add_plugins(CombatPlugin)
         .add_plugins(UnitInteractionPlugin)
-        .add_plugins(UiPlugin)
+        .add_plugins(WorldScreenUiPlugin)
         .add_plugins(MapPlugin)
         .add_plugins(MinimapPlugin)
         .add_plugins(TechTreeScreenPlugin)

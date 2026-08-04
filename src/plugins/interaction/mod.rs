@@ -6,9 +6,9 @@
 //! - 科技树屏幕
 
 mod tech_tree_screen_plugin;
-mod ui_plugin;
 mod unit_interaction_plugin;
+mod world_screen_ui_plugin;
 
 pub use tech_tree_screen_plugin::TechTreeScreenPlugin;
-pub use ui_plugin::UiPlugin;
 pub use unit_interaction_plugin::UnitInteractionPlugin;
+pub use world_screen_ui_plugin::WorldScreenUiPlugin;
