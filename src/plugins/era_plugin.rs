@@ -11,10 +11,16 @@ use civ_map_generator::ruleset::enums::{EnumStr, Era, Technology};
 use enum_map::Enum;
 
 use crate::{
-    AppState, NationComponent, TechResearchedMessage,
-    resources::{EraComponent, GameSettings, MapParametersRes, ResearchedTechList},
+    AppState, NationComponent,
+    plugins::tech::{ResearchedTechList, TechResearchedMessage},
+    resources::{GameSettings, MapParametersRes},
 };
 
+/// 文明当前所处时代组件
+#[derive(Component)]
+pub struct EraComponent(pub Era);
+
+/// 时代更新插件
 pub struct EraPlugin;
 
 impl Plugin for EraPlugin {

@@ -1,6 +1,13 @@
+//! 科技插件
+//!
+//! 管理科技研究流程，包括：
+//! - 为每个文明插入科技相关组件
+//! - 每回合处理科研值并结算科技研发
+//! - 发送科技研发完成消息
+
 use std::{
     cmp::{max, min},
-    collections::HashSet,
+    collections::{HashMap, HashSet},
 };
 
 use bevy::prelude::*;
@@ -8,14 +15,21 @@ use civ_map_generator::ruleset::enums::{EnumStr, Era, Technology};
 use enum_map::Enum;
 
 use crate::{
-    AppState, NationComponent, Player, ResolutionPhase, SciencePerTurn, TechResearchedMessage,
-    TurnManager, TurnState,
-    resources::{
-        GameSettings, MapParametersRes, OverflowScience, ResearchedTechList, ResearchingTech,
-        ScienceFromResearchAgreements, ScienceOfLast8Turns, TechProgress, TechSystem, cost_of_tech,
-    },
+    AppState, NationComponent, Player, ResolutionPhase, SciencePerTurn, TurnManager, TurnState,
+    plugins::tech::TechCostManager,
+    resources::{GameSettings, MapParametersRes},
 };
 
+use super::{
+    components::{
+        OverflowScience, ResearchedTechList, ResearchingTech, ScienceFromResearchAgreements,
+        ScienceOfLast8Turns, TechProgressManager, TechSystem,
+    },
+    functions::cost_of_tech,
+    messages::TechResearchedMessage,
+};
+
+/// 科技插件
 pub struct TechPlugin;
 
 impl Plugin for TechPlugin {
@@ -23,7 +37,7 @@ impl Plugin for TechPlugin {
         app.add_message::<TechResearchedMessage>()
             .add_systems(
                 OnEnter(AppState::GameStart),
-                insert_tech_manager_for_every_nation,
+                insert_tech_system_for_every_nation,
             )
             .add_systems(
                 OnEnter(TurnState::Start),
@@ -36,11 +50,11 @@ impl Plugin for TechPlugin {
 ///
 /// 根据游戏设置中的起始时代初始化每个文明的科技管理器，
 /// 并将起始时代之前的所有时代的科技标记为已经研发。
-fn insert_tech_manager_for_every_nation(
+fn insert_tech_system_for_every_nation(
     mut commands: Commands,
     game_settings: Res<GameSettings>,
     map_params: Res<MapParametersRes>,
-    query_nation: Query<Entity, With<NationComponent>>,
+    query_nation: Query<(Entity, Option<&Player>), With<NationComponent>>,
 ) {
     let start_era = game_settings.start_era;
     let start_era_index = start_era.into_usize();
@@ -55,33 +69,60 @@ fn insert_tech_manager_for_every_nation(
         }
     }
 
-    for entity in query_nation.iter() {
-        commands
-            .entity(entity)
-            .insert((TechSystem, ResearchedTechList(pre_start_era_techs.clone())));
+    let tech_costs_of_player: HashMap<Technology, i32> = ruleset
+        .technologies
+        .iter()
+        .filter(|(_, tech_info)| {
+            let tech_era = Era::from_str(&tech_info.era);
+            tech_era.into_usize() >= start_era_index
+        })
+        .map(|(tech, _)| (tech, cost_of_tech(tech, true, &game_settings, &map_params)))
+        .collect();
+
+    let tech_costs_of_enemy: HashMap<Technology, i32> = ruleset
+        .technologies
+        .iter()
+        .filter(|(_, tech_info)| {
+            let tech_era = Era::from_str(&tech_info.era);
+            tech_era.into_usize() >= start_era_index
+        })
+        .map(|(tech, _)| (tech, cost_of_tech(tech, false, &game_settings, &map_params)))
+        .collect();
+
+    for (entity, player) in query_nation.iter() {
+        commands.entity(entity).insert((
+            TechSystem,
+            ResearchedTechList(pre_start_era_techs.clone()),
+            TechCostManager(if player.is_some() {
+                tech_costs_of_player.clone()
+            } else {
+                tech_costs_of_enemy.clone()
+            }),
+        ));
     }
 }
 
+/// 每回合开始时处理科研值
 fn process_science_on_turn_start(
     manager: Res<TurnManager>,
     mut query: Query<(
         Entity,
         &mut ResearchingTech,
-        &mut TechProgress,
+        &mut TechProgressManager,
         &mut ResearchedTechList,
+        &mut TechCostManager,
         &mut OverflowScience,
         &mut ScienceOfLast8Turns,
         &mut ScienceFromResearchAgreements,
         &SciencePerTurn,
-        Option<&Player>,
     )>,
     mut tech_complete_messages: MessageWriter<TechResearchedMessage>,
-    game_settings: Res<GameSettings>,
     map_params: Res<MapParametersRes>,
 ) {
     let turn = manager.turn_number;
     if turn == 0 {
         // 第0回合不处理科技，即开始游戏的回合暂时不处理科技
+        // 因为开始的回合未积累任何科研值，且未选择科技进行研究
         return;
     }
 
@@ -91,15 +132,13 @@ fn process_science_on_turn_start(
         mut researching_tech,
         mut tech_progress,
         mut researched_techs,
+        mut tech_cost_manager,
         mut overflow_science,
         mut science_of_last_8_turns,
         mut science_from_research_agreements,
         science_per_turn,
-        player,
     )) = query.get_mut(entity)
     {
-        let is_player = player.is_some();
-
         let science_per_turn = science_per_turn.0;
 
         // 存储最近8回合的科技值
@@ -127,7 +166,12 @@ fn process_science_on_turn_start(
             overflow_science.0 = 0;
         }
 
-        let cost = cost_of_tech(current_tech, is_player, &game_settings, &map_params);
+        let Some(&cost) = tech_cost_manager.0.get(&current_tech) else {
+            panic!(
+                "Tech cost for {:?} not found in TechCostManager",
+                current_tech
+            );
+        };
 
         // 获取当前科技的进度，即其已投入的科技点数
         let current = tech_progress.0.entry(current_tech).or_insert(0);
@@ -147,9 +191,15 @@ fn process_science_on_turn_start(
             // 清除当前研发的科技
             researching_tech.0 = None;
 
-            // 添加科技, 如果科技是`Technology::FutureTech`, 且已经添加过, 则此处添加失败，
-            // 如此我们无需再发送科技研发成功消息？
-            // TODO: 或许`Technology::FutureTech`研发过，我们照样需要发送消息，读取该消息来更新胜利分数
+            // 只有当前科技不是`Technology::FutureTech`时，我们才从TechCostManager中删除该科技的成本信息
+            // 因为`Technology::FutureTech`可以重复研究，此参数依旧有用，不应当在TechCostManager中删除该科技
+            if current_tech != Technology::FutureTech {
+                tech_cost_manager.0.remove(&current_tech);
+            }
+
+            // 如果科技是`Technology::FutureTech`，此处添加科技到已经研发过的科技列表中会添加失败，那么：
+            // TODO:如此我们无需再发送科技研发成功消息？
+            //      或许`Technology::FutureTech`研发过，我们照样需要发送消息，读取该消息来更新胜利分数
             if researched_techs.0.insert(current_tech) {
                 tech_complete_messages.write(TechResearchedMessage {
                     nation: entity,

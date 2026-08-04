@@ -1,13 +1,15 @@
-//! AI 科技选择插件
+//! AI 科技选择
 //!
 //! 管理 AI 文明自动选择要研究的科技。
 
 use bevy::prelude::*;
 use civ_map_generator::ruleset::enums::Technology;
 
-use crate::{
-    Enemy, ResolutionPhase, TurnManager, TurnState,
-    resources::{MapParametersRes, ResearchedTechList, ResearchingTech, can_be_researched},
+use crate::{Enemy, ResolutionPhase, TurnManager, TurnState, resources::MapParametersRes};
+
+use super::{
+    components::{ResearchedTechList, ResearchingTech},
+    functions::can_be_researched,
 };
 
 /// AI 科技选择插件

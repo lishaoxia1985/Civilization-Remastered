@@ -10,7 +10,7 @@ mod era_plugin;
 mod interaction;
 mod map_plugin;
 mod minimap_plugin;
-mod tech_plugin;
+pub mod tech;
 mod turn_plugin;
 
 pub use ai::*;
@@ -21,5 +21,4 @@ pub use era_plugin::EraPlugin;
 pub use interaction::*;
 pub use map_plugin::MapPlugin;
 pub use minimap_plugin::MinimapPlugin;
-pub use tech_plugin::TechPlugin;
 pub use turn_plugin::TurnPlugin;

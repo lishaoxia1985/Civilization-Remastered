@@ -12,15 +12,16 @@ use bevy::{
 use civ_map_generator::{
     grid::*,
     map_parameters::{MapParametersBuilder, WorldGrid},
-    ruleset::enums::{Nation, Technology},
+    ruleset::enums::Nation,
 };
 
 use crate::{
     assets::ColorReplaceMaterial,
     plugins::{
-        AiCombatPlugin, AiTechPlugin, AssetLoadingPlugin, CameraPlugin, CombatPlugin, EraPlugin,
-        MapPlugin, MinimapPlugin, TechPlugin, TechTreeScreenPlugin, TurnPlugin,
-        UnitInteractionPlugin, WorldScreenUiPlugin,
+        AiCombatPlugin, AssetLoadingPlugin, CameraPlugin, CombatPlugin, EraPlugin, MapPlugin,
+        MinimapPlugin, TechTreeScreenPlugin, TurnPlugin, UnitInteractionPlugin,
+        WorldScreenUiPlugin,
+        tech::{AiTechPlugin, TechPlugin},
     },
     resources::{GameSettings, MapParametersRes},
 };
@@ -184,15 +185,6 @@ impl TurnManager {
     pub fn current_nation_entity(&self) -> Entity {
         self.turn_queue[self.current_index]
     }
-}
-
-/// When complete to research a technology, this message is sent.
-#[derive(Message)]
-pub struct TechResearchedMessage {
-    // The entity of the nation that has completed the technology.
-    pub nation: Entity,
-    /// The technology that was completed.
-    pub tech: Technology,
 }
 
 #[derive(Message)]

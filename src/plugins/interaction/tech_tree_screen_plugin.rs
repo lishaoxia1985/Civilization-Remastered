@@ -26,10 +26,11 @@ use crate::{
     NationComponent, Player, SciencePerTurn, ScreenState,
     assets::GameAssets,
     components::{CloseTechTreeButton, TechButton, TechButtonState, TechTreeScrollableNode},
-    resources::{
-        GameSettings, MapParametersRes, OverflowScience, ResearchedTechList, ResearchingTech,
-        TechProgress, can_be_researched, is_researched, remaining_science_to_tech,
+    plugins::tech::{
+        OverflowScience, ResearchedTechList, ResearchingTech, TechCostManager, TechProgressManager,
+        can_be_researched, is_researched, remaining_science_to_tech,
     },
+    resources::MapParametersRes,
 };
 
 /// 科技树列宽（像素）
@@ -110,29 +111,18 @@ fn handle_tech_click_system(
     }
 }
 
-/// 获取科技在网格中的坐标（中心点）
-/// 返回 (x像素, y百分比)，y 基于行高百分比（每行 100/row_count%）
-fn get_tech_position(tech_info: &TechnologyInfo, row_height_of_tech_nodes: f32) -> (f32, f32) {
-    let x = (tech_info.column as f32) * COLUMN_WIDTH + COLUMN_WIDTH / 2.0;
-    let row_height_percent = row_height_of_tech_nodes;
-    let y = ERA_HEADER_PERCENT
-        + (tech_info.row as f32 - 1.) * row_height_percent
-        + row_height_percent / 2.0;
-    (x, y)
-}
-
 /// 生成科技树屏幕
 fn spawn_technology_screen(
     mut commands: Commands,
-    game_settings: Res<GameSettings>,
     map_params: Res<MapParametersRes>,
     materials: Res<GameAssets>,
     query_player: Single<
         (
             &NationComponent,
             &ResearchingTech,
-            &TechProgress,
+            &TechProgressManager,
             &ResearchedTechList,
+            &TechCostManager,
             &OverflowScience,
             &SciencePerTurn,
         ),
@@ -146,6 +136,7 @@ fn spawn_technology_screen(
         researching_tech,
         tech_progress,
         researshed_techs,
+        tech_cost_manager,
         overflow_science,
         science_per_turn,
     ) = query_player.into_inner();
@@ -154,11 +145,10 @@ fn spawn_technology_screen(
         turns_to_tech(
             tech,
             science_per_turn.0,
-            true,
             tech_progress,
             researshed_techs,
+            tech_cost_manager,
             overflow_science,
-            &game_settings,
             &map_params,
         )
     });
@@ -683,11 +673,10 @@ fn unique_item(texture: Handle<Image>) -> impl Bundle {
 pub fn turns_to_tech(
     tech: Technology,
     science_per_turn: i32,
-    is_player: bool,
-    tech_progress: &TechProgress,
+    tech_progress: &TechProgressManager,
     researched_techs: &ResearchedTechList,
+    tech_cost_manager: &TechCostManager,
     overflow_science: &OverflowScience,
-    game_settings: &GameSettings,
     map_params: &MapParametersRes,
 ) -> String {
     if is_researched(tech, researched_techs) && tech != Technology::FutureTech {
@@ -696,11 +685,10 @@ pub fn turns_to_tech(
 
     let remaining_cost = remaining_science_to_tech(
         tech,
-        is_player,
         tech_progress,
         researched_techs,
+        tech_cost_manager,
         overflow_science,
-        game_settings,
         map_params,
     ) as f32;
 
@@ -714,4 +702,15 @@ pub fn turns_to_tech(
 
     let turns = (remaining_cost / science_per_turn as f32).ceil() as i32;
     format!("{} turns", turns.max(1))
+}
+
+/// 获取科技在网格中的坐标（中心点）
+/// 返回 (x像素, y百分比)，y基于整个Screen高度的占比
+fn get_tech_position(tech_info: &TechnologyInfo, row_height_of_tech_nodes: f32) -> (f32, f32) {
+    let x = (tech_info.column as f32) * COLUMN_WIDTH + COLUMN_WIDTH / 2.0;
+    let row_height_percent = row_height_of_tech_nodes;
+    let y = ERA_HEADER_PERCENT
+        + (tech_info.row as f32 - 1.) * row_height_percent
+        + row_height_percent / 2.0;
+    (x, y)
 }
