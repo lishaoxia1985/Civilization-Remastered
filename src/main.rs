@@ -18,8 +18,8 @@ use civ_map_generator::{
 use crate::{
     assets::ColorReplaceMaterial,
     plugins::{
-        AiCombatPlugin, AiTechPlugin, AssetLoadingPlugin, CameraPlugin, CombatPlugin, MapPlugin,
-        MinimapPlugin, TechPlugin, TechTreeScreenPlugin, TurnPlugin, UiPlugin,
+        AiCombatPlugin, AiTechPlugin, AssetLoadingPlugin, CameraPlugin, CombatPlugin, EraPlugin,
+        MapPlugin, MinimapPlugin, TechPlugin, TechTreeScreenPlugin, TurnPlugin, UiPlugin,
         UnitInteractionPlugin,
     },
     resources::{GameSettings, MapParametersRes},
@@ -119,6 +119,7 @@ fn main() {
         .add_plugins(TechTreeScreenPlugin)
         .add_plugins(TurnPlugin)
         .add_plugins(TechPlugin)
+        .add_plugins(EraPlugin)
         .add_plugins(AiTechPlugin)
         .add_plugins(AiCombatPlugin)
         // 初始化资源

@@ -70,7 +70,7 @@ impl Default for GameSettings {
     }
 }
 
-// ============ 科技管理 ============
+// ============ 科技管理相关组件 ============
 
 /// 当前正在研发的科技
 ///
@@ -124,8 +124,6 @@ pub struct ScienceOfLast8Turns(pub [i32; 8]);
     ScienceFromResearchAgreements
 )]
 pub struct TechManager {
-    /// 当前时代
-    pub era: Era,
     /// 科技独特能力
     pub tech_uniques: HashMap<String, Vec<String>>,
 
@@ -160,7 +158,6 @@ impl TechManager {
     /// 创建新的科技管理器
     pub fn new(era: Era) -> Self {
         Self {
-            era,
             tech_uniques: HashMap::new(),
             units_can_embark: false,
             embarked_units_can_enter_ocean: false,
@@ -322,3 +319,7 @@ impl Default for TechManager {
         Self::new(Era::AncientEra)
     }
 }
+
+// ============ 时代相关组件 ============
+#[derive(Component)]
+pub struct EraComponent(pub Era);

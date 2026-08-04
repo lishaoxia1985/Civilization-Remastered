@@ -1,7 +1,11 @@
-use std::cmp::{max, min};
+use std::{
+    cmp::{max, min},
+    collections::HashSet,
+};
 
 use bevy::prelude::*;
-use civ_map_generator::ruleset::enums::Technology;
+use civ_map_generator::ruleset::enums::{EnumStr, Era, Technology};
+use enum_map::Enum;
 
 use crate::{
     AppState, NationComponent, Player, ResolutionPhase, SciencePerTurn, TechResearchedMessage,
@@ -28,16 +32,34 @@ impl Plugin for TechPlugin {
     }
 }
 
-/// 插入科技管理器资源
+/// 插入科技管理组件
+///
+/// 根据游戏设置中的起始时代初始化每个文明的科技管理器，
+/// 并将起始时代之前的所有时代的科技标记为已经研发。
 fn insert_tech_manager_for_every_nation(
     mut commands: Commands,
     game_settings: Res<GameSettings>,
+    map_params: Res<MapParametersRes>,
     query_nation: Query<Entity, With<NationComponent>>,
 ) {
+    let start_era = game_settings.start_era;
+    let start_era_index = start_era.into_usize();
+    let ruleset = &map_params.0.ruleset;
+
+    // 收集起始时代之前的所有时代的科技
+    let mut pre_start_era_techs = HashSet::new();
+    for (tech, tech_info) in ruleset.technologies.iter() {
+        let tech_era = Era::from_str(&tech_info.era);
+        if tech_era.into_usize() < start_era_index {
+            pre_start_era_techs.insert(tech);
+        }
+    }
+
     for entity in query_nation.iter() {
-        commands
-            .entity(entity)
-            .insert(TechManager::new(game_settings.start_era));
+        commands.entity(entity).insert((
+            TechManager::new(start_era),
+            ResearchedTechList(pre_start_era_techs.clone()),
+        ));
     }
 }
 
