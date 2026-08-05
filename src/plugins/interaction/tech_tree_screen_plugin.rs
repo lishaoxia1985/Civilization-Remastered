@@ -69,28 +69,6 @@ impl Plugin for TechTreeScreenPlugin {
     }
 }
 
-/// 判断科技状态
-/* fn determine_tech_state(
-    technology: Technology,
-    map_params: &MapParametersRes,
-    researching_tech: Option<Technology>,
-    researched_techs: &ResearchedTechList,
-) -> TechButtonState {
-    if is_researched(technology, &researched_techs) {
-        return TechButtonState::Researched;
-    }
-
-    if researching_tech == Some(technology) {
-        return TechButtonState::InProgress;
-    }
-
-    if !can_be_researched(technology, researched_techs, &map_params) {
-        return TechButtonState::Locked;
-    }
-
-    TechButtonState::Available
-} */
-
 /// 处理科技按钮点击
 fn handle_tech_click_system(
     tech_button_query: Query<(&Interaction, &TechButton)>,
@@ -110,18 +88,20 @@ fn handle_tech_click_system(
 
     // 处理科技按钮
     for (interaction, tech_button) in &tech_button_query {
+        let tech = tech_button.0;
+
         if *interaction != Interaction::Pressed {
             continue;
         }
 
         if !matches!(
-            tech_state_manager.0[tech_button.0],
+            tech_state_manager.0[tech],
             TechState::Available | TechState::ResearchedAndRepeatable
         ) {
             continue;
         }
 
-        researching_tech.0 = Some(tech_button.0);
+        researching_tech.0 = Some(tech);
         next_state.set(ScreenState::WorldMap);
     }
 }
@@ -207,6 +187,20 @@ fn spawn_technology_screen(
         .collect::<Vec<_>>();
 
     let column_tracks: Vec<GridTrack> = vec![GridTrack::px(COLUMN_WIDTH); column_count as usize];
+
+    let tech_button_bg_color = |technology| {
+        if Some(technology) == researching_tech.0 {
+            Color::srgb(0.2, 0.4, 0.8)
+        } else {
+            match tech_state_manager.0[technology] {
+                TechState::Available | TechState::ResearchedAndRepeatable => {
+                    Color::srgb(0.2, 0.5, 0.2)
+                }
+                TechState::Researched => Color::srgb(0.5, 0.5, 0.5),
+                TechState::Locked => Color::NONE,
+            }
+        }
+    };
 
     commands
         .spawn((
@@ -333,7 +327,7 @@ fn spawn_technology_screen(
                                     technology,
                                     &materials,
                                     ruleset,
-                                    tech_state_manager,
+                                    tech_button_bg_color(technology),
                                     tech_turn
                                 )],
                             ));
@@ -439,17 +433,9 @@ fn technology_button(
     technology: Technology,
     materials: &GameAssets,
     ruleset: &Ruleset,
-    tech_state_manager: &TechStateManager,
+    bg_color: Color,
     tech_turn: &str,
 ) -> impl Bundle {
-    let bg_color = match tech_state_manager.0[technology] {
-        TechState::Available | TechState::ResearchedAndRepeatable => Color::srgb(0.2, 0.5, 0.2),
-        TechState::Researched => Color::srgb(0.5, 0.5, 0.5),
-        TechState::Locked => Color::NONE,
-        // TODO: 为当前正在研发的科技时添加此颜色
-        // TechState::ResearchedAndRepeatable => Color::srgb(0.2, 0.4, 0.8),
-    };
-
     (
         Node {
             width: percent(70),

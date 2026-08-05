@@ -203,40 +203,19 @@ fn process_science_on_turn_start(
                 tech_cost_manager.0.remove(&current_tech);
             }
 
-            if tech_state_manager.0[current_tech] == TechState::Researched {
-                tech_state_manager.0[current_tech] = TechState::ResearchedAndRepeatable;
-                // 如果科技是`Technology::FutureTech`,那么：
-                // TODO:如此我们无需再发送科技研发成功消息？
-                //      或许`Technology::FutureTech`研发过，我们照样需要发送消息，读取该消息来更新胜利分数
-                tech_complete_messages.write(TechResearchedMessage {
-                    nation: entity,
-                    tech: current_tech,
-                });
-            } else {
-                tech_state_manager.0[current_tech] = TechState::Researched;
-                tech_complete_messages.write(TechResearchedMessage {
-                    nation: entity,
-                    tech: current_tech,
-                });
-            }
+            // 更新科技状态，包括当前科技的状态，以及当前科技完成后解锁的可研究科技的状态
+            update_tech_states(&mut tech_state_manager, current_tech, &map_params);
 
-            // 最后我们要更新那些前置科技都已经researched的科技为available
-            let tech_and_state: HashMap<_, _> = tech_state_manager
-                .0
-                .iter()
-                .filter(|(_, tech_state)| matches!(tech_state, TechState::Locked))
-                .map(|(tech, state)| {
-                    if can_be_researched(tech, &tech_state_manager, &map_params) {
-                        (tech, TechState::Available)
-                    } else {
-                        (tech, *state)
-                    }
-                })
-                .collect();
-
-            for (&tech, &tech_state) in tech_and_state.iter() {
-                tech_state_manager.0[tech] = tech_state;
-            }
+            // 发送科技完成消息
+            // TODO：对于研发的科技如果为`Technology::FutureTech`，我们是否应当做特别处理，
+            //       因为该科技可以重复研究，
+            //       或许我们可以在读取科技研发成功并弹窗的系统中创建一个Local<T>变量，
+            //       用来记录未来科技是不是在第一次研发完成，如果是的话弹窗提示
+            //       以此达到此科技只在第一次研发完成时弹窗提示
+            tech_complete_messages.write(TechResearchedMessage {
+                nation: entity,
+                tech: current_tech,
+            });
         }
     };
 }
@@ -251,4 +230,51 @@ pub fn limit_overflow_science(
     let ruleset = &map_params.0.ruleset;
     let tech_cost = ruleset.technologies[current_tech].cost;
     min(overflow, max(science_per_turn * 5, tech_cost))
+}
+
+// 更新科技状态，包括当前科技的状态，以及当前科技完成后解锁的可研究科技的状态
+//
+// 你应当只在某项科技研发成功后调用此函数
+fn update_tech_states(
+    tech_state_manager: &mut TechStateManager,
+    current_tech: Technology,
+    map_params: &MapParametersRes,
+) {
+    // 更新科技状态
+    debug_assert!(matches!(
+        tech_state_manager.0[current_tech],
+        TechState::Available | TechState::ResearchedAndRepeatable
+    ));
+
+    if tech_state_manager.0[current_tech] == TechState::Available
+        && current_tech != Technology::FutureTech
+    {
+        tech_state_manager.0[current_tech] = TechState::Researched;
+        /* tech_complete_messages.write(TechResearchedMessage {
+            nation: entity,
+            tech: current_tech,
+        }); */
+    } else {
+        tech_state_manager.0[current_tech] = TechState::ResearchedAndRepeatable;
+        // 如果科技是`Technology::FutureTech`,那么：
+        // TODO:如此我们无需再发送科技研发成功消息？
+        //      或许`Technology::FutureTech`研发过，我们照样需要发送消息，读取该消息来更新胜利分数
+        /* tech_complete_messages.write(TechResearchedMessage {
+            nation: entity,
+            tech: current_tech,
+        }); */
+    }
+
+    // 最后我们要更新那些状态为Locked且前置科技都已经Researched的科技为Available
+    let tech_state_should_update: Vec<_> = tech_state_manager
+        .0
+        .iter()
+        .filter(|(_, tech_state)| matches!(tech_state, TechState::Locked))
+        .filter(|&(tech, _)| can_be_researched(tech, &tech_state_manager, &map_params))
+        .map(|(tech, _)| tech)
+        .collect();
+
+    for tech in tech_state_should_update.into_iter() {
+        tech_state_manager.0[tech] = TechState::Available;
+    }
 }

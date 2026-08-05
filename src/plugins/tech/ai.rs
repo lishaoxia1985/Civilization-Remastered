@@ -6,11 +6,12 @@ use bevy::prelude::*;
 use civ_map_generator::ruleset::enums::Technology;
 
 use crate::{
-    Enemy, ResolutionPhase, TurnManager, TurnState, plugins::tech::TechStateManager,
+    Enemy, ResolutionPhase, TurnManager, TurnState,
+    plugins::tech::{TechState, TechStateManager},
     resources::MapParametersRes,
 };
 
-use super::{components::ResearchingTech, functions::can_be_researched};
+use super::components::ResearchingTech;
 
 /// AI 科技选择插件
 pub struct AiTechPlugin;
@@ -43,7 +44,12 @@ fn ai_select_tech(
         .ruleset
         .technologies
         .iter()
-        .filter(|(tech, _)| can_be_researched(*tech, tech_state_manager, &map_params))
+        .filter(|&(tech, _)| {
+            matches!(
+                tech_state_manager.0[tech],
+                TechState::Available | TechState::ResearchedAndRepeatable
+            )
+        })
         .map(|(tech, info)| (tech, info.cost))
         .collect();
     available.sort_by_key(|(_, cost)| *cost);

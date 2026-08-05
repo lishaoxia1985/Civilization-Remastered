@@ -44,7 +44,7 @@ fn initialize_turn_system(
     // 若没有国家，提前返回（根据需求处理）
     let Some(&first_entity) = turn_queue.first() else {
         // 无国家时可能直接设置状态并返回
-        return;
+        panic!("There are no nations in the game.");
     };
 
     commands.insert_resource(TurnManager {
@@ -53,6 +53,8 @@ fn initialize_turn_system(
         turn_number: 0,
     });
     next_turn_state.set(TurnState::Start);
+
+    info!("Starting turn resolution for {}", first_entity);
 
     // 获取首个国家的 Player 组件
     // 以此判断是否为玩家国家
@@ -91,15 +93,15 @@ fn advance_turn_queue(
         // 上一个玩家已经结束回合，获取当前玩家并进入当前玩家的回合
         let entity = manager.turn_queue[manager.current_index];
 
-        next_turn_state.set(TurnState::Start);
-
-        info!("Starting turn resolution for {}", entity);
-
         if player_entity == entity {
             next_turn_phase.set(TurnPhase::PlayTurn);
         } else {
             next_turn_phase.set(TurnPhase::EnemyTurn);
         }
+
+        next_turn_state.set(TurnState::Start);
+
+        info!("Starting turn resolution for {}", entity);
 
         // 【新增】如果索引回到 0，说明所有实体都行动完毕，新回合开始
         if manager.current_index == 0 {

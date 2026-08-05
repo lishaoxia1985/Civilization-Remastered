@@ -234,6 +234,7 @@ fn end_turn_click(
         return;
     }
     next_turn_state.set(TurnState::End);
+    info!("Ending player turn for {}", entity);
 }
 
 fn update_end_turn_button(
