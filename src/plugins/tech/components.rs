@@ -3,10 +3,11 @@
 //! 包含与科技研究、时代相关的所有数据组件。
 //! 组件仅为数据结构，不含任何逻辑。
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use bevy::prelude::*;
 use civ_map_generator::ruleset::enums::Technology;
+use enum_map::EnumMap;
 
 /// 当前正在研发的科技
 ///
@@ -17,10 +18,6 @@ use civ_map_generator::ruleset::enums::Technology;
 /// 未来可能会在科技选择界面或AI选择科技的逻辑中实现科技队列功能。
 #[derive(Component, Default)]
 pub struct ResearchingTech(pub Option<Technology>);
-
-/// 已经研发的科技list
-#[derive(Component, Default)]
-pub struct ResearchedTechList(pub HashSet<Technology>);
 
 /// 进行中的科技，只有已经研究且有科研值积累但尚未完成的科技存储在此。
 ///
@@ -33,6 +30,27 @@ pub struct TechProgressManager(pub HashMap<Technology, i32>);
 /// 值不可能为`0`. 如果一个科技已经研发过且不是像`Future Tech`这种可以重复研究的，它不会出现在这个HashMap中。
 #[derive(Component, Default)]
 pub struct TechCostManager(pub HashMap<Technology, i32>);
+
+#[derive(Component, Default)]
+pub struct TechStateManager(pub EnumMap<Technology, TechState>);
+
+/// 科技可用性状态
+#[derive(Default, PartialEq, Eq, Copy, Clone, Debug)]
+pub enum TechState {
+    /// 可研究（前置科技已完成）
+    Available,
+    /// 已研究完成
+    ///
+    /// Notes: 如果某科技可重复研究且已经研究完成，你应当使用[`Self::ResearchedAndRepeatable`]
+    Researched,
+    /// 已经研究完成且可重复研究
+    ///
+    /// 在original Civ中，仅`Technology::FutureTech`是可重复研究的
+    ResearchedAndRepeatable,
+    /// 不可用（前置科技未完成）
+    #[default]
+    Locked,
+}
 
 /// 溢出的科研值
 ///
@@ -63,7 +81,7 @@ pub struct ScienceOfLast8Turns(pub [i32; 8]);
 #[require(
     ResearchingTech,
     TechProgressManager,
-    ResearchedTechList,
+    TechStateManager,
     TechCostManager,
     OverflowScience,
     ScienceOfLast8Turns,

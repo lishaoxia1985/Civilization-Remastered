@@ -5,7 +5,6 @@
 //! - [科技逻辑函数](functions)：成本计算、可研究性判断等
 //! - [科技消息](messages)：科技研发完成等消息
 //! - [科技插件](tech_plugin)：回合科研结算
-//! - [时代插件](era_plugin)：时代更新
 //! - [AI 科技选择](ai)：AI 文明自动选择科技
 
 mod ai;
@@ -16,6 +15,7 @@ mod tech_plugin;
 
 pub use ai::AiTechPlugin;
 pub use components::*;
-pub use functions::*;
 pub use messages::*;
 pub use tech_plugin::TechPlugin;
+
+use functions::*;

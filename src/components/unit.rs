@@ -101,33 +101,6 @@ pub enum ActionButton {
 #[derive(Component, Clone, Copy, Debug)]
 pub struct WorldTile(pub Tile);
 
-// ============ 科技树组件 ============
-
-/// 科技按钮组件
-#[derive(Component, Clone, Copy, Debug)]
-pub struct TechButton(pub Technology);
-
-/// 科技可用性状态
-#[derive(Component, Clone, Debug, PartialEq)]
-pub enum TechButtonState {
-    /// 可研究（前置科技已完成）
-    Available,
-    /// 正在研究中
-    InProgress,
-    /// 已研究完成
-    Researched,
-    /// 不可用（前置科技未完成）
-    Locked,
-}
-
-/// 科技树可滚动节点
-#[derive(Component)]
-pub struct TechTreeScrollableNode;
-
-/// 关闭科技树按钮
-#[derive(Component)]
-pub struct CloseTechTreeButton;
-
 // ============ 小地图组件 ============
 
 /// 信息面板

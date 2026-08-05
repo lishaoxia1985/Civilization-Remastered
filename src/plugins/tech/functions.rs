@@ -5,11 +5,9 @@
 use civ_map_generator::ruleset::enums::{EnumStr, Technology};
 
 use crate::{
-    plugins::tech::TechCostManager,
+    plugins::tech::{TechState, TechStateManager},
     resources::{GameSettings, MapParametersRes},
 };
-
-use super::components::{OverflowScience, ResearchedTechList, TechProgressManager};
 
 /// 计算科技成本
 ///
@@ -42,41 +40,18 @@ pub fn cost_of_tech(
     tech_cost as i32
 }
 
-/// 获取科技的研究进度（已投入的科技点数）
-pub fn research_progress(tech: Technology, tech_progress: &TechProgressManager) -> i32 {
-    tech_progress.0.get(&tech).copied().unwrap_or(0)
-}
-
-/// 计算完成科技还需要的剩余科技点数
-pub fn remaining_science_to_tech(
-    tech: Technology,
-    tech_progress: &TechProgressManager,
-    researched_techs: &ResearchedTechList,
-    tech_cost_manager: &TechCostManager,
-    overflow_science: &OverflowScience,
-    map_params: &MapParametersRes,
-) -> i32 {
-    let spare_science = if can_be_researched(tech, researched_techs, map_params) {
-        overflow_science.0
-    } else {
-        0
-    };
-
-    let cost = tech_cost_manager.0.get(&tech).copied().unwrap_or(0);
-    let researched = research_progress(tech, tech_progress);
-
-    cost - researched - spare_science
-}
-
 /// 检查科技是否已研究
-pub fn is_researched(tech: Technology, researched_techs: &ResearchedTechList) -> bool {
-    researched_techs.0.contains(&tech)
+pub fn is_researched(tech: Technology, tech_state_manager: &TechStateManager) -> bool {
+    matches!(
+        tech_state_manager.0[tech],
+        TechState::Researched | TechState::ResearchedAndRepeatable
+    )
 }
 
 /// 检查科技是否可以研究
 pub fn can_be_researched(
     tech: Technology,
-    researched_techs: &ResearchedTechList,
+    tech_state_manager: &TechStateManager,
     map_params: &MapParametersRes,
 ) -> bool {
     let ruleset = &map_params.0.ruleset;
@@ -86,12 +61,12 @@ pub fn can_be_researched(
         .uniques
         .contains(&"Can be continually researched".to_string());
 
-    if is_researched(tech, researched_techs) && !is_continually_researchable {
+    if is_researched(tech, tech_state_manager) && !is_continually_researchable {
         return false;
     }
 
     tech_info
         .prerequisites
         .iter()
-        .all(|prereq| is_researched(Technology::from_str(prereq), researched_techs))
+        .all(|prereq| is_researched(Technology::from_str(prereq), tech_state_manager))
 }

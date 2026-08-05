@@ -5,12 +5,12 @@
 use bevy::prelude::*;
 use civ_map_generator::ruleset::enums::Technology;
 
-use crate::{Enemy, ResolutionPhase, TurnManager, TurnState, resources::MapParametersRes};
-
-use super::{
-    components::{ResearchedTechList, ResearchingTech},
-    functions::can_be_researched,
+use crate::{
+    Enemy, ResolutionPhase, TurnManager, TurnState, plugins::tech::TechStateManager,
+    resources::MapParametersRes,
 };
+
+use super::{components::ResearchingTech, functions::can_be_researched};
 
 /// AI 科技选择插件
 pub struct AiTechPlugin;
@@ -27,11 +27,11 @@ impl Plugin for AiTechPlugin {
 
 fn ai_select_tech(
     manager: Res<TurnManager>,
-    mut enemy_query: Query<(&mut ResearchingTech, &ResearchedTechList), With<Enemy>>,
+    mut enemy_query: Query<(&mut ResearchingTech, &TechStateManager), With<Enemy>>,
     map_params: Res<MapParametersRes>,
 ) {
     let entity = manager.current_nation_entity();
-    let Ok((mut researching_tech, researched_techs)) = enemy_query.get_mut(entity) else {
+    let Ok((mut researching_tech, tech_state_manager)) = enemy_query.get_mut(entity) else {
         unreachable!("Enemy tech manager not found")
     };
     if researching_tech.0.is_some() {
@@ -43,7 +43,7 @@ fn ai_select_tech(
         .ruleset
         .technologies
         .iter()
-        .filter(|(tech, _)| can_be_researched(*tech, researched_techs, &map_params))
+        .filter(|(tech, _)| can_be_researched(*tech, tech_state_manager, &map_params))
         .map(|(tech, info)| (tech, info.cost))
         .collect();
     available.sort_by_key(|(_, cost)| *cost);

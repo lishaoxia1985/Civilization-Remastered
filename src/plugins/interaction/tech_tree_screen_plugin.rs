@@ -25,10 +25,9 @@ use std::collections::HashMap;
 use crate::{
     NationComponent, Player, SciencePerTurn, ScreenState,
     assets::GameAssets,
-    components::{CloseTechTreeButton, TechButton, TechButtonState, TechTreeScrollableNode},
     plugins::tech::{
-        OverflowScience, ResearchedTechList, ResearchingTech, TechCostManager, TechProgressManager,
-        can_be_researched, is_researched, remaining_science_to_tech,
+        OverflowScience, ResearchingTech, TechCostManager, TechProgressManager, TechState,
+        TechStateManager,
     },
     resources::MapParametersRes,
 };
@@ -39,6 +38,20 @@ const COLUMN_WIDTH: f32 = 400.0;
 const ERA_HEADER_PERCENT: f32 = 5.0;
 const LINE_COLOR: Color = Color::srgb(0.4, 0.4, 0.4);
 const LINE_WIDTH: f32 = 2.0;
+
+// ============ 科技树组件 ============
+
+/// 科技按钮组件
+#[derive(Component, Clone, Copy, Debug)]
+pub struct TechButton(pub Technology);
+
+/// 科技树可滚动节点
+#[derive(Component)]
+pub struct TechTreeScrollableNode;
+
+/// 关闭科技树按钮
+#[derive(Component)]
+pub struct CloseTechTreeButton;
 
 #[derive(Component)]
 struct TechTree;
@@ -57,7 +70,7 @@ impl Plugin for TechTreeScreenPlugin {
 }
 
 /// 判断科技状态
-fn determine_tech_state(
+/* fn determine_tech_state(
     technology: Technology,
     map_params: &MapParametersRes,
     researching_tech: Option<Technology>,
@@ -76,14 +89,13 @@ fn determine_tech_state(
     }
 
     TechButtonState::Available
-}
+} */
 
 /// 处理科技按钮点击
 fn handle_tech_click_system(
     tech_button_query: Query<(&Interaction, &TechButton)>,
     close_button_query: Query<(&Interaction, &CloseTechTreeButton)>,
-    query_player: Single<(&mut ResearchingTech, &ResearchedTechList), With<Player>>,
-    map_params: Res<MapParametersRes>,
+    query_player: Single<(&mut ResearchingTech, &TechStateManager), With<Player>>,
     mut next_state: ResMut<NextState<ScreenState>>,
 ) {
     // 处理关闭按钮
@@ -94,7 +106,7 @@ fn handle_tech_click_system(
         }
     }
 
-    let (mut researching_tech, researched_techs) = query_player.into_inner();
+    let (mut researching_tech, tech_state_manager) = query_player.into_inner();
 
     // 处理科技按钮
     for (interaction, tech_button) in &tech_button_query {
@@ -102,7 +114,10 @@ fn handle_tech_click_system(
             continue;
         }
 
-        if !can_be_researched(tech_button.0, researched_techs, &map_params) {
+        if !matches!(
+            tech_state_manager.0[tech_button.0],
+            TechState::Available | TechState::ResearchedAndRepeatable
+        ) {
             continue;
         }
 
@@ -121,7 +136,7 @@ fn spawn_technology_screen(
             &NationComponent,
             &ResearchingTech,
             &TechProgressManager,
-            &ResearchedTechList,
+            &TechStateManager,
             &TechCostManager,
             &OverflowScience,
             &SciencePerTurn,
@@ -135,7 +150,7 @@ fn spawn_technology_screen(
         _player_nation,
         researching_tech,
         tech_progress,
-        researshed_techs,
+        tech_state_manager,
         tech_cost_manager,
         overflow_science,
         science_per_turn,
@@ -146,10 +161,9 @@ fn spawn_technology_screen(
             tech,
             science_per_turn.0,
             tech_progress,
-            researshed_techs,
+            tech_state_manager,
             tech_cost_manager,
             overflow_science,
-            &map_params,
         )
     });
 
@@ -302,12 +316,6 @@ fn spawn_technology_screen(
                         .technologies
                         .iter()
                         .for_each(|(technology, technology_info)| {
-                            let tech_state = determine_tech_state(
-                                technology,
-                                &map_params,
-                                researching_tech.0,
-                                researshed_techs,
-                            );
                             let tech_turn = &tech_and_turns[technology];
 
                             builder.spawn((
@@ -321,9 +329,12 @@ fn spawn_technology_screen(
                                     border: UiRect::all(Val::Px(2.0)),
                                     ..default()
                                 },
-                                tech_state.clone(),
                                 children![technology_button(
-                                    technology, &materials, ruleset, tech_state, tech_turn
+                                    technology,
+                                    &materials,
+                                    ruleset,
+                                    tech_state_manager,
+                                    tech_turn
                                 )],
                             ));
                         });
@@ -428,14 +439,15 @@ fn technology_button(
     technology: Technology,
     materials: &GameAssets,
     ruleset: &Ruleset,
-    tech_state: TechButtonState,
+    tech_state_manager: &TechStateManager,
     tech_turn: &str,
 ) -> impl Bundle {
-    let bg_color = match tech_state {
-        TechButtonState::Available => Color::srgb(0.2, 0.5, 0.2),
-        TechButtonState::InProgress => Color::srgb(0.2, 0.4, 0.8),
-        TechButtonState::Researched => Color::srgb(0.5, 0.5, 0.5),
-        TechButtonState::Locked => Color::NONE,
+    let bg_color = match tech_state_manager.0[technology] {
+        TechState::Available | TechState::ResearchedAndRepeatable => Color::srgb(0.2, 0.5, 0.2),
+        TechState::Researched => Color::srgb(0.5, 0.5, 0.5),
+        TechState::Locked => Color::NONE,
+        // TODO: 为当前正在研发的科技时添加此颜色
+        // TechState::ResearchedAndRepeatable => Color::srgb(0.2, 0.4, 0.8),
     };
 
     (
@@ -669,27 +681,59 @@ fn unique_item(texture: Handle<Image>) -> impl Bundle {
     )
 }
 
+/// 获取科技在网格中的坐标（中心点）
+/// 返回 (x像素, y百分比)，y基于整个Screen高度的占比
+fn get_tech_position(tech_info: &TechnologyInfo, row_height_of_tech_nodes: f32) -> (f32, f32) {
+    let x = (tech_info.column as f32) * COLUMN_WIDTH + COLUMN_WIDTH / 2.0;
+    let row_height_percent = row_height_of_tech_nodes;
+    let y = ERA_HEADER_PERCENT
+        + (tech_info.row as f32 - 1.) * row_height_percent
+        + row_height_percent / 2.0;
+    (x, y)
+}
+
+/// 计算完成科技还需要的剩余科技点数
+pub fn remaining_science_to_tech(
+    tech: Technology,
+    tech_progress: &TechProgressManager,
+    tech_state_manager: &TechStateManager,
+    tech_cost_manager: &TechCostManager,
+    overflow_science: &OverflowScience,
+) -> i32 {
+    let spare_science = if matches!(
+        tech_state_manager.0[tech],
+        TechState::Available | TechState::ResearchedAndRepeatable
+    ) {
+        overflow_science.0
+    } else {
+        0
+    };
+
+    let cost = tech_cost_manager.0.get(&tech).copied().unwrap_or(0);
+    let researched = tech_progress.0.get(&tech).copied().unwrap_or(0);
+
+    cost - researched - spare_science
+}
+
 /// 计算完成科技还需要的回合数
 pub fn turns_to_tech(
     tech: Technology,
     science_per_turn: i32,
     tech_progress: &TechProgressManager,
-    researched_techs: &ResearchedTechList,
+    tech_state_manager: &TechStateManager,
     tech_cost_manager: &TechCostManager,
     overflow_science: &OverflowScience,
-    map_params: &MapParametersRes,
 ) -> String {
-    if is_researched(tech, researched_techs) && tech != Technology::FutureTech {
+    if tech_state_manager.0[tech] == TechState::Researched {
         return String::new();
     }
 
     let remaining_cost = remaining_science_to_tech(
         tech,
         tech_progress,
-        researched_techs,
+        tech_state_manager,
         tech_cost_manager,
         overflow_science,
-        map_params,
     ) as f32;
 
     if remaining_cost <= 0.0 {
@@ -702,15 +746,4 @@ pub fn turns_to_tech(
 
     let turns = (remaining_cost / science_per_turn as f32).ceil() as i32;
     format!("{} turns", turns.max(1))
-}
-
-/// 获取科技在网格中的坐标（中心点）
-/// 返回 (x像素, y百分比)，y基于整个Screen高度的占比
-fn get_tech_position(tech_info: &TechnologyInfo, row_height_of_tech_nodes: f32) -> (f32, f32) {
-    let x = (tech_info.column as f32) * COLUMN_WIDTH + COLUMN_WIDTH / 2.0;
-    let row_height_percent = row_height_of_tech_nodes;
-    let y = ERA_HEADER_PERCENT
-        + (tech_info.row as f32 - 1.) * row_height_percent
-        + row_height_percent / 2.0;
-    (x, y)
 }

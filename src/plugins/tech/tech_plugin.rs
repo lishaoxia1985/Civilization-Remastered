@@ -7,23 +7,23 @@
 
 use std::{
     cmp::{max, min},
-    collections::{HashMap, HashSet},
+    collections::HashMap,
 };
 
 use bevy::prelude::*;
 use civ_map_generator::ruleset::enums::{EnumStr, Era, Technology};
-use enum_map::Enum;
+use enum_map::{Enum, EnumMap};
 
 use crate::{
     AppState, NationComponent, Player, ResolutionPhase, SciencePerTurn, TurnManager, TurnState,
-    plugins::tech::TechCostManager,
+    plugins::tech::{TechCostManager, TechState, TechStateManager, can_be_researched},
     resources::{GameSettings, MapParametersRes},
 };
 
 use super::{
     components::{
-        OverflowScience, ResearchedTechList, ResearchingTech, ScienceFromResearchAgreements,
-        ScienceOfLast8Turns, TechProgressManager, TechSystem,
+        OverflowScience, ResearchingTech, ScienceFromResearchAgreements, ScienceOfLast8Turns,
+        TechProgressManager, TechSystem,
     },
     functions::cost_of_tech,
     messages::TechResearchedMessage,
@@ -61,11 +61,17 @@ fn insert_tech_system_for_every_nation(
     let ruleset = &map_params.0.ruleset;
 
     // 收集起始时代之前的所有时代的科技
-    let mut pre_start_era_techs = HashSet::new();
+    // TODO: 应当将起始科技设置为Researched，以它为前置科技的科技设置为Available
+    let mut pre_start_era_tech_state_manager: EnumMap<Technology, TechState> = EnumMap::default();
     for (tech, tech_info) in ruleset.technologies.iter() {
+        if tech_info.uniques.contains(&"Starting tech".to_string()) {
+            pre_start_era_tech_state_manager[tech] = TechState::Available;
+            continue;
+        }
+
         let tech_era = Era::from_str(&tech_info.era);
         if tech_era.into_usize() < start_era_index {
-            pre_start_era_techs.insert(tech);
+            pre_start_era_tech_state_manager[tech] = TechState::Researched;
         }
     }
 
@@ -92,7 +98,7 @@ fn insert_tech_system_for_every_nation(
     for (entity, player) in query_nation.iter() {
         commands.entity(entity).insert((
             TechSystem,
-            ResearchedTechList(pre_start_era_techs.clone()),
+            TechStateManager(pre_start_era_tech_state_manager.clone()),
             TechCostManager(if player.is_some() {
                 tech_costs_of_player.clone()
             } else {
@@ -109,7 +115,7 @@ fn process_science_on_turn_start(
         Entity,
         &mut ResearchingTech,
         &mut TechProgressManager,
-        &mut ResearchedTechList,
+        &mut TechStateManager,
         &mut TechCostManager,
         &mut OverflowScience,
         &mut ScienceOfLast8Turns,
@@ -131,7 +137,7 @@ fn process_science_on_turn_start(
         entity,
         mut researching_tech,
         mut tech_progress,
-        mut researched_techs,
+        mut tech_state_manager,
         mut tech_cost_manager,
         mut overflow_science,
         mut science_of_last_8_turns,
@@ -197,14 +203,39 @@ fn process_science_on_turn_start(
                 tech_cost_manager.0.remove(&current_tech);
             }
 
-            // 如果科技是`Technology::FutureTech`，此处添加科技到已经研发过的科技列表中会添加失败，那么：
-            // TODO:如此我们无需再发送科技研发成功消息？
-            //      或许`Technology::FutureTech`研发过，我们照样需要发送消息，读取该消息来更新胜利分数
-            if researched_techs.0.insert(current_tech) {
+            if tech_state_manager.0[current_tech] == TechState::Researched {
+                tech_state_manager.0[current_tech] = TechState::ResearchedAndRepeatable;
+                // 如果科技是`Technology::FutureTech`,那么：
+                // TODO:如此我们无需再发送科技研发成功消息？
+                //      或许`Technology::FutureTech`研发过，我们照样需要发送消息，读取该消息来更新胜利分数
                 tech_complete_messages.write(TechResearchedMessage {
                     nation: entity,
                     tech: current_tech,
                 });
+            } else {
+                tech_state_manager.0[current_tech] = TechState::Researched;
+                tech_complete_messages.write(TechResearchedMessage {
+                    nation: entity,
+                    tech: current_tech,
+                });
+            }
+
+            // 最后我们要更新那些前置科技都已经researched的科技为available
+            let tech_and_state: HashMap<_, _> = tech_state_manager
+                .0
+                .iter()
+                .filter(|(_, tech_state)| matches!(tech_state, TechState::Locked))
+                .map(|(tech, state)| {
+                    if can_be_researched(tech, &tech_state_manager, &map_params) {
+                        (tech, TechState::Available)
+                    } else {
+                        (tech, *state)
+                    }
+                })
+                .collect();
+
+            for (&tech, &tech_state) in tech_and_state.iter() {
+                tech_state_manager.0[tech] = tech_state;
             }
         }
     };

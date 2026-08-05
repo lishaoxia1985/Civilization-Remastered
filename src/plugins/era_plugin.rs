@@ -4,15 +4,13 @@
 //! 1. 当前时代的所有科技都已研发完成
 //! 2. 研发了下一个时代的科技
 
-use std::collections::HashSet;
-
 use bevy::prelude::*;
-use civ_map_generator::ruleset::enums::{EnumStr, Era, Technology};
+use civ_map_generator::ruleset::enums::{EnumStr, Era};
 use enum_map::Enum;
 
 use crate::{
     AppState, NationComponent,
-    plugins::tech::{ResearchedTechList, TechResearchedMessage},
+    plugins::tech::{TechResearchedMessage, TechState, TechStateManager},
     resources::{GameSettings, MapParametersRes},
 };
 
@@ -47,10 +45,10 @@ fn insert_era_for_every_nation(
 fn update_era_on_tech_researched(
     mut tech_researched_messages: MessageReader<TechResearchedMessage>,
     map_params: Res<MapParametersRes>,
-    mut query: Query<(&mut EraComponent, &ResearchedTechList)>,
+    mut query: Query<(&mut EraComponent, &TechStateManager)>,
 ) {
     for message in tech_researched_messages.read() {
-        let Ok((mut era_component, researched_techs)) = query.get_mut(message.nation) else {
+        let Ok((mut era_component, tech_state_manager)) = query.get_mut(message.nation) else {
             continue;
         };
 
@@ -73,7 +71,7 @@ fn update_era_on_tech_researched(
         }
 
         // 情况2：当前时代的所有科技都已研发完成
-        if all_techs_of_era_researched(current_era, &researched_techs.0, &map_params) {
+        if all_techs_of_era_researched(current_era, &tech_state_manager, &map_params) {
             info!(
                 "Nation {:?} has advanced to the next era: {:?}",
                 message.nation, next_era
@@ -96,7 +94,7 @@ fn next_era(era: Era) -> Option<Era> {
 /// 检查当前时代的所有科技是否都已研发完成
 fn all_techs_of_era_researched(
     era: Era,
-    researched_techs: &HashSet<Technology>,
+    tech_state_manager: &TechStateManager,
     map_params: &MapParametersRes,
 ) -> bool {
     let ruleset = &map_params.0.ruleset;
@@ -106,5 +104,5 @@ fn all_techs_of_era_researched(
         .technologies
         .iter()
         .filter(|(_, tech_info)| tech_info.era == era_str)
-        .all(|(tech, _)| researched_techs.contains(&tech))
+        .all(|(tech, _)| tech_state_manager.0[tech] == TechState::Researched)
 }
