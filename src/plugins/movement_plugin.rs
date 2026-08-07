@@ -1,0 +1,180 @@
+//! 移动系统插件
+//!
+//! 管理单位移动逻辑，包括：
+//! - 响应移动请求（MoveRequestMessage）
+//! - 处理移动后自动攻击（目标地块有敌人时自动选择相邻位置攻击）
+//! - 移动力消耗
+
+use bevy::prelude::*;
+use civ_map_generator::tile::Tile;
+
+use crate::{
+    AttackRequestMessage, MoveRequestMessage,
+    components::{Movement, Owner, UnitComponent},
+    resources::{TileEntityMap, TileMapRes},
+};
+
+/// 单位在父地块上的局部偏移量（与 map_plugin.rs 中创建单位时保持一致）
+fn unit_local_offset(unit: &UnitComponent, tile_pixel_size: Vec2) -> Vec3 {
+    let transform_y = match unit {
+        UnitComponent::Civilian(_) => -tile_pixel_size.y / 4.,
+        UnitComponent::Military(_) => tile_pixel_size.y / 4.,
+    };
+    Vec3::new(0., transform_y, 6.)
+}
+
+/// 移动插件
+pub struct MovementPlugin;
+
+impl Plugin for MovementPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_observer(handle_move_request);
+    }
+}
+
+/// 处理移动请求
+fn handle_move_request(
+    event: On<MoveRequestMessage>,
+    mut commands: Commands,
+    unit_query: Query<(Entity, &ChildOf, &Movement, &Owner, &UnitComponent), With<UnitComponent>>,
+    tile_map: Option<Res<TileMapRes>>,
+    tile_entity_map: Res<TileEntityMap>,
+) {
+    let move_request = event.event();
+    let unit_entity = move_request.unit;
+    let target_tile = move_request.target_tile;
+
+    let Ok((_, _, movement, unit_owner, unit_component)) = unit_query.get(unit_entity) else {
+        return;
+    };
+
+    if movement.current == 0 {
+        return;
+    }
+
+    let Some(tile_map) = tile_map else {
+        return;
+    };
+    let tile_map = &tile_map.0;
+
+    let target_tile_entity = tile_entity_map.get(target_tile);
+
+    // 检查目标地块是否有敌方军事单位（只有军事单位才会阻挡移动）
+    let has_enemy = unit_query
+        .iter()
+        .any(|(entity, child_of, _, owner, unit_component)| {
+            entity != unit_entity
+                && child_of.0 == target_tile_entity.unwrap_or(Entity::PLACEHOLDER)
+                && !is_same_owner(owner, unit_owner)
+                && matches!(unit_component, UnitComponent::Military(_))
+        });
+
+    // 计算移动到目标地块的实际移动消耗
+    let move_cost = movement_cost(&target_tile, tile_map);
+    let new_movement = if move_cost > 0 && move_cost <= movement.current {
+        movement.current - move_cost
+    } else {
+        movement.current
+    };
+
+    if has_enemy {
+        // 目标地块有敌人 - 尝试移动到相邻位置并攻击
+        let grid = tile_map.world_grid.grid;
+        let neighbors: Vec<Tile> = target_tile.neighbor_tiles(grid).collect();
+
+        for neighbor in neighbors {
+            let neighbor_entity = tile_entity_map.get(neighbor);
+            let is_occupied = unit_query
+                .iter()
+                .any(|(_, child_of, _, _, unit_component)| {
+                    child_of.0 == neighbor_entity.unwrap_or(Entity::PLACEHOLDER)
+                        && matches!(unit_component, UnitComponent::Military(_))
+                });
+
+            if !is_occupied {
+                if let Some(neighbor_entity) = neighbor_entity {
+                    // 移动到相邻位置
+                    commands
+                        .entity(unit_entity)
+                        .set_parent_in_place(neighbor_entity);
+                    // 重置局部变换，使单位正确显示在新地块上
+                    let tile_pixel_size =
+                        Vec2::from(tile_map.world_grid.grid.layout.size) * Vec2::new(2.0, 2.0);
+                    commands
+                        .entity(unit_entity)
+                        .insert(Transform::from_translation(unit_local_offset(
+                            unit_component,
+                            tile_pixel_size,
+                        )));
+                    // 扣除移动到相邻位置的移动消耗（攻击后移动力清零）
+                    commands.entity(unit_entity).insert(Movement {
+                        current: 0,
+                        max: movement.max,
+                    });
+
+                    // 找到目标地块上的敌人并触发攻击
+                    if let Some(target_entity) = target_tile_entity {
+                        for (enemy_entity, enemy_child_of, _, enemy_owner, _) in unit_query.iter() {
+                            if enemy_child_of.0 == target_entity
+                                && enemy_entity != unit_entity
+                                && !is_same_owner(enemy_owner, unit_owner)
+                            {
+                                commands.trigger(AttackRequestMessage {
+                                    attacker: unit_entity,
+                                    target: enemy_entity,
+                                });
+                                break;
+                            }
+                        }
+                    }
+                }
+                break;
+            }
+        }
+    } else {
+        // 目标地块没有敌人 - 正常移动，只扣除实际移动消耗
+        if let Some(target_entity) = target_tile_entity {
+            commands
+                .entity(unit_entity)
+                .set_parent_in_place(target_entity);
+            // 重置局部变换，使单位正确显示在新地块上
+            let tile_pixel_size =
+                Vec2::from(tile_map.world_grid.grid.layout.size) * Vec2::new(2.0, 2.0);
+            commands
+                .entity(unit_entity)
+                .insert(Transform::from_translation(unit_local_offset(
+                    unit_component,
+                    tile_pixel_size,
+                )));
+            commands.entity(unit_entity).insert(Movement {
+                current: new_movement,
+                max: movement.max,
+            });
+        }
+    }
+}
+
+/// 计算进入一个地块的移动消耗
+fn movement_cost(tile: &Tile, tile_map: &civ_map_generator::tile_map::TileMap) -> u32 {
+    let terrain_type = tile.terrain_type(tile_map);
+
+    match terrain_type {
+        civ_map_generator::ruleset::enums::TerrainType::Flatland => 1,
+        civ_map_generator::ruleset::enums::TerrainType::Hill => 2,
+        civ_map_generator::ruleset::enums::TerrainType::Mountain => {
+            return 0;
+        }
+        civ_map_generator::ruleset::enums::TerrainType::Water => {
+            return 0;
+        }
+    }
+}
+
+/// 判断两个单位是否属于同一所有者
+fn is_same_owner(owner1: &Owner, owner2: &Owner) -> bool {
+    match (owner1, owner2) {
+        (Owner::Civilization(n1), Owner::Civilization(n2)) => n1 == n2,
+        (Owner::CityState(n1), Owner::CityState(n2)) => n1 == n2,
+        _ => false,
+    }
+}

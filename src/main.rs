@@ -12,15 +12,16 @@ use bevy::{
 use civ_map_generator::{
     grid::*,
     map_parameters::{MapParametersBuilder, WorldGrid},
-    ruleset::enums::Nation,
+    ruleset::enums::{Nation, TileImprovement},
+    tile::Tile,
 };
 
 use crate::{
     assets::ColorReplaceMaterial,
     plugins::{
-        AiCombatPlugin, AssetLoadingPlugin, CameraPlugin, CombatPlugin, EraPlugin, MapPlugin,
-        MinimapPlugin, TechTreeScreenPlugin, TurnPlugin, UnitInteractionPlugin,
-        WorldScreenUiPlugin,
+        AiCombatPlugin, AssetLoadingPlugin, CameraPlugin, CombatPlugin, ConstructionPlugin,
+        EraPlugin, MapPlugin, MinimapPlugin, MovementPlugin, TechTreeScreenPlugin, TurnPlugin,
+        UnitInteractionPlugin, WorldScreenUiPlugin,
         tech::{AiTechPlugin, TechPlugin},
     },
     resources::{GameSettings, MapParametersRes},
@@ -113,6 +114,8 @@ fn main() {
         .add_plugins(AssetLoadingPlugin)
         .add_plugins(CameraPlugin)
         .add_plugins(CombatPlugin)
+        .add_plugins(MovementPlugin)
+        .add_plugins(ConstructionPlugin)
         .add_plugins(UnitInteractionPlugin)
         .add_plugins(WorldScreenUiPlugin)
         .add_plugins(MapPlugin)
@@ -197,6 +200,28 @@ pub struct BuildCompletedMessage {
 pub struct AttackRequestMessage {
     pub attacker: Entity,
     pub target: Entity,
+}
+
+/// 移动请求消息：由玩家点击移动目标触发
+#[derive(Event)]
+pub struct MoveRequestMessage {
+    pub unit: Entity,
+    pub target_tile: Tile,
+}
+
+/// 建造请求消息：由工人单位建造设施触发
+#[derive(Event)]
+pub struct BuildRequestMessage {
+    pub unit: Entity,
+    pub target_tile: Tile,
+    pub improvement: TileImprovement,
+}
+
+/// 建城请求消息：由移民单位建立城市触发
+#[derive(Event)]
+pub struct FoundCityRequestMessage {
+    pub unit: Entity,
+    pub target_tile: Tile,
 }
 
 // 定义结算顺序的 SystemSet

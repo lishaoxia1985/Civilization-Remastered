@@ -36,7 +36,7 @@ use enum_map::{EnumMap, enum_map};
 use crate::{
     AppState, ScreenState,
     assets::{GameAssets, hex_mesh},
-    components::{InfoPanel, MainCamera, WorldTile},
+    components::{InfoPanel, MainCamera},
     resources::TileMapRes,
 };
 
@@ -62,7 +62,7 @@ impl Plugin for MinimapPlugin {
         )
         .add_systems(
             Update,
-            (minimap_fov_update, handle_tile_click).run_if(in_state(ScreenState::WorldMap)),
+            (minimap_fov_update).run_if(in_state(ScreenState::WorldMap)),
         )
         .add_systems(OnExit(AppState::MapGenerating), spawn_tile_map_for_minimap);
     }
@@ -427,19 +427,6 @@ pub fn setup_info_panel(mut commands: Commands) {
         TextColor(Color::WHITE),
         InfoPanel,
     ));
-}
-
-/// 处理地块点击事件
-fn handle_tile_click(
-    mut click_events: MessageReader<Pointer<Click>>,
-    query: Query<&WorldTile>,
-    mut query_info_panel: Single<&mut Text, With<InfoPanel>>,
-) {
-    for click in click_events.read() {
-        if let Ok(world_tile) = query.get(click.event_target()) {
-            query_info_panel.0 = format!("Tile clicked: {:?}", world_tile.0);
-        }
-    }
 }
 
 /// 默认视野指示器尺寸

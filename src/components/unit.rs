@@ -3,7 +3,7 @@
 //! 定义游戏中所有单位的组件类型。
 
 use bevy::prelude::*;
-use civ_map_generator::ruleset::enums::Technology;
+use civ_map_generator::ruleset::enums::TileImprovement;
 use civ_map_generator::ruleset::enums::{Nation, Unit};
 use civ_map_generator::tile::Tile;
 
@@ -69,9 +69,47 @@ pub struct MoveRangeHighlight;
 #[derive(Component)]
 pub struct AttackTargetHighlight;
 
-/// 单位信息和攻击面板
+/// 单位信息面板容器
 #[derive(Component)]
-pub struct UnitInfoText;
+pub struct UnitInfoPanel;
+
+/// 单位信息面板中的单位图标节点
+#[derive(Component)]
+pub struct UnitIconNode;
+
+/// 单位信息面板中的单位名称文本
+#[derive(Component)]
+pub struct UnitNameText;
+
+/// 单位信息面板字段类型
+#[derive(Component)]
+pub enum UnitInfoField {
+    /// 单位名称
+    Name,
+    /// 单位类型
+    Type,
+    /// 攻击力
+    Strength,
+    /// 生命值
+    Health,
+    /// 移动力
+    Movement,
+    /// 单位图标
+    Icon,
+}
+
+/// 游戏 UI 面板字段类型
+#[derive(Component)]
+pub enum GameUiField {
+    /// 回合计数器
+    TurnCounter,
+    /// 金币
+    Gold,
+    /// 科技点数
+    Science,
+    /// 研究状态
+    ResearchStatus,
+}
 
 /// 单位操作菜单面板
 #[derive(Component)]
@@ -86,12 +124,31 @@ pub enum ActionButton {
     Attack,
     /// 建立城市（移民）
     FoundCity,
+    /// 建造农场（工人）
+    BuildFarm,
+    /// 建造矿山（工人）
+    BuildMine,
     /// 跳过回合
     SkipTurn,
-    /// 取消选择
-    Deselect,
     /// 切换同一个地块上的另一个单位
     CycleUnit,
+}
+
+/// 移动按钮激活状态标记（点击 Move 后变为激活状态，此时点击地块可移动）
+#[derive(Component)]
+pub struct MoveButtonActive;
+
+// ============ 建造系统组件 ============
+
+/// 地块设施组件 - 标记地块上已建造的设施
+#[derive(Component, Clone, Copy, Debug)]
+pub struct TileImprovementComponent(#[allow(dead_code)] pub TileImprovement);
+
+/// 城市组件 - 标记地块上的城市
+#[derive(Component, Clone, Debug)]
+pub struct City {
+    #[allow(dead_code)]
+    pub name: String,
 }
 
 // ============ 世界地图组件 ============

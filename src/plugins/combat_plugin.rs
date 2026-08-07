@@ -9,7 +9,7 @@
 use bevy::prelude::*;
 
 use crate::{
-    AttackRequestMessage, TurnManager,
+    AttackRequestMessage, TurnManager, TurnState,
     components::{Health, Movement, Owner, SelectedUnit, Strength},
 };
 
@@ -18,7 +18,8 @@ pub struct CombatPlugin;
 
 impl Plugin for CombatPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, advance_turn_system)
+        // 在每回合开始时恢复所有单位的移动力（而不是每帧）
+        app.add_systems(OnEnter(TurnState::Start), advance_turn_system)
             .add_observer(resolve_combat);
     }
 }

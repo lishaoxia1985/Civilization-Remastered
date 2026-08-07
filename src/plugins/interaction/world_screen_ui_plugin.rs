@@ -36,21 +36,8 @@ impl Plugin for WorldScreenUiPlugin {
     }
 }
 
-/// 回合计数器文本
-#[derive(Component)]
-pub struct TurnCounterText;
-
-/// 金币文本
-#[derive(Component)]
-pub struct GoldText;
-
-/// 科技点数文本
-#[derive(Component)]
-pub struct ScienceText;
-
-/// 研究状态文本
-#[derive(Component)]
-pub struct ResearchStatusText;
+/// 游戏 UI 字段类型（使用枚举统一管理）
+pub use crate::components::GameUiField;
 
 /// 结束回合按钮
 #[derive(Component)]
@@ -88,67 +75,32 @@ fn setup_game_state_ui(mut commands: Commands) {
                 Text::new("Turn: 1"),
                 default_font.clone(),
                 TextColor(Color::WHITE),
-                TurnCounterText,
+                GameUiField::TurnCounter,
             ));
             parent.spawn((
                 Text::new("Gold: 500"),
                 default_font.clone(),
                 TextColor(Color::srgb(1.0, 0.84, 0.0)),
-                GoldText,
+                GameUiField::Gold,
             ));
             parent.spawn((
                 Text::new("Science: 3/turn"),
                 default_font.clone(),
                 TextColor(Color::srgb(0.0, 0.5, 1.0)),
-                ScienceText,
+                GameUiField::Science,
             ));
             parent.spawn((
                 Text::new("Research: None"),
                 small_font.clone(),
                 TextColor(Color::srgb(0.0, 0.8, 0.8)),
-                ResearchStatusText,
+                GameUiField::ResearchStatus,
             ));
         });
 }
 
 /// 更新游戏状态 UI
 fn update_game_state_ui(
-    mut turn_text: Single<
-        &mut Text,
-        (
-            With<TurnCounterText>,
-            Without<GoldText>,
-            Without<ScienceText>,
-            Without<ResearchStatusText>,
-        ),
-    >,
-    mut gold_text: Single<
-        &mut Text,
-        (
-            With<GoldText>,
-            Without<TurnCounterText>,
-            Without<ResearchStatusText>,
-            Without<ScienceText>,
-        ),
-    >,
-    mut science_text: Single<
-        &mut Text,
-        (
-            With<ScienceText>,
-            Without<TurnCounterText>,
-            Without<GoldText>,
-            Without<ResearchStatusText>,
-        ),
-    >,
-    mut research_text: Single<
-        &mut Text,
-        (
-            With<ResearchStatusText>,
-            Without<TurnCounterText>,
-            Without<GoldText>,
-            Without<ScienceText>,
-        ),
-    >,
+    mut text_fields: Query<(&mut Text, &GameUiField)>,
     turn_manager: Res<TurnManager>,
     query_player: Single<
         (
@@ -168,21 +120,34 @@ fn update_game_state_ui(
         tech_cost_manager,
         science_per_turn,
     ) = query_player.into_inner();
-    turn_text.0 = format!(
-        "Turn: {} (Player: {})",
-        turn_manager.turn_number,
-        nation_component.0.as_str()
-    );
-    gold_text.0 = format!("Gold: {} ({:+})", 3, 3);
-    science_text.0 = format!("Science: {}/turn", science_per_turn.0);
 
-    if let Some(tech) = researching_tech.0 {
-        let research_progress = tech_progress_manager.0.get(&tech).copied().unwrap_or(0);
-        let cost_of_tech = tech_cost_manager.0.get(&tech).copied().unwrap_or(0);
-        let progress = (research_progress as f32 / cost_of_tech as f32 * 100.0) as i32;
-        research_text.0 = format!("Researching: {} ({}%)", tech.as_str(), progress.min(100));
-    } else {
-        research_text.0 = "Research: None - Click a tech to start".to_string();
+    for (mut text, field) in text_fields.iter_mut() {
+        match field {
+            GameUiField::TurnCounter => {
+                text.0 = format!(
+                    "Turn: {} (Player: {})",
+                    turn_manager.turn_number,
+                    nation_component.0.as_str()
+                );
+            }
+            GameUiField::Gold => {
+                text.0 = format!("Gold: {} ({:+})", 3, 3);
+            }
+            GameUiField::Science => {
+                text.0 = format!("Science: {}/turn", science_per_turn.0);
+            }
+            GameUiField::ResearchStatus => {
+                if let Some(tech) = researching_tech.0 {
+                    let research_progress =
+                        tech_progress_manager.0.get(&tech).copied().unwrap_or(0);
+                    let cost_of_tech = tech_cost_manager.0.get(&tech).copied().unwrap_or(0);
+                    let progress = (research_progress as f32 / cost_of_tech as f32 * 100.0) as i32;
+                    text.0 = format!("Researching: {} ({}%)", tech.as_str(), progress.min(100));
+                } else {
+                    text.0 = "Research: None - Click a tech to start".to_string();
+                }
+            }
+        }
     }
 }
 
