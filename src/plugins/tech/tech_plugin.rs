@@ -54,7 +54,7 @@ fn insert_tech_system_for_every_nation(
     mut commands: Commands,
     game_settings: Res<GameSettings>,
     map_params: Res<MapParametersRes>,
-    query_nation: Query<(Entity, Option<&Player>), With<NationComponent>>,
+    nation_query: Query<(Entity, Option<&Player>), With<NationComponent>>,
 ) {
     let start_era = game_settings.start_era;
     let start_era_index = start_era.into_usize();
@@ -95,7 +95,7 @@ fn insert_tech_system_for_every_nation(
         .map(|(tech, _)| (tech, cost_of_tech(tech, false, &game_settings, &map_params)))
         .collect();
 
-    for (entity, player) in query_nation.iter() {
+    for (entity, player) in nation_query.iter() {
         commands.entity(entity).insert((
             TechSystem,
             TechStateManager(pre_start_era_tech_state_manager.clone()),

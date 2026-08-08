@@ -32,9 +32,9 @@ impl Plugin for EraPlugin {
 fn insert_era_for_every_nation(
     mut commands: Commands,
     game_settings: Res<GameSettings>,
-    query_nation: Query<Entity, With<NationComponent>>,
+    nation_query: Query<Entity, With<NationComponent>>,
 ) {
-    for entity in query_nation.iter() {
+    for entity in nation_query.iter() {
         commands
             .entity(entity)
             .insert(EraComponent(game_settings.start_era));

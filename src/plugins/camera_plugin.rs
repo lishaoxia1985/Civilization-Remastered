@@ -193,10 +193,12 @@ fn limit_main_camera_within_map_bounds(transform: &mut Transform, map_params: &M
 ///
 /// Notes: 在小地图的瓦片上没有WorldTile组件，因此`query_world_tile`不会查询到小地图上的瓦片。
 fn show_main_camera_area(
-    query: Single<&mut Transform, (With<MainCamera>, Changed<Transform>)>,
+    mut set: ParamSet<(
+        Single<&mut Transform, (With<MainCamera>, Changed<Transform>)>,
+        Query<&mut Transform, With<WorldTile>>,
+    )>,
     tilemap: Option<Res<TileMapRes>>,
     tile_entity_map: Res<TileEntityMap>,
-    mut query_world_tile: Query<&mut Transform, (With<WorldTile>, Without<MainCamera>)>,
     mut previous_bounds: Local<Option<((i32, i32), (i32, i32))>>,
 ) {
     let Some(tile_map) = tilemap else {
@@ -228,7 +230,7 @@ fn show_main_camera_area(
         causing horizontal coordinate wrapping to fail (disconnected visual continuity).");
     }
 
-    let camera_position = query.into_inner().translation.truncate().to_array();
+    let camera_position = set.p0().into_inner().translation.truncate().to_array();
     let camera_offset_coordinate = grid.pixel_to_offset(camera_position).to_array();
 
     let (left_x, right_x) = if grid.wrap_x() {
@@ -269,7 +271,7 @@ fn show_main_camera_area(
 
     for (offset_coordinate, tile) in tiles_to_update {
         if let Some(tile_entity) = tile_entity_map.get(tile) {
-            if let Ok(mut transform) = query_world_tile.get_mut(tile_entity) {
+            if let Ok(mut transform) = set.p1().get_mut(tile_entity) {
                 let pixel_position = grid.offset_to_pixel(offset_coordinate);
                 transform.translation = Vec3::from((pixel_position[0], pixel_position[1], 0.));
             }

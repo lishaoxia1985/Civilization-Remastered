@@ -119,7 +119,7 @@ fn spawn_technology_screen(
     mut commands: Commands,
     map_params: Res<MapParametersRes>,
     materials: Res<GameAssets>,
-    query_player: Query<
+    player_query: Query<
         (
             &NationComponent,
             &ResearchingTech,
@@ -147,7 +147,7 @@ fn spawn_technology_screen(
         tech_cost_manager,
         overflow_science,
         science_per_turn,
-    )) = query_player.get(current_entity)
+    )) = player_query.get(current_entity)
     else {
         return;
     };

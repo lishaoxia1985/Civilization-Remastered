@@ -279,7 +279,7 @@ fn handle_unit_selection(
     unit_query: Query<(Entity, &Owner, &UnitComponent, &ChildOf)>,
     world_tile_query: Query<&WorldTile>,
     mut commands: Commands,
-    query_player: Query<&NationComponent, With<Player>>,
+    player_query: Query<&NationComponent, With<Player>>,
     selected_unit_query: Query<Entity, With<SelectedUnit>>,
     move_button_query: Query<Entity, With<MoveButtonActive>>,
     turn_manager: Res<TurnManager>,
@@ -292,7 +292,7 @@ fn handle_unit_selection(
     // 获取当前回合的nation实体，只在玩家回合处理选择
     let current_entity = turn_manager.current_nation_entity();
 
-    let Ok(nation_component) = query_player.get(current_entity) else {
+    let Ok(nation_component) = player_query.get(current_entity) else {
         return;
     };
 
@@ -475,7 +475,7 @@ fn handle_move_target_click(
     tile_map: Option<Res<TileMapRes>>,
     move_button_query: Query<Entity, With<MoveButtonActive>>,
     mut commands: Commands,
-    query_player: Query<&NationComponent, With<Player>>,
+    player_query: Query<&NationComponent, With<Player>>,
     turn_manager: Res<TurnManager>,
 ) {
     // 只有 Move 按钮激活时才允许点击地块移动
@@ -486,7 +486,7 @@ fn handle_move_target_click(
     // 获取当前回合的nation实体，只在玩家回合处理选择
     let current_entity = turn_manager.current_nation_entity();
 
-    let Ok(nation_component) = query_player.get(current_entity) else {
+    let Ok(nation_component) = player_query.get(current_entity) else {
         return;
     };
 
@@ -694,7 +694,6 @@ fn handle_unit_action_click(
     mut color_materials: ResMut<Assets<ColorMaterial>>,
     tile_entity_map: Res<TileEntityMap>,
     move_range_query: Query<Entity, With<MoveRangeHighlight>>,
-    attack_target_query: Query<Entity, With<AttackTargetHighlight>>,
     move_button_query: Query<Entity, With<MoveButtonActive>>,
 ) {
     for (interaction, action, button_entity) in &action_button_query {
@@ -1079,8 +1078,6 @@ fn update_unit_info_panel(
         ),
         With<SelectedUnit>,
     >,
-    unit_query: Query<(&UnitComponent, &Owner, &Strength, &Movement)>,
-    tile_map: Option<Res<TileMapRes>>,
     mut materials: ResMut<Assets<ColorReplaceMaterial>>,
 ) {
     if let Ok((unit_component, owner, health, strength, movement, material_handle)) =

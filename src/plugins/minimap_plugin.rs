@@ -73,7 +73,7 @@ fn setup_minimap(
     mut commands: Commands,
     tile_map: Option<Res<TileMapRes>>,
     mut images: ResMut<Assets<Image>>,
-    query_main_camera: Single<&Camera, With<MainCamera>>,
+    main_camera_query: Single<&Camera, With<MainCamera>>,
 ) {
     let Some(tile_map) = tile_map else {
         return;
@@ -129,7 +129,7 @@ fn setup_minimap(
     let [world_grid_width, world_grid_height] =
         [world_grid_center[0] * 2.0, world_grid_center[1] * 2.0];
 
-    let logical_viewport_size = query_main_camera
+    let logical_viewport_size = main_camera_query
         .into_inner()
         .logical_viewport_size()
         .unwrap();
@@ -285,12 +285,11 @@ fn spawn_tile_map_for_minimap(
 /// 小地图点击处理
 fn minimap_click_handler(
     click: On<Pointer<Click>>,
-    query_main_camera: Single<(&mut Transform, &Projection), With<MainCamera>>,
-    query_minimap_indicator: Single<&mut Node, With<FieldOfViewIndicator>>,
-    mut query_auxiliary_fov_indicators: Query<
-        &mut Node,
-        (With<AuxiliaryFovIndicator>, Without<FieldOfViewIndicator>),
-    >,
+    mut set: ParamSet<(
+        Single<&mut Node, With<FieldOfViewIndicator>>,
+        Query<&mut Node, With<AuxiliaryFovIndicator>>,
+    )>,
+    main_camera_query: Single<(&mut Transform, &Projection), With<MainCamera>>,
     tile_map: Option<Res<TileMapRes>>,
     default_fov_indicator_size: Res<DefaultFovIndicatorSize>,
 ) {
@@ -306,7 +305,7 @@ fn minimap_click_handler(
     let width = grid.center()[0] * 2.0;
     let height = grid.center()[1] * 2.0;
 
-    let (mut camera_transform, projection) = query_main_camera.into_inner();
+    let (mut camera_transform, projection) = main_camera_query.into_inner();
 
     if matches!(click.button, PointerButton::Primary)
         && let Projection::Orthographic(orthographic) = projection
@@ -319,7 +318,7 @@ fn minimap_click_handler(
         camera_transform.translation.x = normalized_drag_position[0] * width;
         camera_transform.translation.y = normalized_drag_position[1] * height;
 
-        let mut minimap_indicator_node = query_minimap_indicator.into_inner();
+        let mut minimap_indicator_node = set.p0().into_inner();
         minimap_indicator_node.left =
             Val::Px(normalized_drag_position[0] * MINIMAP_WIDTH - fov_width / 2.0 * scale);
         minimap_indicator_node.bottom =
@@ -327,24 +326,21 @@ fn minimap_click_handler(
         minimap_indicator_node.width = Val::Px(fov_width * scale);
         minimap_indicator_node.height = Val::Px(fov_height * scale);
 
-        query_auxiliary_fov_indicators
-            .iter_mut()
-            .for_each(|mut node| {
-                node.width = Val::Px(fov_width * scale);
-                node.height = Val::Px(fov_height * scale);
-            });
+        set.p1().iter_mut().for_each(|mut node| {
+            node.width = Val::Px(fov_width * scale);
+            node.height = Val::Px(fov_height * scale);
+        });
     }
 }
 
-/// 小地图视野更新
+/// 主镜头移动或缩放时小地图视野更新
 fn minimap_fov_update(
-    query_main_camera: Single<(&Transform, &Projection), (Changed<Camera>, With<MainCamera>)>,
+    main_camera_query: Single<(&Transform, &Projection), (Changed<Camera>, With<MainCamera>)>,
     tile_map: Option<Res<TileMapRes>>,
-    query_minimap_indicator: Single<&mut Node, With<FieldOfViewIndicator>>,
-    mut query_auxiliary_fov_indicators: Query<
-        &mut Node,
-        (With<AuxiliaryFovIndicator>, Without<FieldOfViewIndicator>),
-    >,
+    mut set: ParamSet<(
+        Single<&mut Node, With<FieldOfViewIndicator>>,
+        Query<&mut Node, With<AuxiliaryFovIndicator>>,
+    )>,
     default_fov_indicator_size: Res<DefaultFovIndicatorSize>,
 ) {
     let Some(tile_map) = tile_map else {
@@ -356,7 +352,7 @@ fn minimap_fov_update(
     let width = grid.center()[0] * 2.0;
     let height = grid.center()[1] * 2.0;
 
-    let (camera_transform, projection) = query_main_camera.into_inner();
+    let (camera_transform, projection) = main_camera_query.into_inner();
 
     let scale = if let Projection::Orthographic(orthographic) = projection {
         orthographic.scale
@@ -389,7 +385,7 @@ fn minimap_fov_update(
     let pixel_position = grid.offset_to_pixel(offset_coordinate);
     let normalized_drag_position = Vec2::new(pixel_position[0] / width, pixel_position[1] / height);
 
-    let mut minimap_indicator_node = query_minimap_indicator.into_inner();
+    let mut minimap_indicator_node = set.p0().into_inner();
     minimap_indicator_node.left =
         Val::Px(normalized_drag_position[0] * MINIMAP_WIDTH - fov_width / 2.0 * scale);
     minimap_indicator_node.bottom =
@@ -397,12 +393,10 @@ fn minimap_fov_update(
     minimap_indicator_node.width = Val::Px(fov_width * scale);
     minimap_indicator_node.height = Val::Px(fov_height * scale);
 
-    query_auxiliary_fov_indicators
-        .iter_mut()
-        .for_each(|mut node| {
-            node.width = Val::Px(fov_width * scale);
-            node.height = Val::Px(fov_height * scale);
-        });
+    set.p1().iter_mut().for_each(|mut node| {
+        node.width = Val::Px(fov_width * scale);
+        node.height = Val::Px(fov_height * scale);
+    });
 }
 
 /// 信息面板组件
