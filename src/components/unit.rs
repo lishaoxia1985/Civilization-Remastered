@@ -98,19 +98,6 @@ pub enum UnitInfoField {
     Icon,
 }
 
-/// 游戏 UI 面板字段类型
-#[derive(Component)]
-pub enum GameUiField {
-    /// 回合计数器
-    TurnCounter,
-    /// 金币
-    Gold,
-    /// 科技点数
-    Science,
-    /// 研究状态
-    ResearchStatus,
-}
-
 /// 单位操作菜单面板
 #[derive(Component)]
 pub struct UnitActionMenu;

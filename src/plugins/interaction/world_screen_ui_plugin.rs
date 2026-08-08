@@ -11,6 +11,22 @@ use crate::{
     plugins::tech::{ResearchingTech, TechCostManager, TechProgressManager},
 };
 
+/// 回合计数器文本
+#[derive(Component)]
+struct TurnCounterText;
+
+/// 金币文本
+#[derive(Component)]
+struct GoldText;
+
+/// 科技点数文本
+#[derive(Component)]
+struct ScienceText;
+
+/// 研究状态文本
+#[derive(Component)]
+struct ResearchStatusText;
+
 /// 游戏状态插件
 pub struct WorldScreenUiPlugin;
 
@@ -27,7 +43,10 @@ impl Plugin for WorldScreenUiPlugin {
         .add_systems(
             Update,
             (
-                update_game_state_ui,
+                update_turn_counter,
+                update_gold_display,
+                update_science_display,
+                update_research_status,
                 update_end_turn_button,
                 update_tech_tree_button,
             )
@@ -35,9 +54,6 @@ impl Plugin for WorldScreenUiPlugin {
         );
     }
 }
-
-/// 游戏 UI 字段类型（使用枚举统一管理）
-pub use crate::components::GameUiField;
 
 /// 结束回合按钮
 #[derive(Component)]
@@ -75,79 +91,69 @@ fn setup_game_state_ui(mut commands: Commands) {
                 Text::new("Turn: 1"),
                 default_font.clone(),
                 TextColor(Color::WHITE),
-                GameUiField::TurnCounter,
+                TurnCounterText,
             ));
             parent.spawn((
                 Text::new("Gold: 500"),
                 default_font.clone(),
                 TextColor(Color::srgb(1.0, 0.84, 0.0)),
-                GameUiField::Gold,
+                GoldText,
             ));
             parent.spawn((
                 Text::new("Science: 3/turn"),
                 default_font.clone(),
                 TextColor(Color::srgb(0.0, 0.5, 1.0)),
-                GameUiField::Science,
+                ScienceText,
             ));
             parent.spawn((
                 Text::new("Research: None"),
                 small_font.clone(),
                 TextColor(Color::srgb(0.0, 0.8, 0.8)),
-                GameUiField::ResearchStatus,
+                ResearchStatusText,
             ));
         });
 }
 
-/// 更新游戏状态 UI
-fn update_game_state_ui(
-    mut text_fields: Query<(&mut Text, &GameUiField)>,
+/// 更新回合计数器
+fn update_turn_counter(
+    mut text: Single<&mut Text, With<TurnCounterText>>,
     turn_manager: Res<TurnManager>,
-    query_player: Single<
-        (
-            &NationComponent,
-            &ResearchingTech,
-            &TechProgressManager,
-            &TechCostManager,
-            &SciencePerTurn,
-        ),
-        With<Player>,
-    >,
+    query_player: Single<&NationComponent, With<Player>>,
 ) {
-    let (
-        nation_component,
-        researching_tech,
-        tech_progress_manager,
-        tech_cost_manager,
-        science_per_turn,
-    ) = query_player.into_inner();
+    let nation_component = query_player.into_inner();
+    text.0 = format!(
+        "Turn: {} (Player: {})",
+        turn_manager.turn_number,
+        nation_component.0.as_str()
+    );
+}
 
-    for (mut text, field) in text_fields.iter_mut() {
-        match field {
-            GameUiField::TurnCounter => {
-                text.0 = format!(
-                    "Turn: {} (Player: {})",
-                    turn_manager.turn_number,
-                    nation_component.0.as_str()
-                );
-            }
-            GameUiField::Gold => {
-                text.0 = format!("Gold: {} ({:+})", 3, 3);
-            }
-            GameUiField::Science => {
-                text.0 = format!("Science: {}/turn", science_per_turn.0);
-            }
-            GameUiField::ResearchStatus => {
-                if let Some(tech) = researching_tech.0 {
-                    let research_progress =
-                        tech_progress_manager.0.get(&tech).copied().unwrap_or(0);
-                    let cost_of_tech = tech_cost_manager.0.get(&tech).copied().unwrap_or(0);
-                    let progress = (research_progress as f32 / cost_of_tech as f32 * 100.0) as i32;
-                    text.0 = format!("Researching: {} ({}%)", tech.as_str(), progress.min(100));
-                } else {
-                    text.0 = "Research: None - Click a tech to start".to_string();
-                }
-            }
-        }
+/// 更新金币显示
+fn update_gold_display(mut text: Single<&mut Text, With<GoldText>>) {
+    text.0 = format!("Gold: {} ({:+})", 3, 3);
+}
+
+/// 更新科技点数显示
+fn update_science_display(
+    mut text: Single<&mut Text, With<ScienceText>>,
+    science_per_turn: Single<&SciencePerTurn, With<Player>>,
+) {
+    text.0 = format!("Science: {}/turn", science_per_turn.into_inner().0);
+}
+
+/// 更新研究状态
+fn update_research_status(
+    mut text: Single<&mut Text, With<ResearchStatusText>>,
+    query_player: Single<(&ResearchingTech, &TechProgressManager, &TechCostManager), With<Player>>,
+) {
+    let (researching_tech, tech_progress_manager, tech_cost_manager) = query_player.into_inner();
+    if let Some(tech) = researching_tech.0 {
+        let research_progress = tech_progress_manager.0.get(&tech).copied().unwrap_or(0);
+        let cost_of_tech = tech_cost_manager.0.get(&tech).copied().unwrap_or(0);
+        let progress = (research_progress as f32 / cost_of_tech as f32 * 100.0) as i32;
+        text.0 = format!("Researching: {} ({}%)", tech.as_str(), progress.min(100));
+    } else {
+        text.0 = "Research: None - Click a tech to start".to_string();
     }
 }
 
