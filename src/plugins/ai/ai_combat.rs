@@ -19,7 +19,7 @@ impl Plugin for AiCombatPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             Update,
-            (ai_attack_system,).run_if(in_state(TurnPhase::EnemyTurn)),
+            (ai_attack_system,).run_if(in_state(TurnPhase::Enemy)),
         );
     }
 }

@@ -23,7 +23,7 @@ use enum_map::EnumMap;
 use std::collections::HashMap;
 
 use crate::{
-    NationComponent, Player, SciencePerTurn, ScreenState,
+    NationComponent, Player, SciencePerTurn, ScreenState, TurnManager,
     assets::GameAssets,
     plugins::tech::{
         OverflowScience, ResearchingTech, TechCostManager, TechProgressManager, TechState,
@@ -73,9 +73,19 @@ impl Plugin for TechTreeScreenPlugin {
 fn handle_tech_click_system(
     tech_button_query: Query<(&Interaction, &TechButton)>,
     close_button_query: Query<(&Interaction, &CloseTechTreeButton)>,
-    query_player: Single<(&mut ResearchingTech, &TechStateManager), With<Player>>,
+    mut player_query: Query<(&mut ResearchingTech, &TechStateManager), With<Player>>,
+    turn_manager: Res<TurnManager>,
     mut next_state: ResMut<NextState<ScreenState>>,
 ) {
+    // 只在玩家回合处理科技按钮点击
+    // 获取当前回合的nation实体
+    let current_entity = turn_manager.current_nation_entity();
+
+    let Ok((mut researching_tech, tech_state_manager)) = player_query.get_mut(current_entity)
+    else {
+        return;
+    };
+
     // 处理关闭按钮
     for (interaction, _) in &close_button_query {
         if *interaction == Interaction::Pressed {
@@ -83,8 +93,6 @@ fn handle_tech_click_system(
             return;
         }
     }
-
-    let (mut researching_tech, tech_state_manager) = query_player.into_inner();
 
     // 处理科技按钮
     for (interaction, tech_button) in &tech_button_query {
@@ -111,7 +119,7 @@ fn spawn_technology_screen(
     mut commands: Commands,
     map_params: Res<MapParametersRes>,
     materials: Res<GameAssets>,
-    query_player: Single<
+    query_player: Query<
         (
             &NationComponent,
             &ResearchingTech,
@@ -123,10 +131,15 @@ fn spawn_technology_screen(
         ),
         With<Player>,
     >,
+    turn_manager: Res<TurnManager>,
 ) {
     let ruleset = &map_params.0.ruleset;
 
-    let (
+    // 只在实际玩家回合时能打开科技树
+    // 获取当前回合的nation实体
+    let current_entity = turn_manager.current_nation_entity();
+
+    let Ok((
         _player_nation,
         researching_tech,
         tech_progress,
@@ -134,7 +147,10 @@ fn spawn_technology_screen(
         tech_cost_manager,
         overflow_science,
         science_per_turn,
-    ) = query_player.into_inner();
+    )) = query_player.get(current_entity)
+    else {
+        return;
+    };
 
     let tech_and_turns: EnumMap<Technology, String> = EnumMap::from_fn(|tech| {
         turns_to_tech(
@@ -539,7 +555,8 @@ fn technology_button(
     )
 }
 
-/// 创建科技解锁物品列表
+/// 创建科技解锁项目列表
+/// TODO: 可能需要文明独有的单位来替换通用的建筑、单位等等，当前所有文明均使用通用项目
 fn tech_unlock_item_list(
     technology: Technology,
     ruleset: &Ruleset,

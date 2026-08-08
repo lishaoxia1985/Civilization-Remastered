@@ -9,7 +9,7 @@ use civ_map_generator::{
 };
 
 use crate::{
-    AppState, NationComponent, Player, ScreenState,
+    AppState, NationComponent, Player, ScreenState, TurnManager, TurnPhase,
     components::{MainCamera, WorldTile},
     resources::{MapParametersRes, TileEntityMap, TileMapRes},
 };
@@ -30,7 +30,7 @@ impl Plugin for CameraPlugin {
                 )
                     .run_if(in_state(ScreenState::WorldMap)),
             )
-            .add_systems(OnEnter(AppState::GameStart), move_camera_to_player_center);
+            .add_systems(OnEnter(TurnPhase::Player), move_camera_to_player_center);
     }
 }
 
@@ -128,18 +128,40 @@ fn zoom_main_camera_system(
     }
 }
 
-/// 将相机移动到玩家起始位置
+/// 将主相机移动到玩家起始位置
+///
+/// TODO: 将主相机移动到玩家起始位置,后续可能修改为玩家的首都位置
+///       另外如果游戏中只有一个玩家时，可能不需要移动主镜头
 fn move_camera_to_player_center(
     mut query: Query<&mut Transform, With<MainCamera>>,
     tile_map: Res<TileMapRes>,
-    query_player: Single<&NationComponent, With<Player>>,
+    player_query: Query<&NationComponent, With<Player>>,
+    turn_manager: Option<Res<TurnManager>>,
 ) {
+    let Some(turn_manager) = turn_manager else {
+        return;
+    };
+
+    // 只在实际玩家回合时移动相机
+    // 获取当前回合的nation实体
+    let current_entity = turn_manager.current_nation_entity();
+
+    // 如果当前回合的nation实体是玩家，获得玩家国家；否则退出
+    let Ok(player) = player_query.get(current_entity) else {
+        return;
+    };
+
+    let player_nation = player.0;
+
     let grid = tile_map.0.world_grid.grid;
-    let player = query_player.into_inner().0;
-    let tile_and_civ = &tile_map.0.starting_tile_and_civilization;
-    let tile = tile_and_civ
+
+    // TODO: 获取玩家起始位置,后续可能修改为玩家的首都位置
+    //       另外如果游戏中只有一个玩家时，可能不需要移动主镜头
+    let tile = tile_map
+        .0
+        .starting_tile_and_civilization
         .iter()
-        .find(|&(_, &c)| c == player)
+        .find(|&(_, &c)| c == player_nation)
         .map(|(&tile, _)| tile)
         .unwrap();
 

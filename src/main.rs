@@ -55,18 +55,18 @@ pub enum ScreenState {
 /// Turn phase state, used to control player interaction permissions and system execution conditions.
 ///
 /// This state determines which phases in the current game loop allow player operations
-/// (where the player can interact) and which do not. By distinguishing between `PlayTurn`
-/// and `EnemyTurn`, you can precisely control when different system sets run:
-/// - Some systems (e.g., player input handling, UI interaction) only run during the `PlayTurn` phase.
-/// - Some systems (e.g., enemy AI logic) only run during the `EnemyTurn` phase.
+/// (where the player can interact) and which do not. By distinguishing between `Player`
+/// and `Enemy`, you can precisely control when different system sets run:
+/// - Some systems (e.g., player input handling, UI interaction) only run during the `Player` phase.
+/// - Some systems (e.g., enemy AI logic) only run during the `Enemy` phase.
 #[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Hash, SubStates)]
 #[source(AppState = AppState::GameStart)]
 #[states(scoped_entities)]
 pub enum TurnPhase {
     #[default]
     Uninitialized,
-    PlayTurn,
-    EnemyTurn,
+    Player,
+    Enemy,
 }
 
 #[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Hash, SubStates)]
@@ -151,7 +151,13 @@ fn insert_nations(mut commands: Commands, map_params: Res<MapParametersRes>) {
     let player_idx = (map_params.0.seed % civ_list.len() as u64) as usize;
     let player_nation = civ_list[player_idx];
 
-    commands.spawn((NationComponent(player_nation), Player, SciencePerTurn(3)));
+    commands.spawn((
+        NationComponent(player_nation),
+        Player,
+        SciencePerTurn(3),
+        GoldIncome(0),
+        GoldPerTurn(10),
+    ));
 
     // 其余为敌方文明
     let enemy_nations: Vec<Nation> = civ_list
@@ -161,7 +167,13 @@ fn insert_nations(mut commands: Commands, map_params: Res<MapParametersRes>) {
         .collect();
 
     for &nation in enemy_nations.iter() {
-        commands.spawn((NationComponent(nation), Enemy, SciencePerTurn(3)));
+        commands.spawn((
+            NationComponent(nation),
+            Enemy,
+            SciencePerTurn(3),
+            GoldIncome(0),
+            GoldPerTurn(10),
+        ));
     }
 }
 
@@ -176,6 +188,19 @@ pub struct Enemy;
 
 #[derive(Component)]
 pub struct SciencePerTurn(pub i32);
+
+/// 金币收入
+///
+/// TODO: 未来可能会修改该组件名，例如修改为国库，
+///       同时添加必须组件GoldPerTurn，表示每一回合的Gold
+#[derive(Component)]
+pub struct GoldIncome(pub i32);
+
+/// 每回合获取的金币数
+///
+/// TODO: 我们还未实现相关逻辑
+#[derive(Component)]
+pub struct GoldPerTurn(pub i32);
 
 #[derive(Resource)]
 pub struct TurnManager {

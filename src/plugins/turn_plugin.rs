@@ -15,8 +15,8 @@ impl Plugin for TurnPlugin {
                 (
                     ResolutionPhase::Science,
                     ResolutionPhase::Production,
-                    ResolutionPhase::AiSelectTech.run_if(in_state(TurnPhase::EnemyTurn)),
-                    ResolutionPhase::AutoEndTurn.run_if(in_state(TurnPhase::EnemyTurn)),
+                    ResolutionPhase::AiSelectTech.run_if(in_state(TurnPhase::Enemy)),
+                    ResolutionPhase::AutoEndTurn.run_if(in_state(TurnPhase::Enemy)),
                 )
                     .chain()
                     .run_if(in_state(AppState::GameStart)),
@@ -60,9 +60,9 @@ fn initialize_turn_system(
     // 以此判断是否为玩家国家
     let (_, player) = nation_query.get(first_entity).expect("实体应存在于查询中");
     let phase = if player.is_some() {
-        TurnPhase::PlayTurn
+        TurnPhase::Player
     } else {
-        TurnPhase::EnemyTurn
+        TurnPhase::Enemy
     };
     next_turn_phase.set(phase);
 }
@@ -73,7 +73,7 @@ fn auto_end_enemy_turn(
     manager: Res<TurnManager>,
 ) {
     // 只在敌人回合时自动发送结束消息
-    if *current_phase.get() == TurnPhase::EnemyTurn {
+    if *current_phase.get() == TurnPhase::Enemy {
         let entity = manager.current_nation_entity();
         next_state.set(TurnState::End);
         info!("Auto-ending enemy turn for {}", entity);
@@ -82,21 +82,21 @@ fn auto_end_enemy_turn(
 
 fn advance_turn_queue(
     mut manager: ResMut<TurnManager>,
-    player_query: Single<Entity, With<Player>>,
+    player_query: Query<Entity, With<Player>>,
     mut next_turn_state: ResMut<NextState<TurnState>>,
     mut next_turn_phase: ResMut<NextState<TurnPhase>>,
 ) {
-    let player_entity = player_query.into_inner();
     if !manager.turn_queue.is_empty() {
         manager.current_index = (manager.current_index + 1) % manager.turn_queue.len();
 
         // 上一个玩家已经结束回合，获取当前玩家并进入当前玩家的回合
         let entity = manager.turn_queue[manager.current_index];
 
-        if player_entity == entity {
-            next_turn_phase.set(TurnPhase::PlayTurn);
+        // 如果当前Nation是玩家，则进入玩家回合
+        if player_query.get(entity).is_ok() {
+            next_turn_phase.set(TurnPhase::Player);
         } else {
-            next_turn_phase.set(TurnPhase::EnemyTurn);
+            next_turn_phase.set(TurnPhase::Enemy);
         }
 
         next_turn_state.set(TurnState::Start);

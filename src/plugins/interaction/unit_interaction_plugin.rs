@@ -17,7 +17,7 @@ use civ_map_generator::{
 
 use crate::{
     AppState, BuildRequestMessage, FoundCityRequestMessage, MoveRequestMessage, NationComponent,
-    Player, ScreenState,
+    Player, ScreenState, TurnManager,
     assets::ColorReplaceMaterial,
     components::*,
     resources::{TileEntityMap, TileMapRes},
@@ -276,24 +276,29 @@ fn setup_unit_action_menu(mut commands: Commands) {
 /// 选中后弹出行动菜单，不自动显示移动范围（需点击 Move 按钮）
 fn handle_unit_selection(
     mut click_events: MessageReader<Pointer<Click>>,
-    unit_query: Query<(Entity, &Owner, &UnitComponent, &ChildOf, &Movement)>,
+    unit_query: Query<(Entity, &Owner, &UnitComponent, &ChildOf)>,
     world_tile_query: Query<&WorldTile>,
     mut commands: Commands,
-    query_player: Single<&NationComponent, With<Player>>,
+    query_player: Query<&NationComponent, With<Player>>,
     selected_unit_query: Query<Entity, With<SelectedUnit>>,
     move_button_query: Query<Entity, With<MoveButtonActive>>,
+    turn_manager: Res<TurnManager>,
 ) {
     // 如果 Move 按钮激活，点击地块是移动操作，不处理选择
     if move_button_query.iter().next().is_some() {
         return;
     }
 
-    let nation_component = query_player.into_inner();
+    // 获取当前回合的nation实体，只在玩家回合处理选择
+    let current_entity = turn_manager.current_nation_entity();
+
+    let Ok(nation_component) = query_player.get(current_entity) else {
+        return;
+    };
+
     for click in click_events.read() {
         // 如果点击的是单位实体本身，直接选中
-        if let Ok((unit_entity, owner, _, child_of, movement)) =
-            unit_query.get(click.event_target())
-        {
+        if let Ok((unit_entity, owner, ..)) = unit_query.get(click.event_target()) {
             let is_players_unit = match owner {
                 Owner::Civilization(nation) => *nation == nation_component.0,
                 Owner::CityState(_) => false,
@@ -322,7 +327,7 @@ fn handle_unit_selection(
         };
 
         let mut units_on_tile: Vec<(Entity, &UnitComponent)> = Vec::new();
-        for (entity, owner, unit_component, child_of, _) in unit_query.iter() {
+        for (entity, owner, unit_component, child_of) in unit_query.iter() {
             let is_players_unit = match owner {
                 Owner::Civilization(nation) => *nation == nation_component.0,
                 Owner::CityState(_) => false,
@@ -470,12 +475,20 @@ fn handle_move_target_click(
     tile_map: Option<Res<TileMapRes>>,
     move_button_query: Query<Entity, With<MoveButtonActive>>,
     mut commands: Commands,
-    query_player: Single<&NationComponent, With<Player>>,
+    query_player: Query<&NationComponent, With<Player>>,
+    turn_manager: Res<TurnManager>,
 ) {
     // 只有 Move 按钮激活时才允许点击地块移动
     if move_button_query.iter().next().is_none() {
         return;
     }
+
+    // 获取当前回合的nation实体，只在玩家回合处理选择
+    let current_entity = turn_manager.current_nation_entity();
+
+    let Ok(nation_component) = query_player.get(current_entity) else {
+        return;
+    };
 
     let Ok((unit_entity, unit_child_of, unit_component, unit_owner, movement)) =
         selected_unit_query.single()
@@ -498,8 +511,6 @@ fn handle_move_target_click(
     };
     let grid = tile_map.world_grid.grid;
     let reachable = calculate_move_range(unit_tile.0, movement.current, tile_map, grid);
-
-    let nation_component = query_player.into_inner();
 
     for click in click_events.read() {
         // 获取点击的目标地块实体

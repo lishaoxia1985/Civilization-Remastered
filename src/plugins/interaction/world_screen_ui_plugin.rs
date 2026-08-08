@@ -6,8 +6,8 @@ use bevy::prelude::*;
 use civ_map_generator::ruleset::enums::EnumStr;
 
 use crate::{
-    AppState, NationComponent, Player, SciencePerTurn, ScreenState, TurnManager, TurnPhase,
-    TurnState,
+    AppState, GoldIncome, GoldPerTurn, NationComponent, Player, SciencePerTurn, ScreenState,
+    TurnManager, TurnPhase, TurnState,
     plugins::tech::{ResearchingTech, TechCostManager, TechProgressManager},
 };
 
@@ -88,19 +88,19 @@ fn setup_game_state_ui(mut commands: Commands) {
         ))
         .with_children(|parent| {
             parent.spawn((
-                Text::new("Turn: 1"),
+                Text::new("Turn: 0"),
                 default_font.clone(),
                 TextColor(Color::WHITE),
                 TurnCounterText,
             ));
             parent.spawn((
-                Text::new("Gold: 500"),
+                Text::new("Gold: 0"),
                 default_font.clone(),
                 TextColor(Color::srgb(1.0, 0.84, 0.0)),
                 GoldText,
             ));
             parent.spawn((
-                Text::new("Science: 3/turn"),
+                Text::new("Science: 0/turn"),
                 default_font.clone(),
                 TextColor(Color::srgb(0.0, 0.5, 1.0)),
                 ScienceText,
@@ -118,9 +118,15 @@ fn setup_game_state_ui(mut commands: Commands) {
 fn update_turn_counter(
     mut text: Single<&mut Text, With<TurnCounterText>>,
     turn_manager: Res<TurnManager>,
-    query_player: Single<&NationComponent, With<Player>>,
+    player_query: Query<&NationComponent, With<Player>>,
 ) {
-    let nation_component = query_player.into_inner();
+    // 获取当前回合的nation实体
+    let current_entity = turn_manager.current_nation_entity();
+
+    let Ok(nation_component) = player_query.get(current_entity) else {
+        return;
+    };
+
     text.0 = format!(
         "Turn: {} (Player: {})",
         turn_manager.turn_number,
@@ -129,24 +135,52 @@ fn update_turn_counter(
 }
 
 /// 更新金币显示
-fn update_gold_display(mut text: Single<&mut Text, With<GoldText>>) {
-    text.0 = format!("Gold: {} ({:+})", 3, 3);
+/// TODO: 需通过查询获得每回合金
+fn update_gold_display(
+    mut text: Single<&mut Text, With<GoldText>>,
+    turn_manager: Res<TurnManager>,
+    gold_query: Query<(&GoldIncome, &GoldPerTurn), With<Player>>,
+) {
+    // 获取当前回合的nation实体
+    let current_entity = turn_manager.current_nation_entity();
+    let Ok((gold_income, gold_per_turn)) = gold_query.get(current_entity) else {
+        return;
+    };
+
+    text.0 = format!("Gold: {} ({:+})", gold_income.0, gold_per_turn.0);
 }
 
 /// 更新科技点数显示
 fn update_science_display(
     mut text: Single<&mut Text, With<ScienceText>>,
-    science_per_turn: Single<&SciencePerTurn, With<Player>>,
+    turn_manager: Res<TurnManager>,
+    science_per_turn_query: Query<&SciencePerTurn, With<Player>>,
 ) {
-    text.0 = format!("Science: {}/turn", science_per_turn.into_inner().0);
+    // 获取当前回合的nation实体
+    let current_entity = turn_manager.current_nation_entity();
+
+    let Ok(science_per_turn) = science_per_turn_query.get(current_entity) else {
+        return;
+    };
+
+    text.0 = format!("Science: {}/turn", science_per_turn.0);
 }
 
 /// 更新研究状态
 fn update_research_status(
     mut text: Single<&mut Text, With<ResearchStatusText>>,
-    query_player: Single<(&ResearchingTech, &TechProgressManager, &TechCostManager), With<Player>>,
+    turn_manager: Res<TurnManager>,
+    player_query: Query<(&ResearchingTech, &TechProgressManager, &TechCostManager), With<Player>>,
 ) {
-    let (researching_tech, tech_progress_manager, tech_cost_manager) = query_player.into_inner();
+    // 获取当前回合的nation实体
+    let current_entity = turn_manager.current_nation_entity();
+
+    let Ok((researching_tech, tech_progress_manager, tech_cost_manager)) =
+        player_query.get(current_entity)
+    else {
+        return;
+    };
+
     if let Some(tech) = researching_tech.0 {
         let research_progress = tech_progress_manager.0.get(&tech).copied().unwrap_or(0);
         let cost_of_tech = tech_cost_manager.0.get(&tech).copied().unwrap_or(0);
@@ -191,15 +225,17 @@ fn setup_end_turn_button(mut commands: Commands) {
 /// 结束回合点击处理,只针对Player
 fn end_turn_click(
     _click: On<Pointer<Click>>,
-    query_player: Single<(Entity, &ResearchingTech), With<Player>>,
+    player_query: Query<(Entity, &ResearchingTech), With<Player>>,
     turn_manager: Res<TurnManager>,
     mut next_turn_state: ResMut<NextState<TurnState>>,
 ) {
-    let (entity, researching_tech) = query_player.into_inner();
-    if turn_manager.turn_queue[turn_manager.current_index] != entity {
-        info!("当前不是你的回合");
+    // 获取当前回合的nation实体
+    let current_entity = turn_manager.current_nation_entity();
+
+    let Ok((entity, researching_tech)) = player_query.get(current_entity) else {
         return;
-    }
+    };
+
     if researching_tech.0.is_none() {
         println!("当前没有正在研究的科技，请选择一项科技进行研究。");
         return;
@@ -213,7 +249,7 @@ fn update_end_turn_button(
     turn_phase: Res<State<TurnPhase>>,
 ) {
     let mut visibility = visibility.into_inner();
-    if turn_phase.get() == &TurnPhase::PlayTurn {
+    if turn_phase.get() == &TurnPhase::Player {
         *visibility = Visibility::Visible;
     } else {
         *visibility = Visibility::Hidden;
@@ -259,7 +295,7 @@ fn update_tech_tree_button(
     turn_phase: Res<State<TurnPhase>>,
 ) {
     let mut visibility = visibility.into_inner();
-    if turn_phase.get() == &TurnPhase::PlayTurn {
+    if turn_phase.get() == &TurnPhase::Player {
         *visibility = Visibility::Visible;
     } else {
         *visibility = Visibility::Hidden;
