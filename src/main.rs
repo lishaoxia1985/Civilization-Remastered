@@ -6,7 +6,8 @@
 use std::sync::Arc;
 
 use bevy::{
-    input_focus::InputFocus, prelude::*, sprite_render::Material2dPlugin, window::WindowResolution,
+    input_focus::InputFocus, prelude::*, sprite_render::Material2dPlugin,
+    ui_render::UiMaterialPlugin, window::WindowResolution,
 };
 
 use civ_map_generator::{
@@ -17,7 +18,7 @@ use civ_map_generator::{
 };
 
 use crate::{
-    assets::ColorReplaceMaterial,
+    assets::{ColorReplaceMaterial, RingProgressMaterial},
     plugins::{
         AiCombatPlugin, AssetLoadingPlugin, CameraPlugin, CombatPlugin, ConstructionPlugin,
         EraPlugin, MapPlugin, MinimapPlugin, MovementPlugin, TechTreeScreenPlugin, TurnPlugin,
@@ -110,6 +111,7 @@ fn main() {
         }))
         .add_plugins(MeshPickingPlugin)
         .add_plugins(Material2dPlugin::<ColorReplaceMaterial>::default())
+        .add_plugins(UiMaterialPlugin::<RingProgressMaterial>::default())
         // 注册游戏插件
         .add_plugins(AssetLoadingPlugin)
         .add_plugins(CameraPlugin)

@@ -3,9 +3,7 @@
 //! 定义游戏中所有单位的组件类型。
 
 use bevy::prelude::*;
-use civ_map_generator::ruleset::enums::TileImprovement;
-use civ_map_generator::ruleset::enums::{Nation, Unit};
-use civ_map_generator::tile::Tile;
+use civ_map_generator::{ruleset::enums::{Nation, TileImprovement, Unit}, tile::Tile};
 
 /// 单位所属者
 #[derive(Component, Clone, Copy, Debug)]
@@ -50,6 +48,15 @@ pub struct Movement {
 /// 单位晋升
 #[derive(Component, Clone, Debug)]
 pub struct Promotion(Vec<String>);
+
+/// 单位经验值
+#[derive(Component, Clone, Copy, Debug)]
+pub struct Experience {
+    /// 当前经验值
+    pub current: u32,
+    /// 升级所需经验值
+    pub max: u32,
+}
 
 // ============ 选择系统组件 ============
 

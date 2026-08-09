@@ -19,7 +19,7 @@ use civ_map_generator::{
 use crate::{
     AppState,
     assets::{ColorReplaceMaterial, GameAssets, hex_mesh, line_mesh},
-    components::{Health, Movement, Owner, Strength, UnitComponent, WorldTile},
+    components::{Experience, Health, Movement, Owner, Strength, UnitComponent, WorldTile},
     resources::{MapGeneratorTask, MapParametersRes, TileEntityMap, TileMapRes},
 };
 
@@ -351,6 +351,10 @@ fn unit_bundle(
         strength,
         health,
         movement,
+        Experience {
+            current: 0,
+            max: 100,
+        },
         Mesh2d(inner_rectangle.clone()),
         MeshMaterial2d(custom_materials.add(ColorReplaceMaterial {
             inner_color: bevy::color::LinearRgba::from_u8_array_no_alpha(inner_color),

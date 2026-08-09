@@ -4,9 +4,11 @@
 
 mod material;
 mod mesh;
+mod ring_material;
 
 pub use material::*;
 pub use mesh::*;
+pub use ring_material::*;
 
 use bevy::{platform::collections::HashMap, prelude::*};
 use bevy_asset_loader::{asset_collection::AssetCollection, mapped::AssetFileStem};

@@ -9,21 +9,16 @@
 
 use std::collections::{HashMap, HashSet, VecDeque};
 
-use bevy::prelude::*;
+use bevy::{prelude::*, ui_render::ui_material::MaterialNode};
 use civ_map_generator::{
-    ruleset::enums::{EnumStr, TileImprovement, Unit},
-    tile::Tile,
+    grid::{HexGrid, HexOrientation}, ruleset::enums::{EnumStr, TerrainType, TileImprovement, Unit}, tile::Tile, tile_map::TileMap,
 };
 
 use crate::{
-    AppState, BuildRequestMessage, FoundCityRequestMessage, MoveRequestMessage, NationComponent,
-    Player, ScreenState, TurnManager,
-    assets::{ColorReplaceMaterial, GameAssets},
-    components::*,
-    resources::{TileEntityMap, TileMapRes},
+    AppState, AttackRequestMessage, BuildRequestMessage, FoundCityRequestMessage, MoveRequestMessage, NationComponent, Player, ScreenState, TurnManager, assets::{ColorReplaceMaterial, GameAssets, RingProgressMaterial}, components::*, resources::{TileEntityMap, TileMapRes},
 };
 
-/// 单位信息面板字段类型
+/// 单位图标（叠加在环形进度条之上）
 #[derive(Component)]
 struct UnitInfoIcon;
 
@@ -41,6 +36,14 @@ pub enum UnitInfoField {
     /// 移动力
     Movement,
 }
+
+/// 力量行容器标记（用于控制平民单位隐藏）
+#[derive(Component)]
+struct StrengthRow;
+
+/// 环形进度条标记（由 MaterialNode 渲染）
+#[derive(Component)]
+struct UnitRingProgress;
 
 /// 单位交互插件
 pub struct UnitInteractionPlugin;
@@ -152,15 +155,30 @@ fn hide_movement_range(
 // ============ UI 面板初始化 ============
 
 /// 设置单位信息面板（左下角）
-/// 类似文明5布局：左侧大图标，右侧信息区
-fn setup_unit_info_panel(mut commands: Commands, materials: Res<GameAssets>) {
+/// 类似文明5布局：左侧大图标（带HP/XP半圆环），右侧信息区
+/// 布局顺序：移动力（第一行）、名称、类型、分隔线、力量（仅军事单位）、HP
+fn setup_unit_info_panel(
+    mut commands: Commands,
+    materials: Res<GameAssets>,
+    mut ring_materials: ResMut<Assets<RingProgressMaterial>>,
+) {
+    // 创建环形进度条材质（初始全满 HP、0 XP）
+    let ring_material_handle = ring_materials.add(RingProgressMaterial {
+        left_progress: 1.0,
+        right_progress: 0.0,
+        left_color: LinearRgba::new(0.0, 1.0, 0.0, 1.0),
+        right_color: LinearRgba::new(0.0, 0.5, 1.0, 1.0),
+        background_color: LinearRgba::new(0.2, 0.2, 0.2, 0.8),
+        ring_thickness: 0.15,
+    });
+
     commands.spawn((
         Node {
             position_type: PositionType::Absolute,
             left: Val::Px(10.0),
             bottom: Val::Px(60.0),
             width: Val::Px(280.0),
-            height: Val::Auto,
+            height: Val::Px(110.0),
             border: UiRect::all(Val::Px(2.0)),
             flex_direction: FlexDirection::Row,
             column_gap: Val::Px(10.0),
@@ -172,20 +190,42 @@ fn setup_unit_info_panel(mut commands: Commands, materials: Res<GameAssets>) {
         Visibility::Hidden,
         UnitInfoPanel,
         children![
-            // 左侧：单位大图标（64x64）
+            // 左侧：单位大图标（64x64），带HP/XP半圆环
             (
                 Node {
                     width: Val::Px(64.0),
                     height: Val::Px(64.0),
-                    border: UiRect::all(Val::Px(2.0)),
-                    align_items: AlignItems::Center,
-                    justify_content: JustifyContent::Center,
+                    position_type: PositionType::Relative,
                     ..Default::default()
                 },
-                BackgroundColor(Color::srgba(0.3, 0.3, 0.6, 0.8)),
-                BorderColor::all(Color::WHITE),
-                UnitInfoIcon,
-                ImageNode::default()
+                children![
+                    // 底层：环形进度条（UiMaterial 渲染 HP 左半环 + XP 右半环）
+                    (
+                        Node {
+                            position_type: PositionType::Absolute,
+                            left: Val::Px(0.0),
+                            top: Val::Px(0.0),
+                            width: Val::Px(64.0),
+                            height: Val::Px(64.0),
+                            ..Default::default()
+                        },
+                        MaterialNode(ring_material_handle),
+                        UnitRingProgress,
+                    ),
+                    // 顶层：单位图标
+                    (
+                        Node {
+                            position_type: PositionType::Absolute,
+                            left: Val::Px(8.0),
+                            top: Val::Px(8.0),
+                            width: Val::Px(48.0),
+                            height: Val::Px(48.0),
+                            ..Default::default()
+                        },
+                        ImageNode::new(materials.texture_handle("Warrior")),
+                        UnitInfoIcon,
+                    ),
+                ],
             ),
             // 右侧：信息区
             (
@@ -195,6 +235,34 @@ fn setup_unit_info_panel(mut commands: Commands, materials: Res<GameAssets>) {
                     ..Default::default()
                 },
                 children![
+                    // 移动力（第一行）
+                    (
+                        Node {
+                            flex_direction: FlexDirection::Row,
+                            align_items: AlignItems::Center,
+                            column_gap: Val::Px(5.0),
+                            ..Default::default()
+                        },
+                        children![
+                            (
+                                Node {
+                                    width: Val::Px(16.0),
+                                    height: Val::Px(16.0),
+                                    ..Default::default()
+                                },
+                                ImageNode::new(materials.texture_handle("icon_moves")),
+                            ),
+                            (
+                                Text::new(""),
+                                TextFont {
+                                    font_size: FontSize::Px(12.0),
+                                    ..Default::default()
+                                },
+                                TextColor(Color::srgba(0.0, 0.5, 1.0, 1.0)),
+                                UnitInfoField::Movement,
+                            ),
+                        ],
+                    ),
                     // 单位名称
                     (
                         Text::new(""),
@@ -225,7 +293,7 @@ fn setup_unit_info_panel(mut commands: Commands, materials: Res<GameAssets>) {
                         },
                         BackgroundColor(Color::srgba(1.0, 1.0, 1.0, 0.3)),
                     ),
-                    // 战斗力行（剑图标 + 数值）
+                    // 战斗力行（剑图标 + 数值）- 平民单位隐藏
                     (
                         Node {
                             flex_direction: FlexDirection::Row,
@@ -233,6 +301,8 @@ fn setup_unit_info_panel(mut commands: Commands, materials: Res<GameAssets>) {
                             column_gap: Val::Px(5.0),
                             ..Default::default()
                         },
+                        BackgroundColor(Color::NONE),
+                        StrengthRow,
                         children![
                             (
                                 Node {
@@ -285,34 +355,6 @@ fn setup_unit_info_panel(mut commands: Commands, materials: Res<GameAssets>) {
                                 },
                                 TextColor(Color::srgba(0.0, 1.0, 0.0, 1.0)),
                                 UnitInfoField::Health,
-                            ),
-                        ],
-                    ),
-                    // 移动力行（箭头图标 + 数值）
-                    (
-                        Node {
-                            flex_direction: FlexDirection::Row,
-                            align_items: AlignItems::Center,
-                            column_gap: Val::Px(5.0),
-                            ..Default::default()
-                        },
-                        children![
-                            (
-                                Node {
-                                    width: Val::Px(16.0),
-                                    height: Val::Px(16.0),
-                                    ..Default::default()
-                                },
-                                ImageNode::new(materials.texture_handle("icon_moves")),
-                            ),
-                            (
-                                Text::new(""),
-                                TextFont {
-                                    font_size: FontSize::Px(12.0),
-                                    ..Default::default()
-                                },
-                                TextColor(Color::srgba(0.0, 0.5, 1.0, 1.0)),
-                                UnitInfoField::Movement,
                             ),
                         ],
                     ),
@@ -470,8 +512,8 @@ fn handle_unit_selection(
 fn calculate_move_range(
     start_tile: Tile,
     movement_points: u32,
-    tile_map: &civ_map_generator::tile_map::TileMap,
-    grid: civ_map_generator::grid::HexGrid,
+    tile_map: &TileMap,
+    grid: HexGrid,
 ) -> HashSet<Tile> {
     let mut reachable = HashSet::new();
     let mut visited = HashSet::new();
@@ -504,16 +546,16 @@ fn calculate_move_range(
 }
 
 /// 计算进入一个地块的移动消耗
-fn movement_cost(tile: &Tile, tile_map: &civ_map_generator::tile_map::TileMap) -> u32 {
+fn movement_cost(tile: &Tile, tile_map: &TileMap) -> u32 {
     let terrain_type = tile.terrain_type(tile_map);
 
     match terrain_type {
-        civ_map_generator::ruleset::enums::TerrainType::Flatland => 1,
-        civ_map_generator::ruleset::enums::TerrainType::Hill => 2,
-        civ_map_generator::ruleset::enums::TerrainType::Mountain => {
+        TerrainType::Flatland => 1,
+        TerrainType::Hill => 2,
+        TerrainType::Mountain => {
             return 0;
         }
-        civ_map_generator::ruleset::enums::TerrainType::Water => {
+        TerrainType::Water => {
             return 0;
         }
     }
@@ -644,7 +686,7 @@ fn handle_move_target_click(
             // 军事单位：Move 键即攻击键，点击相邻且有敌人的地块直接攻击
             if is_attacker_military && is_adjacent {
                 if let Some((enemy_entity, _, _, _)) = enemy_on_target {
-                    commands.trigger(crate::AttackRequestMessage {
+                    commands.trigger(AttackRequestMessage {
                         attacker: unit_entity,
                         target: enemy_entity,
                     });
@@ -1013,7 +1055,7 @@ fn handle_unit_attack_click(
             }
 
             // 发送攻击请求（触发观察者）
-            commands.trigger(crate::AttackRequestMessage {
+            commands.trigger(AttackRequestMessage {
                 attacker: attacker_entity,
                 target: target_entity,
             });
@@ -1032,7 +1074,7 @@ fn handle_unit_attack_click(
 fn are_tiles_adjacent(
     tile1: Tile,
     tile2: Tile,
-    tile_map: &civ_map_generator::tile_map::TileMap,
+    tile_map: &TileMap,
 ) -> bool {
     let grid = tile_map.world_grid.grid;
     let offset1 = tile1.to_offset(grid);
@@ -1042,10 +1084,10 @@ fn are_tiles_adjacent(
     let dy = (offset1.0.y - offset2.0.y).abs();
 
     match grid.layout.orientation {
-        civ_map_generator::grid::HexOrientation::Pointy => {
+        HexOrientation::Pointy => {
             dx <= 1 && dy <= 1 && (dx + dy) <= 2 && !(dx == 0 && dy == 0)
         }
-        civ_map_generator::grid::HexOrientation::Flat => {
+        HexOrientation::Flat => {
             dx <= 1 && dy <= 1 && !(dx == 0 && dy == 0)
         }
     }
@@ -1135,37 +1177,56 @@ fn animate_selected_unit(
 
 // ============ 面板更新系统 ============
 
-/// 更新单位信息面板 - 显示单位图标、名称、类型、攻击力、HP、移动力
+/// 更新单位信息面板
+/// - 环形进度条：根据 HP/XP 重新生成扇形进度图片（无需 shader）
+/// - 力量行：仅军事单位显示
+/// - 文本字段更新
 fn update_unit_info_panel(
     mut panel: Single<&mut Visibility, With<UnitInfoPanel>>,
-    mut unit_icon_query: Single<&mut ImageNode, With<UnitInfoIcon>>,
+    ring_progress_query: Single<&MaterialNode<RingProgressMaterial>, With<UnitRingProgress>>,
+    unit_icon_query: Single<&mut ImageNode, (With<UnitInfoIcon>, Without<UnitRingProgress>)>,
+    mut strength_row_query: Single<&mut Visibility, (With<StrengthRow>, Without<UnitInfoPanel>)>,
     mut text_fields: Query<(&mut Text, &UnitInfoField)>,
     selected_unit_query: Query<
         (
             &UnitComponent,
-            &Owner,
             &Health,
             &Strength,
             &Movement,
-            &MeshMaterial2d<ColorReplaceMaterial>,
+            &Experience,
         ),
         With<SelectedUnit>,
     >,
-    materials: Res<GameAssets>
+    mut ring_materials: ResMut<Assets<RingProgressMaterial>>,
+    materials: Res<GameAssets>,
 ) {
-    if let Ok((unit_component, owner, health, strength, movement, material_handle)) =
+    if let Ok((unit_component, health, strength, movement, experience)) =
         selected_unit_query.single()
     {
         // 显示面板
         **panel = Visibility::Visible;
-        
+
+        // 更新环形进度条材质（HP 左半环 + XP 右半环）
+        let hp_ratio = health.current as f32 / health.max.max(1) as f32;
+        let xp_ratio = experience.current as f32 / experience.max.max(1) as f32;
+        if let Some(mut material) = ring_materials.get_mut(&ring_progress_query.0) {
+            material.left_progress = hp_ratio;
+            material.right_progress = xp_ratio;
+        }
+
         // 更新单位图标
         let icon_char = match unit_component {
-                        UnitComponent::Military(unit) => unit.as_str(),
-                        UnitComponent::Civilian(unit) => unit.as_str(),
-                    };
-                    unit_icon_query.into_inner().image
-                    = materials.texture_handle(icon_char);
+            UnitComponent::Military(unit) => unit.as_str(),
+            UnitComponent::Civilian(unit) => unit.as_str(),
+        };
+        unit_icon_query.into_inner().image = materials.texture_handle(icon_char);
+
+        // 力量行：只有军事单位（strength > 0）才显示
+        if strength.0 > 0 {
+            **strength_row_query = Visibility::Visible;
+        } else {
+            **strength_row_query = Visibility::Hidden;
+        }
 
         // 更新所有文本字段
         for (mut text, field) in text_fields.iter_mut() {
@@ -1187,7 +1248,7 @@ fn update_unit_info_panel(
                     text.0 = unit_type.to_string();
                 }
                 UnitInfoField::Strength => {
-                    // 更新攻击力（图标由 MaterialNode<IconMaterial> 绘制）
+                    // 更新攻击力
                     if strength.0 > 0 {
                         text.0 = strength.0.to_string();
                     } else {
@@ -1195,11 +1256,11 @@ fn update_unit_info_panel(
                     }
                 }
                 UnitInfoField::Health => {
-                    // 更新HP（图标由 MaterialNode<IconMaterial> 绘制）
+                    // 更新HP
                     text.0 = format!("{} / {}", health.current, health.max);
                 }
                 UnitInfoField::Movement => {
-                    // 更新移动力（图标由 MaterialNode<IconMaterial> 绘制）
+                    // 更新移动力
                     text.0 = format!("{} / {}", movement.current, movement.max);
                 }
             }

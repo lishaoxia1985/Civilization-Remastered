@@ -6,6 +6,7 @@
 //! - 地块设施组件管理
 
 use bevy::prelude::*;
+use civ_map_generator::ruleset::enums::Unit;
 
 use crate::{
     BuildRequestMessage, FoundCityRequestMessage,
@@ -43,7 +44,7 @@ fn handle_build_request(
     // 只有工人单位可以建造设施
     let is_worker = matches!(
         unit_component,
-        UnitComponent::Civilian(civ_map_generator::ruleset::enums::Unit::Worker)
+        UnitComponent::Civilian(Unit::Worker)
     );
     if !is_worker {
         return;

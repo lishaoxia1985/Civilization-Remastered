@@ -6,7 +6,7 @@
 //! - 移动力消耗
 
 use bevy::prelude::*;
-use civ_map_generator::tile::Tile;
+use civ_map_generator::{ruleset::enums::TerrainType, tile::Tile, tile_map::TileMap};
 
 use crate::{
     AttackRequestMessage, MoveRequestMessage,
@@ -155,16 +155,16 @@ fn handle_move_request(
 }
 
 /// 计算进入一个地块的移动消耗
-fn movement_cost(tile: &Tile, tile_map: &civ_map_generator::tile_map::TileMap) -> u32 {
+fn movement_cost(tile: &Tile, tile_map: &TileMap) -> u32 {
     let terrain_type = tile.terrain_type(tile_map);
 
     match terrain_type {
-        civ_map_generator::ruleset::enums::TerrainType::Flatland => 1,
-        civ_map_generator::ruleset::enums::TerrainType::Hill => 2,
-        civ_map_generator::ruleset::enums::TerrainType::Mountain => {
+        TerrainType::Flatland => 1,
+        TerrainType::Hill => 2,
+        TerrainType::Mountain => {
             return 0;
         }
-        civ_map_generator::ruleset::enums::TerrainType::Water => {
+        TerrainType::Water => {
             return 0;
         }
     }
