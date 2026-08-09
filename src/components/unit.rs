@@ -73,31 +73,6 @@ pub struct AttackTargetHighlight;
 #[derive(Component)]
 pub struct UnitInfoPanel;
 
-/// 单位信息面板中的单位图标节点
-#[derive(Component)]
-pub struct UnitIconNode;
-
-/// 单位信息面板中的单位名称文本
-#[derive(Component)]
-pub struct UnitNameText;
-
-/// 单位信息面板字段类型
-#[derive(Component)]
-pub enum UnitInfoField {
-    /// 单位名称
-    Name,
-    /// 单位类型
-    Type,
-    /// 攻击力
-    Strength,
-    /// 生命值
-    Health,
-    /// 移动力
-    Movement,
-    /// 单位图标
-    Icon,
-}
-
 /// 单位操作菜单面板
 #[derive(Component)]
 pub struct UnitActionMenu;

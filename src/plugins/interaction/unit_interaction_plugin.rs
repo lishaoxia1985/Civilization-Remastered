@@ -18,10 +18,29 @@ use civ_map_generator::{
 use crate::{
     AppState, BuildRequestMessage, FoundCityRequestMessage, MoveRequestMessage, NationComponent,
     Player, ScreenState, TurnManager,
-    assets::ColorReplaceMaterial,
+    assets::{ColorReplaceMaterial, GameAssets},
     components::*,
     resources::{TileEntityMap, TileMapRes},
 };
+
+/// 单位信息面板字段类型
+#[derive(Component)]
+struct UnitInfoIcon;
+
+/// 单位信息面板字段类型
+#[derive(Component)]
+pub enum UnitInfoField {
+    /// 单位名称
+    Name,
+    /// 单位类型
+    Type,
+    /// 攻击力
+    Strength,
+    /// 生命值
+    Health,
+    /// 移动力
+    Movement,
+}
 
 /// 单位交互插件
 pub struct UnitInteractionPlugin;
@@ -134,7 +153,7 @@ fn hide_movement_range(
 
 /// 设置单位信息面板（左下角）
 /// 类似文明5布局：左侧大图标，右侧信息区
-fn setup_unit_info_panel(mut commands: Commands) {
+fn setup_unit_info_panel(mut commands: Commands, materials: Res<GameAssets>) {
     commands.spawn((
         Node {
             position_type: PositionType::Absolute,
@@ -165,16 +184,8 @@ fn setup_unit_info_panel(mut commands: Commands) {
                 },
                 BackgroundColor(Color::srgba(0.3, 0.3, 0.6, 0.8)),
                 BorderColor::all(Color::WHITE),
-                UnitIconNode,
-                children![(
-                    Text::new(""),
-                    TextFont {
-                        font_size: FontSize::Px(32.0),
-                        ..Default::default()
-                    },
-                    TextColor(Color::WHITE),
-                    UnitInfoField::Icon,
-                )],
+                UnitInfoIcon,
+                ImageNode::default()
             ),
             // 右侧：信息区
             (
@@ -214,35 +225,96 @@ fn setup_unit_info_panel(mut commands: Commands) {
                         },
                         BackgroundColor(Color::srgba(1.0, 1.0, 1.0, 0.3)),
                     ),
-                    // 战斗力（黄色）
+                    // 战斗力行（剑图标 + 数值）
                     (
-                        Text::new(""),
-                        TextFont {
-                            font_size: FontSize::Px(12.0),
+                        Node {
+                            flex_direction: FlexDirection::Row,
+                            align_items: AlignItems::Center,
+                            column_gap: Val::Px(5.0),
                             ..Default::default()
                         },
-                        TextColor(Color::srgba(1.0, 0.84, 0.0, 1.0)),
-                        UnitInfoField::Strength,
+                        children![
+                            (
+                                Node {
+                                    width: Val::Px(16.0),
+                                    height: Val::Px(16.0),
+                                    ..Default::default()
+                                },
+                                ImageNode::new(materials.texture_handle("icon_strength")),
+                            ),
+                            (
+                                Text::new(""),
+                                TextFont {
+                                    font_size: FontSize::Px(12.0),
+                                    ..Default::default()
+                                },
+                                TextColor(Color::srgba(1.0, 0.84, 0.0, 1.0)),
+                                UnitInfoField::Strength,
+                            ),
+                        ],
                     ),
-                    // HP（绿色）
+                    // HP行（HP文字 + 数值）
                     (
-                        Text::new(""),
-                        TextFont {
-                            font_size: FontSize::Px(12.0),
+                        Node {
+                            flex_direction: FlexDirection::Row,
+                            align_items: AlignItems::Center,
+                            column_gap: Val::Px(5.0),
                             ..Default::default()
                         },
-                        TextColor(Color::srgba(0.0, 1.0, 0.0, 1.0)),
-                        UnitInfoField::Health,
+                        children![
+                            (
+                                Node {
+                                    width: Val::Px(16.0),
+                                    height: Val::Px(16.0),
+                                    ..Default::default()
+                                },
+                                children![(
+                                    Text::new("HP"),
+                                    TextFont {
+                                        font_size: FontSize::Px(12.0),
+                                        ..Default::default()
+                                    },
+                                    TextColor(Color::srgba(0.0, 1.0, 0.0, 1.0)),
+                                ),]
+                            ),
+                            (
+                                Text::new(""),
+                                TextFont {
+                                    font_size: FontSize::Px(12.0),
+                                    ..Default::default()
+                                },
+                                TextColor(Color::srgba(0.0, 1.0, 0.0, 1.0)),
+                                UnitInfoField::Health,
+                            ),
+                        ],
                     ),
-                    // 移动力（蓝色）
+                    // 移动力行（箭头图标 + 数值）
                     (
-                        Text::new(""),
-                        TextFont {
-                            font_size: FontSize::Px(12.0),
+                        Node {
+                            flex_direction: FlexDirection::Row,
+                            align_items: AlignItems::Center,
+                            column_gap: Val::Px(5.0),
                             ..Default::default()
                         },
-                        TextColor(Color::srgba(0.0, 0.5, 1.0, 1.0)),
-                        UnitInfoField::Movement,
+                        children![
+                            (
+                                Node {
+                                    width: Val::Px(16.0),
+                                    height: Val::Px(16.0),
+                                    ..Default::default()
+                                },
+                                ImageNode::new(materials.texture_handle("icon_moves")),
+                            ),
+                            (
+                                Text::new(""),
+                                TextFont {
+                                    font_size: FontSize::Px(12.0),
+                                    ..Default::default()
+                                },
+                                TextColor(Color::srgba(0.0, 0.5, 1.0, 1.0)),
+                                UnitInfoField::Movement,
+                            ),
+                        ],
                     ),
                 ],
             ),
@@ -1066,6 +1138,7 @@ fn animate_selected_unit(
 /// 更新单位信息面板 - 显示单位图标、名称、类型、攻击力、HP、移动力
 fn update_unit_info_panel(
     mut panel: Single<&mut Visibility, With<UnitInfoPanel>>,
+    mut unit_icon_query: Single<&mut ImageNode, With<UnitInfoIcon>>,
     mut text_fields: Query<(&mut Text, &UnitInfoField)>,
     selected_unit_query: Query<
         (
@@ -1078,25 +1151,25 @@ fn update_unit_info_panel(
         ),
         With<SelectedUnit>,
     >,
-    mut materials: ResMut<Assets<ColorReplaceMaterial>>,
+    materials: Res<GameAssets>
 ) {
     if let Ok((unit_component, owner, health, strength, movement, material_handle)) =
         selected_unit_query.single()
     {
         // 显示面板
         **panel = Visibility::Visible;
+        
+        // 更新单位图标
+        let icon_char = match unit_component {
+                        UnitComponent::Military(unit) => unit.as_str(),
+                        UnitComponent::Civilian(unit) => unit.as_str(),
+                    };
+                    unit_icon_query.into_inner().image
+                    = materials.texture_handle(icon_char);
 
         // 更新所有文本字段
         for (mut text, field) in text_fields.iter_mut() {
             match field {
-                UnitInfoField::Icon => {
-                    // 更新单位图标（使用军事/民用符号）
-                    let icon_char = match unit_component {
-                        UnitComponent::Military(_) => "⚔",
-                        UnitComponent::Civilian(_) => "⚒",
-                    };
-                    text.0 = icon_char.to_string();
-                }
                 UnitInfoField::Name => {
                     // 更新单位名称
                     let unit_name = match unit_component {
@@ -1114,33 +1187,20 @@ fn update_unit_info_panel(
                     text.0 = unit_type.to_string();
                 }
                 UnitInfoField::Strength => {
-                    // 更新攻击力
+                    // 更新攻击力（图标由 MaterialNode<IconMaterial> 绘制）
                     if strength.0 > 0 {
-                        text.0 = format!("⚔ {}", strength.0);
+                        text.0 = strength.0.to_string();
                     } else {
                         text.0 = "Non-combat".to_string();
                     }
                 }
                 UnitInfoField::Health => {
-                    // 更新HP
-                    text.0 = format!("❤ {} / {}", health.current, health.max);
+                    // 更新HP（图标由 MaterialNode<IconMaterial> 绘制）
+                    text.0 = format!("{} / {}", health.current, health.max);
                 }
                 UnitInfoField::Movement => {
-                    // 更新移动力
-                    text.0 = format!("◆ {} / {}", movement.current, movement.max);
-                }
-            }
-        }
-
-        // 更新单位图标颜色（从材质获取内外颜色）
-        if let Some(material) = materials.get_mut(&material_handle.0) {
-            let inner_color = material.inner_color;
-            // 更新图标颜色需要单独处理，因为 TextColor 是单独组件
-            for (_, field) in text_fields.iter() {
-                if matches!(field, UnitInfoField::Icon) {
-                    // 这里需要修改 TextColor，但查询中没有包含
-                    // 暂时跳过颜色更新，或者需要额外的查询
-                    break;
+                    // 更新移动力（图标由 MaterialNode<IconMaterial> 绘制）
+                    text.0 = format!("{} / {}", movement.current, movement.max);
                 }
             }
         }
