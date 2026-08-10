@@ -42,10 +42,7 @@ fn handle_build_request(
     };
 
     // 只有工人单位可以建造设施
-    let is_worker = matches!(
-        unit_component,
-        UnitComponent::Civilian(Unit::Worker)
-    );
+    let is_worker = matches!(unit_component, UnitComponent::Civilian(Unit::Worker));
     if !is_worker {
         return;
     }

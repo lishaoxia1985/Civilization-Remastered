@@ -14,6 +14,7 @@ mod minimap_plugin;
 mod movement_plugin;
 pub mod tech;
 mod turn_plugin;
+mod unit_manager_plugin;
 
 pub use ai::*;
 pub use asset_plugin::AssetLoadingPlugin;
@@ -26,3 +27,4 @@ pub use map_plugin::MapPlugin;
 pub use minimap_plugin::MinimapPlugin;
 pub use movement_plugin::MovementPlugin;
 pub use turn_plugin::TurnPlugin;
+pub use unit_manager_plugin::UnitManagerPlugin;

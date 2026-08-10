@@ -11,11 +11,18 @@ use std::collections::{HashMap, HashSet, VecDeque};
 
 use bevy::{prelude::*, ui_render::ui_material::MaterialNode};
 use civ_map_generator::{
-    grid::{HexGrid, HexOrientation}, ruleset::enums::{EnumStr, TerrainType, TileImprovement, Unit}, tile::Tile, tile_map::TileMap,
+    grid::{HexGrid, HexOrientation},
+    ruleset::enums::{EnumStr, TerrainType, TileImprovement, Unit},
+    tile::Tile,
+    tile_map::TileMap,
 };
 
 use crate::{
-    AppState, AttackRequestMessage, BuildRequestMessage, FoundCityRequestMessage, MoveRequestMessage, NationComponent, Player, ScreenState, TurnManager, assets::{ColorReplaceMaterial, GameAssets, RingProgressMaterial}, components::*, resources::{TileEntityMap, TileMapRes},
+    AppState, AttackRequestMessage, BuildRequestMessage, FoundCityRequestMessage,
+    MoveRequestMessage, NationComponent, Player, ScreenState, TurnManager,
+    assets::{ColorReplaceMaterial, GameAssets, RingProgressMaterial},
+    components::*,
+    resources::{TileEntityMap, TileMapRes},
 };
 
 /// 单位图标（叠加在环形进度条之上）
@@ -27,8 +34,6 @@ struct UnitInfoIcon;
 pub enum UnitInfoField {
     /// 单位名称
     Name,
-    /// 单位类型
-    Type,
     /// 攻击力
     Strength,
     /// 生命值
@@ -235,7 +240,27 @@ fn setup_unit_info_panel(
                     ..Default::default()
                 },
                 children![
-                    // 移动力（第一行）
+                    // 单位名称
+                    (
+                        Text::new(""),
+                        TextFont {
+                            font_size: FontSize::Px(16.0),
+                            ..Default::default()
+                        },
+                        TextColor(Color::WHITE),
+                        UnitInfoField::Name,
+                    ),
+                    // 分隔线
+                    (
+                        Node {
+                            width: Val::Percent(100.0),
+                            height: Val::Px(1.0),
+                            margin: UiRect::vertical(Val::Px(3.0)),
+                            ..Default::default()
+                        },
+                        BackgroundColor(Color::srgba(1.0, 1.0, 1.0, 0.3)),
+                    ),
+                    // 移动力
                     (
                         Node {
                             flex_direction: FlexDirection::Row,
@@ -262,36 +287,6 @@ fn setup_unit_info_panel(
                                 UnitInfoField::Movement,
                             ),
                         ],
-                    ),
-                    // 单位名称
-                    (
-                        Text::new(""),
-                        TextFont {
-                            font_size: FontSize::Px(16.0),
-                            ..Default::default()
-                        },
-                        TextColor(Color::WHITE),
-                        UnitInfoField::Name,
-                    ),
-                    // 单位类型
-                    (
-                        Text::new(""),
-                        TextFont {
-                            font_size: FontSize::Px(11.0),
-                            ..Default::default()
-                        },
-                        TextColor(Color::srgba(0.8, 0.8, 0.8, 1.0)),
-                        UnitInfoField::Type,
-                    ),
-                    // 分隔线
-                    (
-                        Node {
-                            width: Val::Percent(100.0),
-                            height: Val::Px(1.0),
-                            margin: UiRect::vertical(Val::Px(3.0)),
-                            ..Default::default()
-                        },
-                        BackgroundColor(Color::srgba(1.0, 1.0, 1.0, 0.3)),
                     ),
                     // 战斗力行（剑图标 + 数值）- 平民单位隐藏
                     (
@@ -399,7 +394,7 @@ fn handle_unit_selection(
     turn_manager: Res<TurnManager>,
 ) {
     // 如果 Move 按钮激活，点击地块是移动操作，不处理选择
-    if move_button_query.iter().next().is_some() {
+    if move_button_query.single().is_ok() {
         return;
     }
 
@@ -413,10 +408,7 @@ fn handle_unit_selection(
     for click in click_events.read() {
         // 如果点击的是单位实体本身，直接选中
         if let Ok((unit_entity, owner, ..)) = unit_query.get(click.event_target()) {
-            let is_players_unit = match owner {
-                Owner::Civilization(nation) => *nation == nation_component.0,
-                Owner::CityState(_) => false,
-            };
+            let is_players_unit = owner.0 == nation_component.0;
 
             if is_players_unit {
                 // 清除旧选中
@@ -442,10 +434,7 @@ fn handle_unit_selection(
 
         let mut units_on_tile: Vec<(Entity, &UnitComponent)> = Vec::new();
         for (entity, owner, unit_component, child_of) in unit_query.iter() {
-            let is_players_unit = match owner {
-                Owner::Civilization(nation) => *nation == nation_component.0,
-                Owner::CityState(_) => false,
-            };
+            let is_players_unit = owner.0 == nation_component.0;
             if !is_players_unit {
                 continue;
             }
@@ -563,11 +552,7 @@ fn movement_cost(tile: &Tile, tile_map: &TileMap) -> u32 {
 
 /// 判断两个所有者是否相同
 fn is_same_owner(owner1: &Owner, owner2: &Owner) -> bool {
-    match (owner1, owner2) {
-        (Owner::Civilization(n1), Owner::Civilization(n2)) => n1 == n2,
-        (Owner::CityState(n1), Owner::CityState(n2)) => n1 == n2,
-        _ => false,
-    }
+    owner1 == owner2
 }
 
 // ============ 移动系统 ============
@@ -654,10 +639,7 @@ fn handle_move_target_click(
         if let Ok((clicked_unit_entity, clicked_owner, _, _)) = unit_query.get(click.event_target())
         {
             if clicked_unit_entity != unit_entity {
-                let is_players_unit = match clicked_owner {
-                    Owner::Civilization(nation) => *nation == nation_component.0,
-                    Owner::CityState(_) => false,
-                };
+                let is_players_unit = clicked_owner.0 == nation_component.0;
 
                 if is_players_unit {
                     // 切换选中到点击的单位
@@ -1019,10 +1001,7 @@ fn handle_unit_attack_click(
         return;
     };
 
-    let attacker_nation = match attacker_owner {
-        Owner::Civilization(nation) => *nation,
-        Owner::CityState(nation) => *nation,
-    };
+    let attacker_nation = attacker_owner.0;
 
     let Ok(attacker_tile) = world_tile_query.get(attacker_child_of.0) else {
         return;
@@ -1036,10 +1015,8 @@ fn handle_unit_attack_click(
                 continue;
             }
 
-            let is_same_owner = match target_owner {
-                Owner::Civilization(nation) => *nation == attacker_nation,
-                Owner::CityState(nation) => *nation == attacker_nation,
-            };
+            // TODO：此处不太可能属于同一个拥有者吧
+            let is_same_owner = target_owner.0 == attacker_nation;
 
             if is_same_owner {
                 continue;
@@ -1071,11 +1048,7 @@ fn handle_unit_attack_click(
 }
 
 /// 检查两个地块是否相邻
-fn are_tiles_adjacent(
-    tile1: Tile,
-    tile2: Tile,
-    tile_map: &TileMap,
-) -> bool {
+fn are_tiles_adjacent(tile1: Tile, tile2: Tile, tile_map: &TileMap) -> bool {
     let grid = tile_map.world_grid.grid;
     let offset1 = tile1.to_offset(grid);
     let offset2 = tile2.to_offset(grid);
@@ -1084,12 +1057,8 @@ fn are_tiles_adjacent(
     let dy = (offset1.0.y - offset2.0.y).abs();
 
     match grid.layout.orientation {
-        HexOrientation::Pointy => {
-            dx <= 1 && dy <= 1 && (dx + dy) <= 2 && !(dx == 0 && dy == 0)
-        }
-        HexOrientation::Flat => {
-            dx <= 1 && dy <= 1 && !(dx == 0 && dy == 0)
-        }
+        HexOrientation::Pointy => dx <= 1 && dy <= 1 && (dx + dy) <= 2 && !(dx == 0 && dy == 0),
+        HexOrientation::Flat => dx <= 1 && dy <= 1 && !(dx == 0 && dy == 0),
     }
 }
 
@@ -1188,13 +1157,7 @@ fn update_unit_info_panel(
     mut strength_row_query: Single<&mut Visibility, (With<StrengthRow>, Without<UnitInfoPanel>)>,
     mut text_fields: Query<(&mut Text, &UnitInfoField)>,
     selected_unit_query: Query<
-        (
-            &UnitComponent,
-            &Health,
-            &Strength,
-            &Movement,
-            &Experience,
-        ),
+        (&UnitComponent, &Health, &Strength, &Movement, &Experience),
         With<SelectedUnit>,
     >,
     mut ring_materials: ResMut<Assets<RingProgressMaterial>>,
@@ -1238,14 +1201,6 @@ fn update_unit_info_panel(
                         UnitComponent::Military(unit) => unit.as_str(),
                     };
                     text.0 = unit_name.to_string();
-                }
-                UnitInfoField::Type => {
-                    // 更新单位类型
-                    let unit_type = match unit_component {
-                        UnitComponent::Civilian(_) => "Civilian",
-                        UnitComponent::Military(_) => "Military",
-                    };
-                    text.0 = unit_type.to_string();
                 }
                 UnitInfoField::Strength => {
                     // 更新攻击力

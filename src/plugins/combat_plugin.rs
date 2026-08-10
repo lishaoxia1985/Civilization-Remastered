@@ -7,6 +7,7 @@
 //! - 战斗修正（地形、生命值等）
 
 use bevy::prelude::*;
+use civ_map_generator::ruleset::enums::Nation;
 
 use crate::{
     AttackRequestMessage, TurnManager, TurnState,
@@ -30,8 +31,7 @@ impl Plugin for CombatPlugin {
 fn resolve_combat(
     event: On<AttackRequestMessage>,
     mut commands: Commands,
-    attacker_query: Query<(&Owner, &Health, &Strength)>,
-    defender_query: Query<(&Owner, &Health, &Strength)>,
+    unit_query: Query<(&Owner, &Health, &Strength)>,
     turn_manager: Res<TurnManager>,
 ) {
     let attack = event.event();
@@ -39,8 +39,7 @@ fn resolve_combat(
         &mut commands,
         attack.attacker,
         attack.target,
-        &attacker_query,
-        &defender_query,
+        &unit_query,
         turn_manager.turn_number,
     );
 }
@@ -50,74 +49,118 @@ fn resolve_attack(
     commands: &mut Commands,
     attacker: Entity,
     target: Entity,
-    attacker_query: &Query<(&Owner, &Health, &Strength)>,
-    defender_query: &Query<(&Owner, &Health, &Strength)>,
+    unit_query: &Query<(&Owner, &Health, &Strength)>,
     turn_number: u32,
 ) {
     // ---- 1. 获取组件 ----
-    let Ok((_attacker_owner, attacker_health, attacker_strength)) = attacker_query.get(attacker) else {
+    let Ok((attacker_owner, attacker_health, attacker_strength)) = unit_query.get(attacker) else {
         warn!("Attacker missing combat components");
         return;
     };
-    let Ok((_defender_owner, defender_health, defender_strength)) = defender_query.get(target) else {
+    let Ok((defender_owner, defender_health, defender_strength)) = unit_query.get(target) else {
         warn!("Defender missing combat components");
         return;
     };
 
-    // ---- 2. 计算最终战斗力（含生命值修正） ----
+    let attacker_owner = attacker_owner.0;
+
+    let defender_owner = defender_owner.0;
+
+    // ---- 2. 基础战斗力（不受血量影响） ----
+    // TODO: 当前并未添加地形和UnitPromotion对攻击力的影响
     let attack_power = attacker_strength.0 as f32;
     let defense_power = defender_strength.0 as f32;
 
-    let attacker_ratio = attacker_health.current as f32 / attacker_health.max as f32;
-    let defender_ratio = defender_health.current as f32 / defender_health.max as f32;
+    // ---- 3. 血量惩罚系数（受伤单位造成伤害减少） ----
+    // 文明5公式：每损失 3% 生命值，造成伤害 -1%
+    // ratio = 1 - (max - current) / (3 * max)
+    let health_damage_ratio = |health: &Health, nation: Nation| -> f32 {
+        // TODO: 临时处理，日本无血量惩罚
+        //       未来应当基于文明的独特特性来计算，因为未来可以自定义mod时此特性就非Japan独有
+        if nation == Nation::Japan {
+            1.0
+        } else {
+            let missing = (health.max - health.current) as f32;
+            let max = health.max as f32;
+            1.0 - missing / (3.0 * max)
+        }
+    };
+    let attacker_health_factor = health_damage_ratio(attacker_health, attacker_owner);
+    let defender_health_factor = health_damage_ratio(defender_health, defender_owner);
 
-    // 文明5中受伤单位的战斗力线性下降（BNW后惩罚略轻，这里简化为线性）
-    let modified_attack = attack_power * (0.5 + 0.5 * attacker_ratio);
-    let modified_defense = defense_power * (0.5 + 0.5 * defender_ratio);
-
-    // ---- 3. 生成两个独立的随机数（0~1） ----
-    // 使用 turn_number 作为种子，以确保可重现
+    // ---- 4. 生成两个独立的随机数（0~1） ----
     let mut rng1 = SimpleRng::new(turn_number as u64);
-    let p1 = rng1.f32();                     // 攻击伤害随机因子
+    let p1 = rng1.f32(); // 攻击伤害随机因子
 
-    let mut rng2 = SimpleRng::new((turn_number + 1) as u64); // 不同种子
-    let p2 = rng2.f32();                     // 反击伤害随机因子
+    let mut rng2 = SimpleRng::new((turn_number + 1) as u64);
+    let p2 = rng2.f32(); // 反击伤害随机因子
 
-    // ---- 4. 计算伤害（文明5公式） ----
-    // 攻击方对防守方造成的伤害
-    let damage_to_defender = if modified_attack > 0.0 && modified_defense > 0.0 {
-        let ratio = modified_attack / modified_defense;
-        let base = (24.0 + 12.0 * p1) * ((ratio + 3.0).powi(4) / 512.0 + 0.5);
-        base.max(1.0) as u32   // 至少造成1点伤害
-    } else {
-        0
-    };
+    // ---- 5. 伤害计算（文明5底层公式） ----
+    // 参数说明：
+    // - attacker_to_defender_ratio: 攻击方战斗力 / 防守方战斗力
+    // - damage_to_attacker: true 表示计算攻击方受到的（反击）伤害
+    // - randomness: 0~1 随机数
+    // - health_factor: 造成伤害一方的血量惩罚系数
+    fn compute_damage(
+        attacker_to_defender_ratio: f32,
+        damage_to_attacker: bool,
+        randomness: f32,
+        health_factor: f32,
+    ) -> u32 {
+        if attacker_to_defender_ratio <= 0.0 || health_factor <= 0.0 {
+            return 0;
+        }
 
-    // 防守方对攻击方的反击伤害（交换攻守位置）
-    let damage_to_attacker = if modified_defense > 0.0 && modified_attack > 0.0 {
-        let ratio = modified_defense / modified_attack;
-        let base = (24.0 + 12.0 * p2) * ((ratio + 3.0).powi(4) / 512.0 + 0.5);
-        base.max(1.0) as u32
-    } else {
-        0
-    };
+        // 强/弱比值（始终 >= 1）
+        let r = if attacker_to_defender_ratio >= 1.0 {
+            attacker_to_defender_ratio
+        } else {
+            1.0 / attacker_to_defender_ratio
+        };
 
-    // ---- 5. 应用伤害 ----
-    // 攻击者扣血
+        // 基础修正值
+        let modifier = ((r + 3.0) / 4.0).powi(4).mul_add(0.5, 0.5); // ((...)/2 + 0.5) 即 (((...)+1)/2)
+
+        // 弱势方造成伤害时取倒数
+        let is_weaker_dealing_damage = if damage_to_attacker {
+            attacker_to_defender_ratio > 1.0 // 防守方更弱
+        } else {
+            attacker_to_defender_ratio < 1.0 // 攻击方更弱
+        };
+        let effective_modifier = if is_weaker_dealing_damage {
+            1.0 / modifier
+        } else {
+            modifier
+        };
+
+        let random_base = 24.0 + 12.0 * randomness;
+        let damage = random_base * effective_modifier * health_factor;
+
+        damage.max(1.0).round() as u32
+    }
+
+    let ratio = attack_power / defense_power;
+
+    // 攻击方对防守方造成的伤害（攻击方是伤害来源，受攻击方血量惩罚）
+    let damage_to_defender = compute_damage(ratio, false, p1, attacker_health_factor);
+
+    // 防守方对攻击方造成的反击伤害（防守方是伤害来源，受防守方血量惩罚）
+    let damage_to_attacker = compute_damage(ratio, true, p2, defender_health_factor);
+
+    // ---- 6. 应用伤害 ----
     let new_attacker_hp = attacker_health.current.saturating_sub(damage_to_attacker);
     commands.entity(attacker).insert(Health {
         current: new_attacker_hp,
         max: attacker_health.max,
     });
 
-    // 防守者扣血
     let new_defender_hp = defender_health.current.saturating_sub(damage_to_defender);
     commands.entity(target).insert(Health {
         current: new_defender_hp,
         max: defender_health.max,
     });
 
-    // ---- 6. 移除死亡单位 ----
+    // ---- 7. 移除死亡单位 ----
     if new_attacker_hp == 0 {
         info!("Attacker {} died from counter damage", attacker);
         commands.entity(attacker).despawn();
@@ -127,10 +170,10 @@ fn resolve_attack(
         commands.entity(target).despawn();
     }
 
-    // ---- 7. 日志与清理 ----
+    // ---- 8. 日志与清理 ----
     info!(
         "Combat: Attacker (ATK={:.1}) dealt {} dmg to Defender (DEF={:.1}), took {} dmg in return.",
-        modified_attack, damage_to_defender, modified_defense, damage_to_attacker
+        attack_power, damage_to_defender, defense_power, damage_to_attacker
     );
 
     // 移除选中状态

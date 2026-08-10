@@ -13,6 +13,7 @@ use crate::{
 };
 
 /// AI 战斗插件
+/// TODO: 需要全部重写
 pub struct AiCombatPlugin;
 
 impl Plugin for AiCombatPlugin {
@@ -27,6 +28,8 @@ impl Plugin for AiCombatPlugin {
 /// AI 攻击系统 - 敌方文明自动攻击
 ///
 /// 遍历所有敌方单位，检查是否有相邻的玩家单位，如果有则发起攻击。
+///
+/// TODO：Warning此处完全错误，单位不可能有Enemy组件
 fn ai_attack_system(
     enemy_query: Query<(Entity, &Owner, &Strength, &Health, &Movement, &ChildOf), With<Enemy>>,
     player_unit_query: Query<(Entity, &Owner, &ChildOf)>,
@@ -56,10 +59,7 @@ fn ai_attack_system(
             continue;
         }
 
-        let enemy_nation = match enemy_owner {
-            Owner::Civilization(nation) => *nation,
-            Owner::CityState(nation) => *nation,
-        };
+        let enemy_nation = enemy_owner.0;
 
         // 获取敌人所在位置
         let enemy_tile_entity = enemy_child_of.0;
@@ -67,10 +67,7 @@ fn ai_attack_system(
         // 获取敌人相邻地块上的所有单位
         for (player_entity, player_owner, player_child_of) in player_unit_query.iter() {
             // 跳过不是玩家的单位
-            let is_player = match player_owner {
-                Owner::Civilization(nation) => *nation != enemy_nation,
-                Owner::CityState(_) => false,
-            };
+            let is_player = player_owner.0 != enemy_nation;
             if !is_player {
                 continue;
             }

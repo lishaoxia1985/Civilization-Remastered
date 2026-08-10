@@ -11,15 +11,15 @@ use bevy::{
 use civ_map_generator::{
     generate_map,
     grid::{Grid, Hex, HexOrientation},
-    ruleset::{Ruleset, enums::*},
+    ruleset::enums::*,
     tile::Tile,
     tile_map::RiverEdge,
 };
 
 use crate::{
     AppState,
-    assets::{ColorReplaceMaterial, GameAssets, hex_mesh, line_mesh},
-    components::{Experience, Health, Movement, Owner, Strength, UnitComponent, WorldTile},
+    assets::{GameAssets, hex_mesh, line_mesh},
+    components::WorldTile,
     resources::{MapGeneratorTask, MapParametersRes, TileEntityMap, TileMapRes},
 };
 
@@ -69,12 +69,10 @@ fn check_map_generate_status(
 /// 设置世界地图上的地块
 fn setup_tile_map(
     mut commands: Commands,
-    map_params: Res<MapParametersRes>,
     tile_map: Option<Res<TileMapRes>>,
     materials: Res<GameAssets>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut color_materials: ResMut<Assets<ColorMaterial>>,
-    mut custom_materials: ResMut<Assets<ColorReplaceMaterial>>,
 ) {
     let Some(tile_map) = tile_map else {
         return;
@@ -219,160 +217,7 @@ fn setup_tile_map(
                 ));
             }
         });
-
-        let ruleset = &map_params.0.ruleset;
-        let radius = tile_pixel_size.min_element() / 3.0;
-
-        let inner_rectangle = meshes.add(Rectangle::new(radius / 2., radius / 2.));
-        let outer_rectangle = meshes.add(Rectangle::new(radius, radius));
-
-        // 在起始位置生成单位
-        if let Some(&civilization) = tile_map.starting_tile_and_civilization.get(&tile) {
-            let replace_warrior_unit = ruleset.units.values().find(|&unit| {
-                unit.unique_to == civilization.as_str() && unit.replaces == "Warrior"
-            });
-            let military_unit = if let Some(unit) = replace_warrior_unit {
-                Unit::from_str(&unit.name)
-            } else {
-                Unit::Warrior
-            };
-
-            commands.entity(tile_entity).with_children(|parent| {
-                parent.spawn(unit_bundle(
-                    UnitComponent::Military(military_unit),
-                    Owner::Civilization(civilization),
-                    ruleset,
-                    inner_rectangle.clone(),
-                    outer_rectangle.clone(),
-                    &mut custom_materials,
-                    &materials,
-                    tile_pixel_size,
-                ));
-
-                parent.spawn(unit_bundle(
-                    UnitComponent::Civilian(Unit::Settler),
-                    Owner::Civilization(civilization),
-                    ruleset,
-                    inner_rectangle.clone(),
-                    outer_rectangle.clone(),
-                    &mut custom_materials,
-                    &materials,
-                    tile_pixel_size,
-                ));
-            });
-        }
-
-        // 城邦起始位置生成单位
-        if let Some(&city_state) = tile_map.starting_tile_and_city_state.get(&tile) {
-            commands.entity(tile_entity).with_children(|parent| {
-                parent.spawn(unit_bundle(
-                    UnitComponent::Civilian(Unit::Settler),
-                    Owner::CityState(city_state),
-                    ruleset,
-                    inner_rectangle.clone(),
-                    outer_rectangle.clone(),
-                    &mut custom_materials,
-                    &materials,
-                    tile_pixel_size,
-                ));
-            });
-        }
     }
 
     commands.insert_resource(tile_entity_map);
-}
-
-/// 创建单位组（包含战斗系统所需的所有组件）
-fn unit_bundle(
-    unit: UnitComponent,
-    owner: Owner,
-    ruleset: &Ruleset,
-    inner_rectangle: Handle<Mesh>,
-    outer_rectangle: Handle<Mesh>,
-    custom_materials: &mut ResMut<Assets<ColorReplaceMaterial>>,
-    materials: &GameAssets,
-    tile_pixel_size: Vec2,
-) -> impl Bundle {
-    let (unit_name, transform_y, out_texture_name) = match &unit {
-        UnitComponent::Civilian(unit) => (unit.as_str(), -tile_pixel_size.y / 4., "sv_unitcitizen"),
-        UnitComponent::Military(unit) => (unit.as_str(), tile_pixel_size.y / 4., "sv_unitmilitary"),
-    };
-
-    let nation = match owner {
-        Owner::Civilization(nation) | Owner::CityState(nation) => nation,
-    };
-
-    let outer_color = ruleset.nations[nation].outer_color;
-    let inner_color = ruleset.nations[nation].inner_color;
-
-    // 从 ruleset 中获取单位属性
-    let unit_key = *match &unit {
-        UnitComponent::Military(u) => u,
-        UnitComponent::Civilian(u) => u,
-    };
-    let unit_info = &ruleset.units[unit_key];
-
-    let (strength, health, movement) = match &unit {
-        UnitComponent::Military(_) => {
-            let hp = 100u32;
-            let mv = unit_info.movement.max(0) as u32;
-            (
-                Strength(unit_info.strength.max(0) as u32),
-                Health {
-                    current: hp,
-                    max: hp,
-                },
-                Movement {
-                    current: mv,
-                    max: mv,
-                },
-            )
-        }
-        UnitComponent::Civilian(_) => {
-            let hp = 50u32;
-            let mv = unit_info.movement.max(0) as u32;
-            (
-                Strength(0),
-                Health {
-                    current: hp,
-                    max: hp,
-                },
-                Movement {
-                    current: mv,
-                    max: mv,
-                },
-            )
-        }
-    };
-
-    (
-        unit,
-        owner,
-        strength,
-        health,
-        movement,
-        Experience {
-            current: 0,
-            max: 100,
-        },
-        Mesh2d(inner_rectangle.clone()),
-        MeshMaterial2d(custom_materials.add(ColorReplaceMaterial {
-            inner_color: bevy::color::LinearRgba::from_u8_array_no_alpha(inner_color),
-            outer_color: bevy::color::LinearRgba::from_u8_array_no_alpha(outer_color),
-            texture: materials.texture_handle(&unit_name),
-        })),
-        Transform {
-            translation: Vec3::new(0., transform_y, 6.),
-            ..Default::default()
-        },
-        children![(
-            Mesh2d(outer_rectangle.clone()),
-            MeshMaterial2d(custom_materials.add(ColorReplaceMaterial {
-                inner_color: bevy::color::LinearRgba::from_u8_array_no_alpha(inner_color,),
-                outer_color: bevy::color::LinearRgba::from_u8_array_no_alpha(outer_color,),
-                texture: materials.texture_handle(out_texture_name),
-            },)),
-            Transform::from_xyz(0., 0., -1.),
-        )],
-    )
 }

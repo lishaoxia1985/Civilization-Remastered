@@ -3,16 +3,14 @@
 //! 定义游戏中所有单位的组件类型。
 
 use bevy::prelude::*;
-use civ_map_generator::{ruleset::enums::{Nation, TileImprovement, Unit}, tile::Tile};
+use civ_map_generator::{
+    ruleset::enums::{Nation, TileImprovement, Unit},
+    tile::Tile,
+};
 
 /// 单位所属者
-#[derive(Component, Clone, Copy, Debug)]
-pub enum Owner {
-    /// 属于文明
-    Civilization(Nation),
-    /// 属于城邦
-    CityState(Nation),
-}
+#[derive(Component, Clone, Copy, PartialEq, Eq, Debug)]
+pub struct Owner(pub Nation);
 
 /// 单位类型组件
 #[derive(Component, Clone, Copy, Debug)]

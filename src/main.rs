@@ -22,7 +22,7 @@ use crate::{
     plugins::{
         AiCombatPlugin, AssetLoadingPlugin, CameraPlugin, CombatPlugin, ConstructionPlugin,
         EraPlugin, MapPlugin, MinimapPlugin, MovementPlugin, TechTreeScreenPlugin, TurnPlugin,
-        UnitInteractionPlugin, WorldScreenUiPlugin,
+        UnitInteractionPlugin, UnitManagerPlugin, WorldScreenUiPlugin,
         tech::{AiTechPlugin, TechPlugin},
     },
     resources::{GameSettings, MapParametersRes},
@@ -128,6 +128,7 @@ fn main() {
         .add_plugins(EraPlugin)
         .add_plugins(AiTechPlugin)
         .add_plugins(AiCombatPlugin)
+        .add_plugins(UnitManagerPlugin)
         // 初始化资源
         .init_resource::<InputFocus>()
         .insert_resource(map_params)

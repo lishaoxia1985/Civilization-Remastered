@@ -172,9 +172,5 @@ fn movement_cost(tile: &Tile, tile_map: &TileMap) -> u32 {
 
 /// 判断两个单位是否属于同一所有者
 fn is_same_owner(owner1: &Owner, owner2: &Owner) -> bool {
-    match (owner1, owner2) {
-        (Owner::Civilization(n1), Owner::Civilization(n2)) => n1 == n2,
-        (Owner::CityState(n1), Owner::CityState(n2)) => n1 == n2,
-        _ => false,
-    }
+    owner1 == owner2
 }
