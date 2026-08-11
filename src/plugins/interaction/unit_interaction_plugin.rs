@@ -42,10 +42,6 @@ pub enum UnitInfoField {
     Movement,
 }
 
-/// 力量行容器标记（用于控制平民单位隐藏）
-#[derive(Component)]
-struct StrengthRow;
-
 /// 环形进度条标记（由 MaterialNode 渲染）
 #[derive(Component)]
 struct UnitRingProgress;
@@ -297,7 +293,6 @@ fn setup_unit_info_panel(
                             ..Default::default()
                         },
                         BackgroundColor(Color::NONE),
-                        StrengthRow,
                         children![
                             (
                                 Node {
@@ -385,113 +380,100 @@ fn setup_unit_action_menu(mut commands: Commands) {
 /// 选中后弹出行动菜单，不自动显示移动范围（需点击 Move 按钮）
 fn handle_unit_selection(
     mut click_events: MessageReader<Pointer<Click>>,
-    unit_query: Query<(Entity, &Owner, &UnitComponent, &ChildOf)>,
-    world_tile_query: Query<&WorldTile>,
     mut commands: Commands,
+    unit_query: Query<(Entity, &Owner), With<UnitComponent>>,
+    children_query: Query<Option<&Children>, With<WorldTile>>,
     player_query: Query<&NationComponent, With<Player>>,
     selected_unit_query: Query<Entity, With<SelectedUnit>>,
     move_button_query: Query<Entity, With<MoveButtonActive>>,
     turn_manager: Res<TurnManager>,
 ) {
-    // 如果 Move 按钮激活，点击地块是移动操作，不处理选择
+    // 移动模式激活时，完全不处理选择，交由移动系统
     if move_button_query.single().is_ok() {
         return;
     }
 
-    // 获取当前回合的nation实体，只在玩家回合处理选择
+    // 仅在玩家回合处理选择
     let current_entity = turn_manager.current_nation_entity();
-
     let Ok(nation_component) = player_query.get(current_entity) else {
         return;
     };
+    let player_nation = nation_component.0;
 
-    for click in click_events.read() {
-        // 如果点击的是单位实体本身，直接选中
-        if let Ok((unit_entity, owner, ..)) = unit_query.get(click.event_target()) {
-            let is_players_unit = owner.0 == nation_component.0;
-
-            if is_players_unit {
-                // 清除旧选中
-                for selected in selected_unit_query.iter() {
-                    commands.entity(selected).remove::<SelectedUnit>();
-                }
-                for entity in move_button_query.iter() {
-                    commands.entity(entity).remove::<MoveButtonActive>();
-                    commands
-                        .entity(entity)
-                        .insert(BackgroundColor(Color::srgb(0.3, 0.3, 0.6)));
-                }
-
-                // 选中该单位
-                commands.entity(unit_entity).insert(SelectedUnit);
-                continue;
-            }
-        }
-
-        let Ok(clicked_tile) = world_tile_query.get(click.event_target()) else {
-            continue;
-        };
-
-        let mut units_on_tile: Vec<(Entity, &UnitComponent)> = Vec::new();
-        for (entity, owner, unit_component, child_of) in unit_query.iter() {
-            let is_players_unit = owner.0 == nation_component.0;
-            if !is_players_unit {
-                continue;
-            }
-
-            if let Ok(tile_component) = world_tile_query.get(child_of.0) {
-                if tile_component.0 == clicked_tile.0 {
-                    units_on_tile.push((entity, unit_component));
-                }
-            }
-        }
-
-        if units_on_tile.is_empty() {
-            for selected in selected_unit_query.iter() {
-                commands.entity(selected).remove::<SelectedUnit>();
-            }
-            // 清除 Move 按钮激活状态
-            for entity in move_button_query.iter() {
-                commands.entity(entity).remove::<MoveButtonActive>();
-                commands
-                    .entity(entity)
-                    .insert(BackgroundColor(Color::srgb(0.3, 0.3, 0.6)));
-            }
-            continue;
-        }
-
-        let current_selected = selected_unit_query.iter().next();
-
-        let entity_to_select = if let Some(current) = current_selected {
-            let is_on_same_tile = units_on_tile.iter().any(|(e, _)| *e == current);
-            if is_on_same_tile {
-                let current_idx = units_on_tile
-                    .iter()
-                    .position(|(e, _)| *e == current)
-                    .unwrap_or(0);
-                let next_idx = (current_idx + 1) % units_on_tile.len();
-                units_on_tile[next_idx].0
-            } else {
-                units_on_tile[0].0
-            }
-        } else {
-            units_on_tile[0].0
-        };
-
-        for selected in selected_unit_query.iter() {
-            commands.entity(selected).remove::<SelectedUnit>();
-        }
-
-        // 清除 Move 按钮激活状态（切换单位时重置）
-        for entity in move_button_query.iter() {
-            commands.entity(entity).remove::<MoveButtonActive>();
+    // 消除 MoveButtonActive 状态的辅助闭包
+    let deactivate_move_button = |commands: &mut Commands| {
+        if let Ok(entity) = move_button_query.single() {
             commands
                 .entity(entity)
+                .remove::<MoveButtonActive>()
                 .insert(BackgroundColor(Color::srgb(0.3, 0.3, 0.6)));
         }
+    };
 
-        // 选中该单位（Move 按钮不激活，但自动显示移动范围高亮）
-        commands.entity(entity_to_select).insert(SelectedUnit);
+    for click in click_events.read() {
+        // 缓存当前事件发生时的状态，避免反复查询
+        let current_selected = selected_unit_query.single().ok();
+
+        // 1. 点击的是单位实体
+        if let Ok((unit_entity, owner)) = unit_query.get(click.event_target()) {
+            //消除 MoveButtonActive 状态
+            deactivate_move_button(&mut commands);
+
+            // 只处理本国单位：切换选中目标
+            // Notes: 这意味着如果点击的是当前目标，也会解除选中然后重新选中
+            if owner.0 == player_nation {
+                if let Some(selected) = current_selected {
+                    commands.entity(selected).remove::<SelectedUnit>();
+                }
+                commands.entity(unit_entity).insert(SelectedUnit);
+            }
+            continue;
+        }
+
+        // 2. 点击的是地块
+        if let Ok(children) = children_query.get(click.event_target()) {
+            // 取消旧选中并关闭移动模式
+            if let Some(selected) = current_selected {
+                commands.entity(selected).remove::<SelectedUnit>();
+            }
+            deactivate_move_button(&mut commands);
+
+            // 获得地块的子元素
+            // 如果没有子元素，说明地块上也没有任何单位实体
+            let Some(children) = children else { continue };
+
+            // 收集当前地块上属于玩家的单位
+            let units_on_tile: Vec<Entity> = children
+                .iter()
+                .filter_map(|child| {
+                    unit_query
+                        .get(child)
+                        .ok()
+                        .and_then(|(entity, owner)| (owner.0 == player_nation).then_some(entity))
+                })
+                .collect();
+
+            if units_on_tile.is_empty() {
+                continue;
+            }
+
+            // 决定下一个选中的单位
+            let next_selected = match current_selected {
+                Some(selected) => {
+                    if let Some(current_idx) = units_on_tile.iter().position(|&e| e == selected) {
+                        // 同一地块：切换到下一个单位
+                        let next_idx = (current_idx + 1) % units_on_tile.len();
+                        units_on_tile[next_idx]
+                    } else {
+                        // 不同地块：选择该地块的第一个单位
+                        units_on_tile[0]
+                    }
+                }
+                None => units_on_tile[0],
+            };
+
+            commands.entity(next_selected).insert(SelectedUnit);
+        }
     }
 }
 
@@ -1154,7 +1136,6 @@ fn update_unit_info_panel(
     mut panel: Single<&mut Visibility, With<UnitInfoPanel>>,
     ring_progress_query: Single<&MaterialNode<RingProgressMaterial>, With<UnitRingProgress>>,
     unit_icon_query: Single<&mut ImageNode, (With<UnitInfoIcon>, Without<UnitRingProgress>)>,
-    mut strength_row_query: Single<&mut Visibility, (With<StrengthRow>, Without<UnitInfoPanel>)>,
     mut text_fields: Query<(&mut Text, &UnitInfoField)>,
     selected_unit_query: Query<
         (&UnitComponent, &Health, &Strength, &Movement, &Experience),
@@ -1183,13 +1164,6 @@ fn update_unit_info_panel(
             UnitComponent::Civilian(unit) => unit.as_str(),
         };
         unit_icon_query.into_inner().image = materials.texture_handle(icon_char);
-
-        // 力量行：只有军事单位（strength > 0）才显示
-        if strength.0 > 0 {
-            **strength_row_query = Visibility::Visible;
-        } else {
-            **strength_row_query = Visibility::Hidden;
-        }
 
         // 更新所有文本字段
         for (mut text, field) in text_fields.iter_mut() {
