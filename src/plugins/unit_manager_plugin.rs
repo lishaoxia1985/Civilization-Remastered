@@ -13,7 +13,9 @@ use civ_map_generator::ruleset::{
 use crate::{
     AppState, NationComponent, Player,
     assets::{ColorReplaceMaterial, GameAssets},
-    components::{Experience, Health, Movement, Owner, Strength, UnitComponent},
+    components::{
+        Civilian, Experience, Health, Military, Movement, Owner, Strength, UnitComponent, UnitKind,
+    },
     resources::{MapParametersRes, TileEntityMap, TileMapRes},
 };
 
@@ -83,12 +85,11 @@ fn spawn_starting_units_for_every_nations(
             Unit::Warrior
         };
 
-        let tile_entity = tile_entity_map
-            .get(start_tile);
+        let tile_entity = tile_entity_map.get(start_tile);
 
         let warrior_entity = commands
-            .spawn(unit_bundle(
-                UnitComponent::Military(military_unit),
+            .spawn(unit_bundle::<Military>(
+                military_unit,
                 civilization,
                 ruleset,
                 inner_rectangle.clone(),
@@ -100,8 +101,8 @@ fn spawn_starting_units_for_every_nations(
             .id();
 
         let settler_entity = commands
-            .spawn(unit_bundle(
-                UnitComponent::Civilian(Unit::Settler),
+            .spawn(unit_bundle::<Civilian>(
+                Unit::Settler,
                 civilization,
                 ruleset,
                 inner_rectangle.clone(),
@@ -130,8 +131,8 @@ fn spawn_starting_units_for_every_nations(
         let tile_entity = tile_entity_map.get(tile);
 
         let settler_entity = commands
-            .spawn(unit_bundle(
-                UnitComponent::Civilian(Unit::Settler),
+            .spawn(unit_bundle::<Civilian>(
+                Unit::Settler,
                 city_state,
                 ruleset,
                 inner_rectangle.clone(),
@@ -147,8 +148,8 @@ fn spawn_starting_units_for_every_nations(
 }
 
 /// 创建单位组（包含战斗系统所需的所有组件）
-fn unit_bundle(
-    unit: UnitComponent,
+fn unit_bundle<K: UnitKind>(
+    unit: Unit,
     nation: Nation,
     ruleset: &Ruleset,
     inner_rectangle: Handle<Mesh>,
@@ -157,56 +158,52 @@ fn unit_bundle(
     materials: &GameAssets,
     tile_pixel_size: Vec2,
 ) -> impl Bundle {
-    let (unit_name, transform_y, out_texture_name) = match &unit {
-        UnitComponent::Civilian(unit) => (unit.as_str(), -tile_pixel_size.y / 4., "sv_unitcitizen"),
-        UnitComponent::Military(unit) => (unit.as_str(), tile_pixel_size.y / 4., "sv_unitmilitary"),
+    let is_military = K::IS_MILITARY;
+    let (unit_name, transform_y, out_texture_name) = if is_military {
+        (unit.as_str(), tile_pixel_size.y / 4., "sv_unitmilitary")
+    } else {
+        (unit.as_str(), -tile_pixel_size.y / 4., "sv_unitcitizen")
     };
 
     let outer_color = ruleset.nations[nation].outer_color;
     let inner_color = ruleset.nations[nation].inner_color;
 
     // 从 ruleset 中获取单位属性
-    let unit_key = *match &unit {
-        UnitComponent::Military(u) => u,
-        UnitComponent::Civilian(u) => u,
-    };
-    let unit_info = &ruleset.units[unit_key];
+    let unit_info = &ruleset.units[unit];
 
-    let (strength, health, movement) = match &unit {
-        UnitComponent::Military(_) => {
-            let hp = 100u32;
-            let mv = unit_info.movement.max(0) as u32;
-            (
-                Strength(unit_info.strength.max(0) as u32),
-                Health {
-                    current: hp,
-                    max: hp,
-                },
-                Movement {
-                    current: mv,
-                    max: mv,
-                },
-            )
-        }
-        UnitComponent::Civilian(_) => {
-            let hp = 50u32;
-            let mv = unit_info.movement.max(0) as u32;
-            (
-                Strength(0),
-                Health {
-                    current: hp,
-                    max: hp,
-                },
-                Movement {
-                    current: mv,
-                    max: mv,
-                },
-            )
-        }
+    let (strength, health, movement) = if is_military {
+        let hp = 100u32;
+        let mv = unit_info.movement.max(0) as u32;
+        (
+            Strength(unit_info.strength.max(0) as u32),
+            Health {
+                current: hp,
+                max: hp,
+            },
+            Movement {
+                current: mv,
+                max: mv,
+            },
+        )
+    } else {
+        let hp = 50u32;
+        let mv = unit_info.movement.max(0) as u32;
+        (
+            Strength(0),
+            Health {
+                current: hp,
+                max: hp,
+            },
+            Movement {
+                current: mv,
+                max: mv,
+            },
+        )
     };
 
     (
-        unit,
+        UnitComponent(unit),
+        K::default(), // 平民/军事标签
         Owner(nation),
         strength,
         health,

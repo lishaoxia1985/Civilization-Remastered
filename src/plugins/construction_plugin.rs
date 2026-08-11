@@ -10,7 +10,7 @@ use civ_map_generator::ruleset::enums::Unit;
 
 use crate::{
     BuildRequestMessage, FoundCityRequestMessage,
-    components::{City, Owner, TileImprovementComponent, UnitComponent},
+    components::{City, Civilian, Owner, TileImprovementComponent, UnitComponent},
     resources::TileEntityMap,
 };
 
@@ -28,7 +28,7 @@ impl Plugin for ConstructionPlugin {
 fn handle_build_request(
     event: On<BuildRequestMessage>,
     mut commands: Commands,
-    unit_query: Query<(Entity, &ChildOf, &UnitComponent, &Owner)>,
+    unit_query: Query<(Entity, &ChildOf, &UnitComponent, &Owner), With<Civilian>>,
     tile_entity_map: Res<TileEntityMap>,
     improvement_query: Query<(), With<TileImprovementComponent>>,
 ) {
@@ -42,8 +42,7 @@ fn handle_build_request(
     };
 
     // 只有工人单位可以建造设施
-    let is_worker = matches!(unit_component, UnitComponent::Civilian(Unit::Worker));
-    if !is_worker {
+    if unit_component.0 != Unit::Worker {
         return;
     }
 
@@ -67,7 +66,7 @@ fn handle_build_request(
 fn handle_found_city_request(
     event: On<FoundCityRequestMessage>,
     mut commands: Commands,
-    unit_query: Query<(Entity, &ChildOf, &UnitComponent, &Owner)>,
+    unit_query: Query<(Entity, &ChildOf, &UnitComponent, &Owner), With<Civilian>>,
     tile_entity_map: Res<TileEntityMap>,
     city_query: Query<(), With<City>>,
 ) {
@@ -80,11 +79,7 @@ fn handle_found_city_request(
     };
 
     // 只有移民单位可以建立城市
-    let is_settler = matches!(
-        unit_component,
-        UnitComponent::Civilian(civ_map_generator::ruleset::enums::Unit::Settler)
-    );
-    if !is_settler {
+    if unit_component.0 != Unit::Settler {
         return;
     }
 

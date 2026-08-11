@@ -10,7 +10,7 @@ use civ_map_generator::{ruleset::enums::TerrainType, tile::Tile, tile_map::TileM
 
 use crate::{
     AttackRequestMessage, MoveRequestMessage,
-    components::{Movement, Owner, UnitComponent},
+    components::{Military, Movement, Owner, UnitComponent},
     resources::{TileEntityMap, TileMapRes},
 };
 
@@ -27,6 +27,10 @@ impl Plugin for MovementPlugin {
 fn handle_move_request(
     event: On<MoveRequestMessage>,
     mut commands: Commands,
+    military_unit_query: Query<
+        (Entity, &ChildOf, &Movement, &Owner, &UnitComponent),
+        With<Military>,
+    >,
     unit_query: Query<(Entity, &ChildOf, &Movement, &Owner, &UnitComponent), With<UnitComponent>>,
     tile_map: Option<Res<TileMapRes>>,
     tile_entity_map: Res<TileEntityMap>,
@@ -35,7 +39,7 @@ fn handle_move_request(
     let unit_entity = move_request.unit;
     let target_tile = move_request.target_tile;
 
-    let Ok((_, _, movement, unit_owner, unit_component)) = unit_query.get(unit_entity) else {
+    let Ok((_, _, movement, unit_owner, _)) = unit_query.get(unit_entity) else {
         unreachable!(
             "The unit you are trying to move does not exist! You should never send a move request to a non-existent unit!"
         );
@@ -53,13 +57,12 @@ fn handle_move_request(
     let target_tile_entity = tile_entity_map.get(target_tile);
 
     // 检查目标地块是否有敌方军事单位（只有军事单位才会阻挡移动）
-    let has_enemy = unit_query
+    let has_enemy = military_unit_query
         .iter()
-        .any(|(entity, child_of, _, owner, unit_component)| {
+        .any(|(entity, child_of, _, owner, _)| {
             entity != unit_entity
                 && child_of.0 == target_tile_entity
                 && !is_same_owner(owner, unit_owner)
-                && matches!(unit_component, UnitComponent::Military(_))
         });
 
     // 计算移动到目标地块的实际移动消耗
@@ -77,12 +80,9 @@ fn handle_move_request(
 
         for neighbor in neighbors {
             let neighbor_entity = tile_entity_map.get(neighbor);
-            let is_occupied = unit_query
+            let is_occupied = military_unit_query
                 .iter()
-                .any(|(_, child_of, _, _, unit_component)| {
-                    child_of.0 == neighbor_entity
-                        && matches!(unit_component, UnitComponent::Military(_))
-                });
+                .any(|(_, child_of, _, _, _)| child_of.0 == neighbor_entity);
 
             if !is_occupied {
                 // 移动到相邻位置

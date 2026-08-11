@@ -14,11 +14,28 @@ pub struct Owner(pub Nation);
 
 /// 单位类型组件
 #[derive(Component, Clone, Copy, Debug)]
-pub enum UnitComponent {
-    /// 平民单位
-    Civilian(Unit),
-    /// 军事单位
-    Military(Unit),
+pub struct UnitComponent(pub Unit);
+
+/// 平民单位标签
+#[derive(Component, Clone, Copy, Debug, Default)]
+pub struct Civilian;
+
+/// 军事单位标签
+#[derive(Component, Clone, Copy, Debug, Default)]
+pub struct Military;
+
+/// 单位类型标签 trait
+pub trait UnitKind: Component + Default {
+    /// 是否为军事单位
+    const IS_MILITARY: bool;
+}
+
+impl UnitKind for Civilian {
+    const IS_MILITARY: bool = false;
+}
+
+impl UnitKind for Military {
+    const IS_MILITARY: bool = true;
 }
 
 /// 单位战斗力

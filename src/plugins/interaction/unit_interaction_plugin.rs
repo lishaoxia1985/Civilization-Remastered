@@ -85,12 +85,12 @@ fn show_movement_range(
     mut commands: Commands,
     world_tile_query: Query<&WorldTile>,
     tile_entity_map: Res<TileEntityMap>,
-    unit_query: Query<(&Owner, &UnitComponent, &ChildOf, &Movement)>,
+    unit_query: Query<(&Owner, &ChildOf, &Movement), With<UnitComponent>>,
     tile_map: Option<Res<TileMapRes>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut color_materials: ResMut<Assets<ColorMaterial>>,
 ) {
-    let Ok((selected_owner, _, child_of, movement)) = unit_query.get(trigger.entity) else {
+    let Ok((selected_owner, child_of, movement)) = unit_query.get(trigger.entity) else {
         unreachable!("Invalid unit selection")
     };
 
@@ -116,14 +116,11 @@ fn show_movement_range(
     for tile in reachable_tiles {
         let entity = tile_entity_map.get(tile);
 
-        // 检查该地块是否有敌方军事单位（只有军事单位显示红色，平民单位可以进入并俘虏）
-        let has_enemy = unit_query
-            .iter()
-            .any(|(owner, unit_component, child_of, _)| {
-                child_of.0 == entity
-                    && !is_same_owner(owner, selected_owner)
-                    && matches!(unit_component, UnitComponent::Military(_))
-            });
+        // 检查该地块是否有敌方单位
+        // 如果有敌方单位，则显示红色,否则显示绿色
+        let has_enemy = unit_query.iter().any(|(owner, child_of, ..)| {
+            child_of.0 == entity && !is_same_owner(owner, selected_owner)
+        });
 
         let material = if has_enemy {
             enemy_material.clone()
@@ -553,6 +550,7 @@ fn handle_move_target_click(
         With<SelectedUnit>,
     >,
     unit_query: Query<(Entity, &Owner, &UnitComponent, &ChildOf)>,
+    military_unit_query: Query<(Entity, &Owner, &ChildOf), With<Military>>,
     tile_map: Option<Res<TileMapRes>>,
     move_button_query: Query<Entity, With<MoveButtonActive>>,
     mut commands: Commands,
@@ -571,8 +569,7 @@ fn handle_move_target_click(
         return;
     };
 
-    let Ok((unit_entity, unit_child_of, unit_component, unit_owner, movement)) =
-        selected_unit_query.single()
+    let Ok((unit_entity, unit_child_of, _, unit_owner, movement)) = selected_unit_query.single()
     else {
         return;
     };
@@ -635,21 +632,22 @@ fn handle_move_target_click(
         // 情况2：点击合法移动目标 → 执行移动
         if reachable.contains(&target_tile.0) {
             // 查找目标地块上的敌方军事单位
-            let enemy_on_target = unit_query.iter().find(|(entity, owner, uc, child_of)| {
-                *entity != unit_entity
-                    && child_of.0 == target_tile_entity
-                    && matches!(uc, UnitComponent::Military(_))
-                    && !is_same_owner(owner, unit_owner)
-            });
+            let enemy_on_target = military_unit_query
+                .iter()
+                .find(|(entity, owner, child_of)| {
+                    *entity != unit_entity
+                        && child_of.0 == target_tile_entity
+                        && !is_same_owner(owner, unit_owner)
+                });
 
-            let is_attacker_military = matches!(unit_component, UnitComponent::Military(_));
+            let is_attacker_military = military_unit_query.get(unit_entity).is_ok();
 
             // 检查攻击者与目标地块是否相邻
             let is_adjacent = are_tiles_adjacent(unit_tile.0, target_tile.0, tile_map);
 
             // 军事单位：Move 键即攻击键，点击相邻且有敌人的地块直接攻击
             if is_attacker_military && is_adjacent {
-                if let Some((enemy_entity, _, _, _)) = enemy_on_target {
+                if let Some((enemy_entity, _, _)) = enemy_on_target {
                     commands.trigger(AttackRequestMessage {
                         attacker: unit_entity,
                         target: enemy_entity,
@@ -677,6 +675,7 @@ fn handle_move_target_click(
 fn show_unit_action_menu(
     action_menu: Single<(Entity, &mut Visibility, Option<&mut Children>), With<UnitActionMenu>>,
     selected_query: Query<(Entity, &UnitComponent), With<SelectedUnit>>,
+    military_query: Query<(), With<Military>>,
     mut commands: Commands,
     mut last_selected: Local<Option<Entity>>,
 ) {
@@ -704,19 +703,17 @@ fn show_unit_action_menu(
             .with_children(|builder| {
                 spawn_action_button(builder, "Move", ActionButton::Move);
 
-                match unit_component {
+                match unit_component.0 {
                     // 军事单位：Move 键即攻击键，不需要单独的 Attack 按钮
-                    UnitComponent::Military(_) => {}
-                    UnitComponent::Civilian(unit) => match unit {
-                        Unit::Settler => {
-                            spawn_action_button(builder, "Found City", ActionButton::FoundCity);
-                        }
-                        Unit::Worker => {
-                            spawn_action_button(builder, "Build Farm", ActionButton::BuildFarm);
-                            spawn_action_button(builder, "Build Mine", ActionButton::BuildMine);
-                        }
-                        _ => {}
-                    },
+                    _ if military_query.get(selected_entity).is_ok() => {}
+                    Unit::Settler => {
+                        spawn_action_button(builder, "Found City", ActionButton::FoundCity);
+                    }
+                    Unit::Worker => {
+                        spawn_action_button(builder, "Build Farm", ActionButton::BuildFarm);
+                        spawn_action_button(builder, "Build Mine", ActionButton::BuildMine);
+                    }
+                    _ => {}
                 }
 
                 spawn_action_button(builder, "Skip Turn", ActionButton::SkipTurn);
@@ -800,9 +797,7 @@ fn handle_unit_action_click(
                             .insert(BackgroundColor(Color::srgb(0.3, 0.3, 0.6)));
                     }
 
-                    if let Ok((selected_entity, _, owner, _, _, movement, child_of)) =
-                        selected_unit_query.single()
-                    {
+                    if let Ok((_, _, _, _, _, movement, _)) = selected_unit_query.single() {
                         if movement.current == 0 {
                             continue;
                         }
@@ -1159,10 +1154,7 @@ fn update_unit_info_panel(
         }
 
         // 更新单位图标
-        let icon_char = match unit_component {
-            UnitComponent::Military(unit) => unit.as_str(),
-            UnitComponent::Civilian(unit) => unit.as_str(),
-        };
+        let icon_char = unit_component.0.as_str();
         unit_icon_query.into_inner().image = materials.texture_handle(icon_char);
 
         // 更新所有文本字段
@@ -1170,11 +1162,7 @@ fn update_unit_info_panel(
             match field {
                 UnitInfoField::Name => {
                     // 更新单位名称
-                    let unit_name = match unit_component {
-                        UnitComponent::Civilian(unit) => unit.as_str(),
-                        UnitComponent::Military(unit) => unit.as_str(),
-                    };
-                    text.0 = unit_name.to_string();
+                    text.0 = unit_component.0.as_str().to_string();
                 }
                 UnitInfoField::Strength => {
                     // 更新攻击力
