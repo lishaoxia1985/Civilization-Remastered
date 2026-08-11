@@ -270,11 +270,10 @@ fn show_main_camera_area(
         });
 
     for (offset_coordinate, tile) in tiles_to_update {
-        if let Some(tile_entity) = tile_entity_map.get(tile) {
-            if let Ok(mut transform) = set.p1().get_mut(tile_entity) {
-                let pixel_position = grid.offset_to_pixel(offset_coordinate);
-                transform.translation = Vec3::from((pixel_position[0], pixel_position[1], 0.));
-            }
+        let tile_entity = tile_entity_map.get(tile);
+        if let Ok(mut transform) = set.p1().get_mut(tile_entity) {
+            let pixel_position = grid.offset_to_pixel(offset_coordinate);
+            transform.translation = Vec3::from((pixel_position[0], pixel_position[1], 0.));
         }
     }
 

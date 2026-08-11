@@ -47,9 +47,7 @@ fn handle_build_request(
         return;
     }
 
-    let Some(target_tile_entity) = tile_entity_map.get(target_tile) else {
-        return;
-    };
+    let target_tile_entity = tile_entity_map.get(target_tile);
 
     // 检查目标地块是否已有设施
     if improvement_query.get(target_tile_entity).is_ok() {
@@ -90,9 +88,7 @@ fn handle_found_city_request(
         return;
     }
 
-    let Some(target_tile_entity) = tile_entity_map.get(target_tile) else {
-        return;
-    };
+    let target_tile_entity = tile_entity_map.get(target_tile);
 
     // 检查目标地块是否已有城市
     if city_query.get(target_tile_entity).is_ok() {

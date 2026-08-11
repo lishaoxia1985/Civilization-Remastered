@@ -114,32 +114,32 @@ fn show_movement_range(
         color_materials.add(ColorMaterial::from_color(Color::srgba(1.0, 0.0, 0.0, 0.4)));
 
     for tile in reachable_tiles {
-        if let Some(entity) = tile_entity_map.get(tile) {
-            // 检查该地块是否有敌方军事单位（只有军事单位显示红色，平民单位可以进入并俘虏）
-            let has_enemy = unit_query
-                .iter()
-                .any(|(owner, unit_component, child_of, _)| {
-                    child_of.0 == entity
-                        && !is_same_owner(owner, selected_owner)
-                        && matches!(unit_component, UnitComponent::Military(_))
-                });
+        let entity = tile_entity_map.get(tile);
 
-            let material = if has_enemy {
-                enemy_material.clone()
-            } else {
-                move_material.clone()
-            };
-
-            commands.entity(entity).with_children(|parent| {
-                parent.spawn((
-                    Mesh2d(highlight_mesh.clone()),
-                    MeshMaterial2d(material),
-                    Transform::from_xyz(0.0, 0.0, 10.0),
-                    MoveRangeHighlight,
-                    Pickable::IGNORE,
-                ));
+        // 检查该地块是否有敌方军事单位（只有军事单位显示红色，平民单位可以进入并俘虏）
+        let has_enemy = unit_query
+            .iter()
+            .any(|(owner, unit_component, child_of, _)| {
+                child_of.0 == entity
+                    && !is_same_owner(owner, selected_owner)
+                    && matches!(unit_component, UnitComponent::Military(_))
             });
-        }
+
+        let material = if has_enemy {
+            enemy_material.clone()
+        } else {
+            move_material.clone()
+        };
+
+        commands.entity(entity).with_children(|parent| {
+            parent.spawn((
+                Mesh2d(highlight_mesh.clone()),
+                MeshMaterial2d(material),
+                Transform::from_xyz(0.0, 0.0, 10.0),
+                MoveRangeHighlight,
+                Pickable::IGNORE,
+            ));
+        });
     }
 }
 
@@ -941,17 +941,17 @@ fn show_attack_targets(
         materials.add(ColorMaterial::from_color(Color::srgba(1.0, 0.0, 0.0, 0.4)));
 
     for &tile in &neighbors {
-        if let Some(entity) = tile_entity_map.get(tile) {
-            commands.entity(entity).with_children(|parent| {
-                parent.spawn((
-                    Mesh2d(highlight_mesh.clone()),
-                    MeshMaterial2d(highlight_material.clone()),
-                    Transform::from_xyz(0.0, 0.0, 10.0),
-                    AttackTargetHighlight,
-                    Pickable::default(),
-                ));
-            });
-        }
+        let entity = tile_entity_map.get(tile);
+
+        commands.entity(entity).with_children(|parent| {
+            parent.spawn((
+                Mesh2d(highlight_mesh.clone()),
+                MeshMaterial2d(highlight_material.clone()),
+                Transform::from_xyz(0.0, 0.0, 10.0),
+                AttackTargetHighlight,
+                Pickable::default(),
+            ));
+        });
     }
 }
 

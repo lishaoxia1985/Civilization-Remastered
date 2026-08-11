@@ -37,8 +37,8 @@ impl TileEntityMap {
     }
 
     /// 获取指定瓦片对应的实体
-    pub fn get(&self, tile: Tile) -> Option<Entity> {
-        self.0.get(tile.index()).copied()
+    pub fn get(&self, tile: Tile) -> Entity {
+        self.0[tile.index()]
     }
 }
 

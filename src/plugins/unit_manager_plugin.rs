@@ -84,8 +84,7 @@ fn spawn_starting_units_for_every_nations(
         };
 
         let tile_entity = tile_entity_map
-            .get(start_tile)
-            .expect("Tile entity not found");
+            .get(start_tile);
 
         let warrior_entity = commands
             .spawn(unit_bundle(
@@ -128,7 +127,7 @@ fn spawn_starting_units_for_every_nations(
     // TODO: 当前未实现CityState相关逻辑
     //       未来或许和文明逻辑一致
     for (&tile, &city_state) in tile_map.starting_tile_and_city_state.iter() {
-        let tile_entity = tile_entity_map.get(tile).expect("Tile entity not found");
+        let tile_entity = tile_entity_map.get(tile);
 
         let settler_entity = commands
             .spawn(unit_bundle(
