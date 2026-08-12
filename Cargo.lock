@@ -2127,7 +2127,7 @@ dependencies = [
 [[package]]
 name = "civ_map_generator"
 version = "0.1.9"
-source = "git+https://github.com/lishaoxia1985/civ-map-generator.git?branch=master#db0e6bc89477f6ea14d90c1f8ffbdd7e80ae6318"
+source = "git+https://github.com/lishaoxia1985/civ-map-generator.git?branch=master#595255fa10779dc377a52c349a041ac0e6b03781"
 dependencies = [
  "arrayvec",
  "bitflags 2.11.1",

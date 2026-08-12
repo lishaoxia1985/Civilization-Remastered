@@ -42,6 +42,12 @@ impl UnitKind for Military {
 #[derive(Component, Clone, Copy, Debug)]
 pub struct Strength(pub u32);
 
+#[derive(Component, Clone, Copy, Debug)]
+pub struct RangedStrength(pub u32);
+
+#[derive(Component, Clone, Copy, Debug)]
+pub struct Range(pub u32);
+
 /// 单位生命值
 #[derive(Component, Clone, Copy, Debug)]
 pub struct Health {
