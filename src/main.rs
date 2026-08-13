@@ -190,7 +190,7 @@ pub struct Player;
 pub struct Enemy;
 
 #[derive(Component)]
-pub struct SciencePerTurn(pub i32);
+pub struct SciencePerTurn(pub u32);
 
 /// 金币收入
 ///
