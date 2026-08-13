@@ -24,20 +24,6 @@ pub struct Civilian;
 #[derive(Component, Clone, Copy, Debug, Default)]
 pub struct Military;
 
-/// 单位类型标签 trait
-pub trait UnitKind: Component + Default {
-    /// 是否为军事单位
-    const IS_MILITARY: bool;
-}
-
-impl UnitKind for Civilian {
-    const IS_MILITARY: bool = false;
-}
-
-impl UnitKind for Military {
-    const IS_MILITARY: bool = true;
-}
-
 /// 单位战斗力
 #[derive(Component, Clone, Copy, Debug)]
 pub struct Strength(pub u32);
@@ -84,10 +70,6 @@ pub struct Experience {
 /// 已选中的单位标记
 #[derive(Component)]
 pub struct SelectedUnit;
-
-/// 地块上单位列表标记 - 用于在相同地块切换选择不同单位
-#[derive(Component)]
-pub struct UnitOnTile;
 
 /// 可移动范围高亮标记
 #[derive(Component)]
