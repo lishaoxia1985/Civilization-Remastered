@@ -726,15 +726,20 @@ pub fn remaining_science_to_tech(
 ) -> u32 {
     let spare_science = match tech_state_manager.0[tech] {
         TechState::Researched => panic!("Technology is already researched"),
-        TechState::Available | TechState::ResearchedAndRepeatable => overflow_science.0,   
+        TechState::Available | TechState::ResearchedAndRepeatable => overflow_science.0,
         TechState::Locked => 0,
     };
 
-    let cost = tech_cost_manager.0.get(&tech).copied().expect("Tech cost not found");
+    let cost = tech_cost_manager
+        .0
+        .get(&tech)
+        .copied()
+        .expect("Tech cost not found");
     let researched = tech_progress.0.get(&tech).copied().unwrap_or(0);
 
     // 避免下溢：如果已投入 + 溢出 >= 成本，剩余为 0
-    cost.saturating_sub(researched).saturating_sub(spare_science)
+    cost.saturating_sub(researched)
+        .saturating_sub(spare_science)
 }
 
 /// 计算完成科技还需要的回合数
