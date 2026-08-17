@@ -255,9 +255,10 @@ pub struct FoundCityRequestMessage {
 // 定义结算顺序的 SystemSet
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ResolutionPhase {
-    Science,    // 第一阶段：科技
-    Production, // 第二阶段：产能
-    // Food,       // 第三阶段：食物（未来扩展）
-    AiSelectTech,
-    AutoEndTurn, // 只有敌人回合时才会运行此系统集中的系统
+    MovementRestore, // 回合开始时恢复移动点数
+    Science,    // 科技结算，该系统集变体用于运行每回合科研点数累计、科技研发等系统
+    Production, // 产能结算，该系统集变体用于运行城市的产能累计、建筑建造等系统
+    // Food,       // 食物结算，该系统集变体用于运行城市食物累计等系统
+    AiSelectTech, //  ai选择科技
+    AutoEndTurn, // 只有敌人回合时才会运行此系统集中的系统，用于敌人自动结束回合
 }

@@ -5,13 +5,14 @@
 //! - 伤害计算
 //! - 战斗结果（摧毁、伤害）
 //! - 战斗修正（地形、生命值等）
+//! - 远程/近战攻击区分（远程单位攻击不会受到反击）
 
 use bevy::prelude::*;
 use civ_map_generator::ruleset::enums::Nation;
 
 use crate::{
-    AttackRequestMessage, TurnManager, TurnState,
-    components::{Health, Movement, Owner, SelectedUnit, Strength},
+    AttackRequestMessage, NationComponent, ResolutionPhase, TurnManager, TurnState,
+    components::{Health, Movement, Owner, Range, RangedStrength, SelectedUnit, Strength},
 };
 
 /// 战斗插件
@@ -19,8 +20,7 @@ pub struct CombatPlugin;
 
 impl Plugin for CombatPlugin {
     fn build(&self, app: &mut App) {
-        // 在每回合开始时恢复所有单位的移动力（而不是每帧）
-        app.add_systems(OnEnter(TurnState::Start), advance_turn_system)
+        app.add_systems(OnEnter(TurnState::Start), restore_movement.in_set(ResolutionPhase::MovementRestore))
             .add_observer(resolve_combat);
     }
 }
@@ -31,7 +31,13 @@ impl Plugin for CombatPlugin {
 fn resolve_combat(
     event: On<AttackRequestMessage>,
     mut commands: Commands,
-    unit_query: Query<(&Owner, &Health, &Strength)>,
+    unit_query: Query<(
+        &Owner,
+        &Health,
+        &Strength,
+        Option<&RangedStrength>,
+        Option<&Range>,
+    )>,
     turn_manager: Res<TurnManager>,
 ) {
     let attack = event.event();
@@ -49,26 +55,47 @@ fn resolve_attack(
     commands: &mut Commands,
     attacker: Entity,
     target: Entity,
-    unit_query: &Query<(&Owner, &Health, &Strength)>,
+    unit_query: &Query<(
+        &Owner,
+        &Health,
+        &Strength,
+        Option<&RangedStrength>,
+        Option<&Range>,
+    )>,
     turn_number: u32,
 ) {
     // ---- 1. 获取组件 ----
-    let Ok((attacker_owner, attacker_health, attacker_strength)) = unit_query.get(attacker) else {
+    let Ok((
+        attacker_owner,
+        attacker_health,
+        attacker_strength,
+        attacker_ranged_strength,
+        attacker_range,
+    )) = unit_query.get(attacker)
+    else {
         warn!("Attacker missing combat components");
         return;
     };
-    let Ok((defender_owner, defender_health, defender_strength)) = unit_query.get(target) else {
+    let Ok((defender_owner, defender_health, defender_strength, _, _)) = unit_query.get(target)
+    else {
         warn!("Defender missing combat components");
         return;
     };
 
     let attacker_owner = attacker_owner.0;
-
     let defender_owner = defender_owner.0;
 
+    // 判断攻击者是否为远程单位（同时拥有 RangedStrength 和 Range 组件）
+    let is_ranged_attacker = attacker_ranged_strength.is_some() && attacker_range.is_some();
+
     // ---- 2. 基础战斗力（不受血量影响） ----
+    // 远程单位使用远程战斗力，近战单位使用近战战斗力
     // TODO: 当前并未添加地形和UnitPromotion对攻击力的影响
-    let attack_power = attacker_strength.0 as f32;
+    let attack_power = if is_ranged_attacker {
+        attacker_ranged_strength.unwrap().0 as f32
+    } else {
+        attacker_strength.0 as f32
+    };
     let defense_power = defender_strength.0 as f32;
 
     // ---- 3. 血量惩罚系数（受伤单位造成伤害减少） ----
@@ -145,7 +172,12 @@ fn resolve_attack(
     let damage_to_defender = compute_damage(ratio, false, p1, attacker_health_factor);
 
     // 防守方对攻击方造成的反击伤害（防守方是伤害来源，受防守方血量惩罚）
-    let damage_to_attacker = compute_damage(ratio, true, p2, defender_health_factor);
+    // 远程单位攻击时不会受到反击伤害；近战单位攻击时和原算法一致
+    let damage_to_attacker = if is_ranged_attacker {
+        0
+    } else {
+        compute_damage(ratio, true, p2, defender_health_factor)
+    };
 
     // ---- 6. 应用伤害 ----
     let new_attacker_hp = attacker_health.current.saturating_sub(damage_to_attacker);
@@ -180,12 +212,24 @@ fn resolve_attack(
     commands.entity(attacker).remove::<SelectedUnit>();
 }
 
-// ============ 回合推进系统 ============
+/// 恢复当前 Nation 所属单位的移动力
+fn restore_movement(
+    mut unit_query: Query<(&Owner, &mut Movement)>,
+    turn_manager: Res<TurnManager>,
+    nation_query: Query<&NationComponent>,
+) {
+    // 获取当前回合的 Nation
+    let current_nation_entity = turn_manager.current_nation_entity();
+    let Ok(nation_component) = nation_query.get(current_nation_entity) else {
+        panic!("Current nation entity missing NationComponent");
+    };
+    let current_nation = nation_component.0;
 
-/// 回合推进系统 - 恢复单位移动力
-fn advance_turn_system(mut unit_query: Query<&mut Movement>) {
-    for mut movement in unit_query.iter_mut() {
-        movement.current = movement.max;
+    // 只恢复当前 Nation 所属单位的移动力
+    for (owner, mut movement) in unit_query.iter_mut() {
+        if owner.0 == current_nation {
+            movement.current = movement.max;
+        }
     }
 }
 
