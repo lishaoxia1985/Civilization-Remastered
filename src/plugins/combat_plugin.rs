@@ -20,8 +20,11 @@ pub struct CombatPlugin;
 
 impl Plugin for CombatPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(OnEnter(TurnState::Start), restore_movement.in_set(ResolutionPhase::MovementRestore))
-            .add_observer(resolve_combat);
+        app.add_systems(
+            OnEnter(TurnState::Start),
+            restore_movement.in_set(ResolutionPhase::MovementRestore),
+        )
+        .add_observer(resolve_combat);
     }
 }
 

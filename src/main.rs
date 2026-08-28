@@ -20,9 +20,10 @@ use civ_map_generator::{
 use crate::{
     assets::{ColorReplaceMaterial, RingProgressMaterial},
     plugins::{
-        AiCombatPlugin, AssetLoadingPlugin, CameraPlugin, CombatPlugin, ConstructionPlugin,
-        EraPlugin, MapPlugin, MinimapPlugin, MovementPlugin, TechTreeScreenPlugin, TurnPlugin,
-        UnitInteractionPlugin, UnitManagerPlugin, WorldScreenUiPlugin,
+        AiCombatPlugin, AssetLoadingPlugin, CameraPlugin, CitizenAssignScreenPlugin,
+        CityConstructionPlugin, CityInteractionPlugin, CityManagementPlugin, CombatPlugin,
+        ConstructionPlugin, EraPlugin, MapPlugin, MinimapPlugin, MovementPlugin, TechTreeScreenPlugin,
+        TurnPlugin, UnitInteractionPlugin, UnitManagerPlugin, WorldScreenUiPlugin,
         tech::{AiTechPlugin, TechPlugin},
     },
     resources::{GameSettings, MapParametersRes},
@@ -51,6 +52,8 @@ pub enum ScreenState {
     #[default]
     WorldMap,
     TechTree,
+    /// 市民分配屏幕 - 在城市选择"分配市民"时进入，在地块上显示市民工作图标
+    CitizenAssign,
 }
 
 /// Turn phase state, used to control player interaction permissions and system execution conditions.
@@ -116,6 +119,10 @@ fn main() {
         .add_plugins(AssetLoadingPlugin)
         .add_plugins(CameraPlugin)
         .add_plugins(CombatPlugin)
+        .add_plugins(CityManagementPlugin)
+        .add_plugins(CityConstructionPlugin)
+        .add_plugins(CityInteractionPlugin)
+        .add_plugins(CitizenAssignScreenPlugin)
         .add_plugins(MovementPlugin)
         .add_plugins(ConstructionPlugin)
         .add_plugins(UnitInteractionPlugin)
@@ -256,9 +263,9 @@ pub struct FoundCityRequestMessage {
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ResolutionPhase {
     MovementRestore, // 回合开始时恢复移动点数
-    Science,    // 科技结算，该系统集变体用于运行每回合科研点数累计、科技研发等系统
-    Production, // 产能结算，该系统集变体用于运行城市的产能累计、建筑建造等系统
+    Science,         // 科技结算，该系统集变体用于运行每回合科研点数累计、科技研发等系统
+    Production,      // 产能结算，该系统集变体用于运行城市的产能累计、建筑建造等系统
     // Food,       // 食物结算，该系统集变体用于运行城市食物累计等系统
     AiSelectTech, //  ai选择科技
-    AutoEndTurn, // 只有敌人回合时才会运行此系统集中的系统，用于敌人自动结束回合
+    AutoEndTurn,  // 只有敌人回合时才会运行此系统集中的系统，用于敌人自动结束回合
 }

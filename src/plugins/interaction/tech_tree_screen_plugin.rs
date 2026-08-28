@@ -71,7 +71,7 @@ impl Plugin for TechTreeScreenPlugin {
 
 /// 处理科技按钮点击
 fn handle_tech_click_system(
-    tech_button_query: Query<(&Interaction, &TechButton)>,
+    tech_button_query: Query<(&Interaction, &TechButton), Changed<Interaction>>,
     close_button_query: Query<(&Interaction, &CloseTechTreeButton)>,
     mut player_query: Query<(&mut ResearchingTech, &TechStateManager), With<Player>>,
     turn_manager: Res<TurnManager>,

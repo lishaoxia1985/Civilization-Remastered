@@ -749,7 +749,7 @@ fn spawn_action_button(builder: &mut ChildSpawnerCommands, label: &str, action: 
 
 /// 处理操作按钮点击
 fn handle_unit_action_click(
-    action_button_query: Query<(&Interaction, &ActionButton, Entity)>,
+    action_button_query: Query<(&Interaction, &ActionButton, Entity), Changed<Interaction>>,
     selected_unit_query: Query<
         (
             Entity,
