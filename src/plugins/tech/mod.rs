@@ -15,7 +15,6 @@ mod tech_plugin;
 
 pub use ai::AiTechPlugin;
 pub use components::*;
+pub use functions::*;
 pub use messages::*;
 pub use tech_plugin::TechPlugin;
-
-use functions::*;

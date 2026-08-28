@@ -55,3 +55,21 @@ pub fn hex_mesh(grid: &HexGrid) -> Mesh {
     mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, vertices);
     mesh.with_inserted_indices(indices)
 }
+
+/// 生成六边形单条边线条网格
+///
+/// 使用 LineList 拓扑结构绘制六边形的一条边。
+/// `edge_index` 取值范围 0~5，对应六边形的6条边。
+/// 每条边由2个顶点组成。
+pub fn hex_edge_mesh(grid: &HexGrid, edge_index: usize) -> Mesh {
+    let hex_layout = &grid.layout;
+    let corners: Vec<[f32; 3]> = hex_layout
+        .all_corners(Hex::new(0, 0))
+        .map(|corner| [corner[0], corner[1], 0.0])
+        .to_vec();
+
+    let edge_index = edge_index % 6;
+    let start = corners[edge_index];
+    let end = corners[(edge_index + 1) % 6];
+    line_mesh(start.into(), end.into(), 1.5)
+}

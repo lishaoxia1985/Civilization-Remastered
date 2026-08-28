@@ -4,7 +4,7 @@
 
 use bevy::prelude::*;
 use civ_map_generator::{
-    ruleset::enums::{Nation, TileImprovement, Unit},
+    ruleset::enums::{Building, Nation, TileImprovement, Unit},
     tile::Tile,
 };
 
@@ -71,6 +71,10 @@ pub struct Experience {
 #[derive(Component)]
 pub struct SelectedUnit;
 
+/// 已选中的城市标记
+#[derive(Component)]
+pub struct SelectedCity;
+
 /// 可移动范围高亮标记
 #[derive(Component)]
 pub struct MoveRangeHighlight;
@@ -116,12 +120,113 @@ pub struct MoveButtonActive;
 #[derive(Component, Clone, Copy, Debug)]
 pub struct TileImprovementComponent(#[allow(dead_code)] pub TileImprovement);
 
+/// 地块设施建造进度组件 - 标记地块上正在建造的设施
+#[derive(Component, Clone, Copy, Debug)]
+pub struct TileImprovementBuildProgress {
+    /// 正在建造的设施类型
+    pub improvement: TileImprovement,
+    /// 当前建造进度（已完成的回合数）
+    pub progress: u32,
+    /// 建造所需总回合数
+    pub total_turns: u32,
+    /// 建造所属文明
+    pub owner: Nation,
+    /// 建造工人实体
+    pub worker: Entity,
+}
+
+/// 城市当前生产队列项目
+#[derive(Component, Clone, Debug)]
+pub enum CityProduction {
+    /// 生产建筑
+    Building(Building),
+    /// 生产单位
+    Unit(Unit),
+}
+
+/// 城市收益统计
+#[derive(Component, Clone, Copy, Debug, Default)]
+pub struct CityYields {
+    /// 粮食
+    pub food: u32,
+    /// 产能
+    pub production: u32,
+    /// 科研
+    pub science: u32,
+    /// 金币
+    pub gold: u32,
+    /// 文化
+    pub culture: u32,
+    /// 信仰
+    pub faith: u32,
+    /// 快乐
+    pub happiness: i32,
+}
+
 /// 城市组件 - 标记地块上的城市
 #[derive(Component, Clone, Debug)]
 pub struct City {
-    #[allow(dead_code)]
+    /// 城市名称
     pub name: String,
+    /// 城市人口（市民数）
+    pub population: u32,
+    /// 当前粮食储量
+    pub food: u32,
+    /// 人口增长所需粮食
+    pub food_needed: u32,
+    /// 城市已建造的建筑
+    pub buildings: Vec<Building>,
+    /// 当前正在生产的内容
+    pub current_production: Option<CityProduction>,
+    /// 生产进度
+    pub production_progress: u32,
+    /// 城市拥有的地块（含城市中心）
+    pub owned_tiles: Vec<Tile>,
+    /// 当前被市民工作的地块（不含城市中心）
+    pub worked_tiles: Vec<Tile>,
+    /// 文化点数（用于边界扩张）
+    pub culture: u32,
+    /// 边界扩张所需文化
+    pub culture_to_expand: u32,
+    /// 当前边界半径（扩张环数）
+    pub border_radius: u32,
+    /// 最大边界半径（城市领土可扩展到的最大范围）
+    pub max_border_radius: u32,
+    /// 市民可工作的最大半径（城市中心周围3格）
+    pub work_radius: u32,
 }
+
+impl City {
+    /// 创建一个新城市
+    pub fn new(name: String) -> Self {
+        Self {
+            name,
+            population: 1,
+            food: 0,
+            food_needed: 15,                   // 文明5：人口1->2需要15粮食
+            buildings: vec![Building::Palace], // 初始自带宫殿
+            current_production: None,
+            production_progress: 0,
+            owned_tiles: Vec::new(),
+            worked_tiles: Vec::new(),
+            culture: 0,
+            culture_to_expand: 20, // 初始边界扩张需要20文化
+            border_radius: 1,      // 初始拥有城市中心周围1格
+            max_border_radius: 5,  // 城市领土最大可扩展到5格
+            work_radius: 3,        // 市民只能工作在3格范围内（文明5规则）
+        }
+    }
+}
+
+// ============ 城市交互组件 ============
+
+/// 城市边界高亮标记 - 标记地块上渲染的城市边界可视化边框
+#[derive(Component)]
+pub struct CityBorderHighlight;
+
+/// 市民图标所关联的地块 - UI 节点形式指示其对应的地块，用于点击分配/取消分配
+#[derive(Component)]
+pub struct CitizenTile(pub Tile);
 
 // ============ 世界地图组件 ============
 

@@ -75,7 +75,7 @@ fn insert_tech_system_for_every_nation(
         }
     }
 
-    let tech_costs_of_player: HashMap<Technology, i32> = ruleset
+    let tech_costs_of_player: HashMap<Technology, u32> = ruleset
         .technologies
         .iter()
         .filter(|(_, tech_info)| {
@@ -85,7 +85,7 @@ fn insert_tech_system_for_every_nation(
         .map(|(tech, _)| (tech, cost_of_tech(tech, true, &game_settings, &map_params)))
         .collect();
 
-    let tech_costs_of_enemy: HashMap<Technology, i32> = ruleset
+    let tech_costs_of_enemy: HashMap<Technology, u32> = ruleset
         .technologies
         .iter()
         .filter(|(_, tech_info)| {
@@ -222,11 +222,11 @@ fn process_science_on_turn_start(
 
 /// 限制溢出科技点，防止过多结转到下一个科技
 pub fn limit_overflow_science(
-    overflow: i32,
+    overflow: u32,
     current_tech: Technology,
-    science_per_turn: i32,
+    science_per_turn: u32,
     map_params: &MapParametersRes,
-) -> i32 {
+) -> u32 {
     let ruleset = &map_params.0.ruleset;
     let tech_cost = ruleset.technologies[current_tech].cost;
     min(overflow, max(science_per_turn * 5, tech_cost))

@@ -749,19 +749,8 @@ fn spawn_action_button(builder: &mut ChildSpawnerCommands, label: &str, action: 
 
 /// 处理操作按钮点击
 fn handle_unit_action_click(
-    action_button_query: Query<(&Interaction, &ActionButton, Entity)>,
-    selected_unit_query: Query<
-        (
-            Entity,
-            &UnitComponent,
-            &Owner,
-            &Health,
-            &Strength,
-            &Movement,
-            &ChildOf,
-        ),
-        With<SelectedUnit>,
-    >,
+    action_button_query: Query<(&Interaction, &ActionButton, Entity), Changed<Interaction>>,
+    selected_unit_query: Query<(Entity, &Movement, &ChildOf), With<SelectedUnit>>,
     world_tile_query: Query<&WorldTile>,
     tile_map: Option<Res<TileMapRes>>,
     mut commands: Commands,
@@ -771,6 +760,10 @@ fn handle_unit_action_click(
     move_range_query: Query<Entity, With<MoveRangeHighlight>>,
     move_button_query: Query<Entity, With<MoveButtonActive>>,
 ) {
+    let Ok((entity, movement, child_of)) = selected_unit_query.single() else {
+        return;
+    };
+
     for (interaction, action, button_entity) in &action_button_query {
         if *interaction != Interaction::Pressed {
             continue;
@@ -797,17 +790,15 @@ fn handle_unit_action_click(
                             .insert(BackgroundColor(Color::srgb(0.3, 0.3, 0.6)));
                     }
 
-                    if let Ok((_, _, _, _, _, movement, _)) = selected_unit_query.single() {
-                        if movement.current == 0 {
-                            continue;
-                        }
-
-                        // 激活 Move 按钮（变色）
-                        commands.entity(button_entity).insert(MoveButtonActive);
-                        commands
-                            .entity(button_entity)
-                            .insert(BackgroundColor(Color::srgb(0.1, 0.8, 0.1)));
+                    if movement.current == 0 {
+                        continue;
                     }
+
+                    // 激活 Move 按钮（变色）
+                    commands.entity(button_entity).insert(MoveButtonActive);
+                    commands
+                        .entity(button_entity)
+                        .insert(BackgroundColor(Color::srgb(0.1, 0.8, 0.1)));
                 }
             }
             ActionButton::Attack => {
@@ -834,7 +825,7 @@ fn handle_unit_action_click(
                 );
             }
             ActionButton::FoundCity => {
-                if let Ok((entity, _, _, _, _, _, child_of)) = selected_unit_query.single() {
+                if let Ok((entity, _, child_of)) = selected_unit_query.single() {
                     if let Ok(tile) = world_tile_query.get(child_of.0) {
                         // 发出建城请求，由 ConstructionPlugin 处理
                         commands.trigger(FoundCityRequestMessage {
@@ -846,29 +837,25 @@ fn handle_unit_action_click(
                 }
             }
             ActionButton::BuildFarm => {
-                if let Ok((entity, _, _, _, _, _, child_of)) = selected_unit_query.single() {
-                    if let Ok(tile) = world_tile_query.get(child_of.0) {
-                        // 发出建造请求，由 ConstructionPlugin 处理
-                        commands.trigger(BuildRequestMessage {
-                            unit: entity,
-                            target_tile: tile.0,
-                            improvement: TileImprovement::Farm,
-                        });
-                        commands.entity(entity).remove::<SelectedUnit>();
-                    }
+                if let Ok(tile) = world_tile_query.get(child_of.0) {
+                    // 发出建造请求，由 ConstructionPlugin 处理
+                    commands.trigger(BuildRequestMessage {
+                        unit: entity,
+                        target_tile: tile.0,
+                        improvement: TileImprovement::Farm,
+                    });
+                    commands.entity(entity).remove::<SelectedUnit>();
                 }
             }
             ActionButton::BuildMine => {
-                if let Ok((entity, _, _, _, _, _, child_of)) = selected_unit_query.single() {
-                    if let Ok(tile) = world_tile_query.get(child_of.0) {
-                        // 发出建造请求，由 ConstructionPlugin 处理
-                        commands.trigger(BuildRequestMessage {
-                            unit: entity,
-                            target_tile: tile.0,
-                            improvement: TileImprovement::Mine,
-                        });
-                        commands.entity(entity).remove::<SelectedUnit>();
-                    }
+                if let Ok(tile) = world_tile_query.get(child_of.0) {
+                    // 发出建造请求，由 ConstructionPlugin 处理
+                    commands.trigger(BuildRequestMessage {
+                        unit: entity,
+                        target_tile: tile.0,
+                        improvement: TileImprovement::Mine,
+                    });
+                    commands.entity(entity).remove::<SelectedUnit>();
                 }
             }
             ActionButton::SkipTurn => {
@@ -879,13 +866,12 @@ fn handle_unit_action_click(
                         .entity(entity)
                         .insert(BackgroundColor(Color::srgb(0.3, 0.3, 0.6)));
                 }
-                if let Ok((entity, _, _, _, _, movement, _)) = selected_unit_query.single() {
-                    commands.entity(entity).insert(Movement {
-                        current: 0,
-                        max: movement.max,
-                    });
-                    commands.entity(entity).remove::<SelectedUnit>();
-                }
+
+                commands.entity(entity).insert(Movement {
+                    current: 0,
+                    max: movement.max,
+                });
+                commands.entity(entity).remove::<SelectedUnit>();
             }
             ActionButton::CycleUnit => {}
         }
@@ -897,18 +883,7 @@ fn handle_unit_action_click(
 /// 显示可攻击的敌方单位高亮
 fn show_attack_targets(
     commands: &mut Commands,
-    selected_unit_query: &Query<
-        (
-            Entity,
-            &UnitComponent,
-            &Owner,
-            &Health,
-            &Strength,
-            &Movement,
-            &ChildOf,
-        ),
-        With<SelectedUnit>,
-    >,
+    selected_unit_query: &Query<(Entity, &Movement, &ChildOf), With<SelectedUnit>>,
     world_tile_query: &Query<&WorldTile>,
     tile_map: &Option<Res<TileMapRes>>,
     tile_entity_map: &Res<TileEntityMap>,
@@ -920,7 +895,7 @@ fn show_attack_targets(
     };
     let tile_map = &tile_map.0;
 
-    let Ok((_, _, _, _, _, _, child_of)) = selected_unit_query.single() else {
+    let Ok((_, _, child_of)) = selected_unit_query.single() else {
         return;
     };
 

@@ -39,7 +39,7 @@ fn ai_select_tech(
         return; // 已经在研究中
     }
 
-    let mut available: Vec<(Technology, i32)> = map_params
+    let mut available: Vec<(Technology, u32)> = map_params
         .0
         .ruleset
         .technologies
@@ -52,7 +52,7 @@ fn ai_select_tech(
         })
         .map(|(tech, info)| (tech, info.cost))
         .collect();
-    available.sort_by_key(|(_, cost)| *cost);
+    available.sort_by_key(|&(_, cost)| cost);
     if let Some(&(tech, _)) = available.first() {
         researching_tech.0 = Some(tech);
         info!("AI chooses to research {:?}", tech);

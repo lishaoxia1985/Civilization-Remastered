@@ -14,22 +14,31 @@ use crate::{
     resources::{MapParametersRes, TileEntityMap, TileMapRes},
 };
 
+/// 相机角度状态资源
+#[derive(Resource, Default)]
+pub struct CameraAngle {
+    /// 是否处于45度角视图
+    pub is_angled: bool,
+}
+
 /// 相机插件
 pub struct CameraPlugin;
 
 impl Plugin for CameraPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(OnEnter(AppState::AssetLoading), setup_main_camera)
+            .insert_resource(CameraAngle::default())
             .add_systems(
                 Update,
                 (
                     main_camera_movement,
-                    cursor_drag_system,
                     zoom_main_camera_system,
                     show_main_camera_area,
+                    toggle_camera_angle,
                 )
                     .run_if(in_state(ScreenState::WorldMap)),
             )
+            .add_systems(Update, cursor_drag_system)
             .add_systems(OnEnter(TurnPhase::Player), move_camera_to_player_center);
     }
 }
@@ -46,6 +55,41 @@ fn setup_main_camera(mut commands: Commands, map_params: Res<MapParametersRes>) 
         RenderLayers::layer(0),
         MainCamera,
     ));
+}
+
+/// 切换相机角度（空格键切换45度角俯视/正俯视图）
+///
+/// 在切换角度时，会调整相机的Y坐标以保证屏幕中心的地图位置保持不变。
+fn toggle_camera_angle(
+    input: Res<ButtonInput<KeyCode>>,
+    mut camera_angle: ResMut<CameraAngle>,
+    mut query: Query<&mut Transform, With<MainCamera>>,
+) {
+    if input.just_pressed(KeyCode::Space) {
+        camera_angle.is_angled = !camera_angle.is_angled;
+
+        const CAMERA_HEIGHT: f32 = 300.0;
+
+        for mut transform in query.iter_mut() {
+            if camera_angle.is_angled {
+                // 切换到45度角俯视视图（绕X轴旋转45度）
+                let angle = 45.0f32.to_radians();
+                transform.rotation = Quat::from_rotation_x(angle);
+                // 提升相机高度，以便在倾斜后仍能看到地图
+                // 并向后移动Y，以保持屏幕中心的地图位置不变
+                // 旋转后屏幕中心对应（x, y + z, 0），因此需要减去z来补偿
+                transform.translation.y -= CAMERA_HEIGHT;
+                transform.translation.z = CAMERA_HEIGHT;
+            } else {
+                // 重置为正俯视图（无旋转）
+                transform.rotation = Quat::IDENTITY;
+                // 恢复Y坐标补偿
+                transform.translation.y += CAMERA_HEIGHT;
+                // 恢复Z坐标为0
+                transform.translation.z = 0.0;
+            }
+        }
+    }
 }
 
 /// 主相机移动
@@ -83,23 +127,42 @@ fn cursor_drag_system(
     cameras: Single<(&mut Transform, &Camera, &GlobalTransform), With<MainCamera>>,
     mut last_cursor_pos: Local<Option<Vec2>>,
     input: Res<ButtonInput<MouseButton>>,
+    screen_state: Option<Res<State<ScreenState>>>,
     map_params: Res<MapParametersRes>,
 ) {
+    if let Some(screen_state) = screen_state {
+        if screen_state.get() != &ScreenState::WorldMap {
+            *last_cursor_pos = None;
+            return;
+        }
+    }
+
     let (mut transform, camera, camera_transform) = cameras.into_inner();
+
     if input.pressed(MouseButton::Left) {
-        if let Some(cursor_position) = window.cursor_position()
-            && let Ok(world_pos) = camera.viewport_to_world_2d(camera_transform, cursor_position)
-        {
-            if let Some(last_pos) = *last_cursor_pos {
-                let delta = world_pos - last_pos;
-                transform.translation -= delta.extend(0.);
-            } else {
-                *last_cursor_pos = Some(world_pos);
+        if let Some(cursor_position) = window.cursor_position() {
+            if let Some(last_screen_pos) = *last_cursor_pos {
+                // 使用同一个 GlobalTransform 转换两个屏幕坐标，
+                // 这样世界空间增量只由鼠标移动决定。
+                if let Ok(current_world) =
+                    camera.viewport_to_world_2d(camera_transform, cursor_position)
+                    && let Ok(last_world) =
+                        camera.viewport_to_world_2d(camera_transform, last_screen_pos)
+                {
+                    let delta = current_world - last_world;
+                    transform.translation -= delta.extend(0.);
+                }
             }
-        };
+
+            // 每帧都更新为当前屏幕坐标
+            *last_cursor_pos = Some(cursor_position);
+        } else {
+            // 光标移出窗口时清除，防止重新进入窗口时跳变
+            *last_cursor_pos = None;
+        }
     } else {
         *last_cursor_pos = None;
-    };
+    }
 
     limit_main_camera_within_map_bounds(&mut transform, &map_params);
 }
@@ -227,7 +290,7 @@ fn show_main_camera_area(
         assert!(HEIGHT_OF_VISIBLE_AREA < grid.height() as i32,
         "In vertical wrap mode, visible area height MUST be strictly less than the grid height.\n
         IF visible area height >= grid height, unrendered black borders will appear at top/bottom edges,\n
-        causing horizontal coordinate wrapping to fail (disconnected visual continuity).");
+        causing vertical coordinate wrapping to fail (disconnected visual continuity).");
     }
 
     let camera_position = set.p0().into_inner().translation.truncate().to_array();

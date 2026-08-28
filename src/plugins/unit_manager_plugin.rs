@@ -1,6 +1,6 @@
 //! 单位管理插件
 //!
-//! TODO: 未来监听添加Unit的Message（通常在建造完成时触发），并生成对应的单位
+//! 管理单位生成，包括起始单位和城市建造完成的单位。
 
 use std::collections::BTreeSet;
 
@@ -63,6 +63,10 @@ fn spawn_starting_units_for_every_nations(
 
     let tile_pixel_size = Vec2::from(grid.layout.size) * Vec2::new(2.0, 2.0);
 
+    let radius = tile_pixel_size.min_element() / 3.0;
+    let inner_rectangle = meshes.add(Rectangle::new(radius / 2., radius / 2.));
+    let outer_rectangle = meshes.add(Rectangle::new(radius, radius));
+
     for (nation_entity, _, nation_component) in nation_query.iter() {
         let civilization = nation_component.0;
         let start_tile = tile_map
@@ -89,9 +93,10 @@ fn spawn_starting_units_for_every_nations(
             military_unit,
             civilization,
             ruleset,
+            inner_rectangle.clone(),
+            outer_rectangle.clone(),
             &mut custom_materials,
             &materials,
-            &mut meshes,
             tile_pixel_size,
         )
         .id();
@@ -101,9 +106,10 @@ fn spawn_starting_units_for_every_nations(
             Unit::Settler,
             civilization,
             ruleset,
+            inner_rectangle.clone(),
+            outer_rectangle.clone(),
             &mut custom_materials,
             &materials,
-            &mut meshes,
             tile_pixel_size,
         )
         .id();
@@ -130,9 +136,10 @@ fn spawn_starting_units_for_every_nations(
             Unit::Settler,
             city_state,
             ruleset,
+            inner_rectangle.clone(),
+            outer_rectangle.clone(),
             &mut custom_materials,
             &materials,
-            &mut meshes,
             tile_pixel_size,
         )
         .id();
@@ -141,26 +148,58 @@ fn spawn_starting_units_for_every_nations(
     }
 }
 
+/// 在指定地块上生成一个单位（用于城市建造完成）
+///
+/// 在城市建造单位完成后调用此函数，在城市中心地块生成对应的单位。
+pub(crate) fn spawn_unit_on_tile(
+    commands: &mut Commands,
+    unit: Unit,
+    owner: Nation,
+    ruleset: &Ruleset,
+    tile_entity: Entity,
+    tile_pixel_size: Vec2,
+    meshes: &mut Assets<Mesh>,
+    custom_materials: &mut Assets<ColorReplaceMaterial>,
+    materials: &GameAssets,
+) {
+    let radius = tile_pixel_size.min_element() / 3.0;
+    let inner_rectangle = meshes.add(Rectangle::new(radius / 2., radius / 2.));
+    let outer_rectangle = meshes.add(Rectangle::new(radius, radius));
+
+    // 创建单位实体并添加到目标地块
+    let unit_entity = spawn_unit_entity(
+        commands,
+        unit,
+        owner,
+        ruleset,
+        inner_rectangle.clone(),
+        outer_rectangle.clone(),
+        custom_materials,
+        &materials,
+        tile_pixel_size,
+    )
+    .id();
+
+    commands.entity(tile_entity).add_child(unit_entity);
+    info!("City produced unit {:?} on tile", unit);
+}
+
 /// 创建单位实体
-fn spawn_unit_entity<'a>(
+pub(crate) fn spawn_unit_entity<'a>(
     commands: &'a mut Commands,
     unit: Unit,
     nation: Nation,
     ruleset: &Ruleset,
+    inner_rectangle: Handle<Mesh>,
+    outer_rectangle: Handle<Mesh>,
     custom_materials: &mut Assets<ColorReplaceMaterial>,
     materials: &GameAssets,
-    meshes: &mut Assets<Mesh>,
     tile_pixel_size: Vec2,
 ) -> EntityCommands<'a> {
     // 从 ruleset 中获取单位属性
     let unit_info = &ruleset.units[unit];
 
     let is_military = unit_info.strength > 0;
-
-    let radius = tile_pixel_size.min_element() / 3.0;
-
-    let inner_rectangle = meshes.add(Rectangle::new(radius / 2., radius / 2.));
-    let outer_rectangle = meshes.add(Rectangle::new(radius, radius));
 
     let (unit_name, transform_y, out_texture_name) = if is_military {
         (unit.as_str(), tile_pixel_size.y / 4., "sv_unitmilitary")

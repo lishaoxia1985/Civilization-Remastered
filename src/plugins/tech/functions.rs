@@ -21,7 +21,7 @@ pub fn cost_of_tech(
     is_player: bool,
     game_settings: &GameSettings,
     map_params: &MapParametersRes,
-) -> i32 {
+) -> u32 {
     let ruleset = &map_params.0.ruleset;
     let tech_info = &ruleset.technologies[tech];
     let difficulty_info = &ruleset.difficulties[game_settings.difficulty];
@@ -37,7 +37,7 @@ pub fn cost_of_tech(
     // 游戏速度修正
     tech_cost *= speed_info.science_cost_modifier;
 
-    tech_cost as i32
+    tech_cost as u32
 }
 
 /// 检查科技是否已研究

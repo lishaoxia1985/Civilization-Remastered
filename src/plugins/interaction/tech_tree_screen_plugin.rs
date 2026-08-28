@@ -71,7 +71,7 @@ impl Plugin for TechTreeScreenPlugin {
 
 /// 处理科技按钮点击
 fn handle_tech_click_system(
-    tech_button_query: Query<(&Interaction, &TechButton)>,
+    tech_button_query: Query<(&Interaction, &TechButton), Changed<Interaction>>,
     close_button_query: Query<(&Interaction, &CloseTechTreeButton)>,
     mut player_query: Query<(&mut ResearchingTech, &TechStateManager), With<Player>>,
     turn_manager: Res<TurnManager>,
@@ -695,33 +695,57 @@ fn get_tech_position(tech_info: &TechnologyInfo, row_height_of_tech_nodes: f32) 
     (x, y)
 }
 
-/// 计算完成科技还需要的剩余科技点数
+/// 计算完成指定科技还需要的剩余科学点数。
+///
+/// 该函数根据科技当前状态、已投入研究点数、科技总成本以及可用的溢出科学点数，
+/// 计算还需要多少科学点数才能完成该科技。
+///
+/// # Arguments
+///
+/// * `tech` - 要计算剩余点数的科技。**调用前必须确保该科技不是已研究完成的状态
+///   （`TechState::Researched`）**，否则函数会 panic。
+/// * `tech_progress` - 管理各科技已投入研究点数的管理器。
+/// * `tech_state_manager` - 管理各科技当前状态的管理器。
+/// * `tech_cost_manager` - 管理各科技总成本的管理器。
+/// * `overflow_science` - 当前可用的溢出科学点数。
+///
+/// # Returns
+///
+/// 返回还需要投入的科学点数（`u32`）。如果计算出的剩余点数为 0，则返回 0。
+///
+/// # Panics
+///
+/// * 如果 `tech` 的状态为 `TechState::Researched`，会直接触发 panic，
+///   因为已经研究完成的科技不应该再计算剩余科学点数。
 pub fn remaining_science_to_tech(
     tech: Technology,
     tech_progress: &TechProgressManager,
     tech_state_manager: &TechStateManager,
     tech_cost_manager: &TechCostManager,
     overflow_science: &OverflowScience,
-) -> i32 {
-    let spare_science = if matches!(
-        tech_state_manager.0[tech],
-        TechState::Available | TechState::ResearchedAndRepeatable
-    ) {
-        overflow_science.0
-    } else {
-        0
+) -> u32 {
+    let spare_science = match tech_state_manager.0[tech] {
+        TechState::Researched => panic!("Technology is already researched"),
+        TechState::Available | TechState::ResearchedAndRepeatable => overflow_science.0,
+        TechState::Locked => 0,
     };
 
-    let cost = tech_cost_manager.0.get(&tech).copied().unwrap_or(0);
+    let cost = tech_cost_manager
+        .0
+        .get(&tech)
+        .copied()
+        .expect("Tech cost not found");
     let researched = tech_progress.0.get(&tech).copied().unwrap_or(0);
 
-    cost - researched - spare_science
+    // 避免下溢：如果已投入 + 溢出 >= 成本，剩余为 0
+    cost.saturating_sub(researched)
+        .saturating_sub(spare_science)
 }
 
 /// 计算完成科技还需要的回合数
 pub fn turns_to_tech(
     tech: Technology,
-    science_per_turn: i32,
+    science_per_turn: u32,
     tech_progress: &TechProgressManager,
     tech_state_manager: &TechStateManager,
     tech_cost_manager: &TechCostManager,
@@ -737,16 +761,16 @@ pub fn turns_to_tech(
         tech_state_manager,
         tech_cost_manager,
         overflow_science,
-    ) as f32;
+    );
 
-    if remaining_cost <= 0.0 {
+    if remaining_cost == 0 {
         return String::new();
     }
 
-    if science_per_turn <= 0 {
+    if science_per_turn == 0 {
         return "∞ turns".to_string();
     }
 
-    let turns = (remaining_cost / science_per_turn as f32).ceil() as i32;
-    format!("{} turns", turns.max(1))
+    let turns = remaining_cost.div_ceil(science_per_turn).max(1);
+    format!("{} turns", turns)
 }
