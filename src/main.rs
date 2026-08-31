@@ -21,10 +21,11 @@ use crate::{
     assets::{ColorReplaceMaterial, RingProgressMaterial},
     plugins::{
         AiCombatPlugin, AssetLoadingPlugin, CameraPlugin, CitizenAssignScreenPlugin,
-        CityConstructionPlugin, CityInteractionPlugin, CityManagementPlugin, CombatPlugin,
-        ConstructionPlugin, EraPlugin, MapPlugin, MinimapPlugin, MovementPlugin,
-        TechTreeScreenPlugin, TurnPlugin, UnitInteractionPlugin, UnitManagerPlugin,
-        WorldScreenUiPlugin,
+        CityConstructionPlugin, CityConstructionScreenPlugin, CityInteractionPlugin,
+        CityManagementPlugin, CityOverlayPlugin,
+        CombatPlugin, ConstructionPlugin, EraPlugin, MapPlugin, MinimapPlugin, MovementPlugin,
+        TechTreeScreenPlugin, TileSelectionPlugin, TurnPlugin, UnitInteractionPlugin,
+        UnitManagerPlugin, WorldScreenUiPlugin,
         tech::{AiTechPlugin, TechPlugin},
     },
     resources::{GameSettings, MapParametersRes},
@@ -55,6 +56,8 @@ pub enum ScreenState {
     TechTree,
     /// 市民分配屏幕 - 在城市选择"分配市民"时进入，在地块上显示市民工作图标
     CitizenAssign,
+    /// 城市建造屏幕 - 在城市操作菜单点击"Build"时进入，选择要建造的建筑/单位
+    CityConstruction,
 }
 
 /// Turn phase state, used to control player interaction permissions and system execution conditions.
@@ -122,11 +125,14 @@ fn main() {
         .add_plugins(CombatPlugin)
         .add_plugins(CityManagementPlugin)
         .add_plugins(CityConstructionPlugin)
+        .add_plugins(CityConstructionScreenPlugin)
         .add_plugins(CityInteractionPlugin)
+        .add_plugins(CityOverlayPlugin)
         .add_plugins(CitizenAssignScreenPlugin)
         .add_plugins(MovementPlugin)
         .add_plugins(ConstructionPlugin)
         .add_plugins(UnitInteractionPlugin)
+        .add_plugins(TileSelectionPlugin)
         .add_plugins(WorldScreenUiPlugin)
         .add_plugins(MapPlugin)
         .add_plugins(MinimapPlugin)

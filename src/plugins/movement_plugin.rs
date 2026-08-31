@@ -10,7 +10,7 @@ use civ_map_generator::{ruleset::enums::TerrainType, tile::Tile, tile_map::TileM
 
 use crate::{
     AttackRequestMessage, MoveRequestMessage,
-    components::{Military, Movement, Owner, UnitComponent},
+    components::{Civilian, Military, Movement, Owner, UnitComponent},
     resources::{TileEntityMap, TileMapRes},
 };
 
@@ -31,6 +31,7 @@ fn handle_move_request(
         (Entity, &ChildOf, &Movement, &Owner, &UnitComponent),
         With<Military>,
     >,
+    civilian_unit_query: Query<(Entity, &ChildOf, &Owner, &UnitComponent), With<Civilian>>,
     unit_query: Query<(Entity, &ChildOf, &Movement, &Owner, &UnitComponent), With<UnitComponent>>,
     tile_map: Option<Res<TileMapRes>>,
     tile_entity_map: Res<TileEntityMap>,
@@ -56,14 +57,31 @@ fn handle_move_request(
 
     let target_tile_entity = tile_entity_map.get(target_tile);
 
-    // 检查目标地块是否有敌方军事单位（只有军事单位才会阻挡移动）
-    let has_enemy = military_unit_query
+    // 判断当前移动单位是否是平民单位
+    let is_civilian = civilian_unit_query.contains(unit_entity);
+
+    // 收集目标地块上的军事单位（排除自身）
+    let military_on_tile: Vec<(Entity, &Owner)> = military_unit_query
         .iter()
-        .any(|(entity, child_of, _, owner, _)| {
-            entity != unit_entity
-                && child_of.0 == target_tile_entity
-                && !is_same_owner(owner, unit_owner)
-        });
+        .filter(|(entity, child_of, _, _, _)| {
+            *entity != unit_entity && child_of.0 == target_tile_entity
+        })
+        .map(|(entity, _, _, owner, _)| (entity, owner))
+        .collect();
+
+    // 收集目标地块上的平民单位（排除自身）
+    let civilian_on_tile: Vec<(Entity, &Owner)> = civilian_unit_query
+        .iter()
+        .filter(|(entity, child_of, _, _)| {
+            *entity != unit_entity && child_of.0 == target_tile_entity
+        })
+        .map(|(entity, _, owner, _)| (entity, owner))
+        .collect();
+
+    // 检查目标地块是否有敌方军事单位（只有军事单位才会阻挡移动并触发攻击）
+    let has_enemy = military_on_tile
+        .iter()
+        .any(|(_, owner)| !is_same_owner(owner, unit_owner));
 
     // 计算移动到目标地块的实际移动消耗
     let move_cost = movement_cost(&target_tile, tile_map);
@@ -110,7 +128,34 @@ fn handle_move_request(
             }
         }
     } else {
-        // 目标地块没有敌人 - 正常移动，只扣除实际移动消耗
+        // 目标地块没有敌人 - 先判断该地块是否允许当前单位进入（堆叠规则）
+        // 规则：一个地块最多同时有一个军事单位和一个平民单位，且两者必须属于同一文明
+        let can_enter = if is_civilian {
+            // 平民单位：不能与另一个平民单位同格；可单独，或与该文明的一个军事单位同格
+            let no_other_civilian = civilian_on_tile.is_empty();
+            let compatible_military = military_on_tile.is_empty()
+                || (military_on_tile.len() == 1
+                    && military_on_tile
+                        .iter()
+                        .all(|(_, owner)| is_same_owner(owner, unit_owner)));
+            no_other_civilian && compatible_military
+        } else {
+            // 军事单位：不能与另一个军事单位同格；可单独，或与该文明的一个平民单位同格
+            let no_other_military = military_on_tile.is_empty();
+            let compatible_civilian = civilian_on_tile.is_empty()
+                || (civilian_on_tile.len() == 1
+                    && civilian_on_tile
+                        .iter()
+                        .all(|(_, owner)| is_same_owner(owner, unit_owner)));
+            no_other_military && compatible_civilian
+        };
+
+        if !can_enter {
+            // 地块堆叠受限，阻止本次移动
+            return;
+        }
+
+        // 正常移动，只扣除实际移动消耗
         commands.entity(target_tile_entity).add_child(unit_entity);
         commands.entity(unit_entity).insert(Movement {
             current: new_movement,

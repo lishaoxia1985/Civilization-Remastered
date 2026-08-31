@@ -11,7 +11,7 @@ use civ_map_generator::ruleset::enums::{EnumStr, Unit};
 use crate::{
     NationComponent, ResolutionPhase, TurnManager, TurnState,
     assets::{ColorReplaceMaterial, GameAssets},
-    components::{City, CityProduction, CityYields, Owner},
+    components::{City, CityProduction, CityYields, Civilian, Military, Owner},
     plugins::unit_manager_plugin::spawn_unit_on_tile,
     resources::{MapParametersRes, TileEntityMap, TileMapRes},
 };
@@ -40,6 +40,11 @@ fn process_city_production(
     mut commands: Commands,
     mut city_query: Query<(Entity, &mut City, &CityYields, &Owner), With<City>>,
     nation_query: Query<&NationComponent>,
+    // 单位占用查询：用于决定新单位放置位置
+    // 规则：每格最多一个军事 + 一个平民，且同格异类型单位必须属于同一文明
+    unit_query: Query<(Entity, &ChildOf, &Owner), Or<(With<Military>, With<Civilian>)>>,
+    military_query: Query<(), With<Military>>,
+    civilian_query: Query<(), With<Civilian>>,
 ) {
     // 第0回合不处理生产（开始游戏的回合）
     if manager.turn_number == 0 {
@@ -98,7 +103,7 @@ fn process_city_production(
                 );
             }
             CityProduction::Unit(unit) => {
-                // 在城市中心地块生成单位
+                // 在城市周边找到合适地块生成单位
                 spawn_produced_unit(
                     &mut commands,
                     unit,
@@ -111,6 +116,9 @@ fn process_city_production(
                     &materials,
                     &mut meshes,
                     &mut custom_materials,
+                    &unit_query,
+                    &military_query,
+                    &civilian_query,
                 );
             }
         }
@@ -135,6 +143,9 @@ fn spawn_produced_unit(
     materials: &GameAssets,
     meshes: &mut Assets<Mesh>,
     custom_materials: &mut Assets<ColorReplaceMaterial>,
+    unit_query: &Query<(Entity, &ChildOf, &Owner), Or<(With<Military>, With<Civilian>)>>,
+    military_query: &Query<(), With<Military>>,
+    civilian_query: &Query<(), With<Civilian>>,
 ) {
     // 获取城市中心地块（城市拥有的第一个地块）
     let center_tile = match city.owned_tiles.first() {
@@ -153,8 +164,21 @@ fn spawn_produced_unit(
     // 计算地块像素大小，用于单位图标渲染
     let tile_pixel_size = Vec2::from(grid.layout.size) * Vec2::new(2.0, 2.0);
 
-    // 尝试在城市中心地块生成单位，如果被占用则在相邻空闲地块生成
-    let spawn_tile = find_spawn_tile(center_tile, *grid, tile_entity_map);
+    // 判断新单位是否为军事单位（军事单位拥有 Strength > 0）
+    let is_military = ruleset.units[unit].strength > 0;
+
+    // 在城市周边寻找符合「每格最多一个军事 + 一个平民」规则的生成地块
+    let spawn_tile = find_spawn_tile(
+        center_tile,
+        *grid,
+        city,
+        is_military,
+        owner,
+        tile_entity_map,
+        unit_query,
+        military_query,
+        civilian_query,
+    );
 
     // 获取目标地块实体
     let tile_entity = tile_entity_map.get(spawn_tile);
@@ -179,33 +203,81 @@ fn spawn_produced_unit(
     );
 }
 
-/// 寻找单位生成的地块（城市中心优先，被占用时找相邻空闲地块）
+/// 寻找单位生成的地块。
+///
+/// 遵循以下规则：
+/// - 每个地块最多只能同时有一个军事单位和一个平民单位；
+/// - 若地块上已有异类型单位，则该单位必须与待放置单位属于同一文明
+///   （即：平民只能叠加在自己文明的军事单位旁，军事只能叠加在自己文明的平民单位旁）。
+///
+/// 候选地块按优先级：城市拥有的地块（含中心，`owned_tiles` 顺序）→ 中心地块的相邻地块。
+/// 若所有候选地块都不满足规则，则回退到中心地块（保证单位一定能生成）。
+/// 
+/// TODO: 应当在没有可放置地块时告知玩家空出地块以放置建造完成的单位，或者其他处理方式，
+///       如继续寻找城市的边缘地块以供放置单位。
 fn find_spawn_tile(
     center_tile: civ_map_generator::tile::Tile,
     grid: civ_map_generator::grid::HexGrid,
+    city: &City,
+    is_military: bool,
+    unit_owner: civ_map_generator::ruleset::enums::Nation,
     tile_entity_map: &Res<TileEntityMap>,
+    unit_query: &Query<(Entity, &ChildOf, &Owner), Or<(With<Military>, With<Civilian>)>>,
+    military_query: &Query<(), With<Military>>,
+    civilian_query: &Query<(), With<Civilian>>,
 ) -> civ_map_generator::tile::Tile {
     use civ_map_generator::tile::Tile;
 
-    // 获取城市中心地块实体
-    let _center_entity = tile_entity_map.get(center_tile);
+    // 检查某个地块是否允许放置待放置单位
+    let can_place_on = |tile: Tile| -> bool {
+        let tile_entity = tile_entity_map.get(tile);
+        unit_query
+            .iter()
+            .all(|(entity, child_of, other_owner)| {
+                if child_of.0 != tile_entity {
+                    // 不在该地块上的单位不参与判定
+                    return true;
+                }
+                let is_other_military = military_query.contains(entity);
+                let is_other_civilian = civilian_query.contains(entity);
+                if is_military && is_other_military {
+                    // 已经有一个军事单位，不能再放军事单位
+                    return false;
+                }
+                if !is_military && is_other_civilian {
+                    // 已经有一个平民单位，不能再放平民单位
+                    return false;
+                }
+                // 地块上已有异类型单位（军事 vs 平民）：要求属于同一文明
+                other_owner.0 == unit_owner
+            })
+    };
 
-    // 检查是否有单位占用了中心地块
-    // 注意：这里只能做简单检查，如果有其他单位在地块上则尝试相邻地块
-    // 由于单位是作为地块的子实体，我们需要通过 children 查询。
-
-    // 简化：总是尝试相邻地块（如果中心地块有城市建筑/城市本身，单位会叠加显示）
-    // 先检查相邻地块，如果相邻地块都不可用则回退到中心地块
-    let neighbors: Vec<Tile> = center_tile.neighbor_tiles(grid).collect();
-
-    // 尝试找到空闲的相邻可通行地块
-    // 由于没有直接的地块占用查询，这里简单返回第一个相邻地块
-    for neighbor in neighbors {
-        // 检查该地块是否不是水域/山脉（通过 TileEntityMap 无法直接判断地形，但可以尝试）
-        // 简化处理：直接使用第一个邻居
-        return neighbor;
+    // 收集候选地块：先城市拥有的地块（含中心），再补中心相邻地块（去重）
+    let mut candidates: Vec<Tile> = Vec::new();
+    for &tile in &city.owned_tiles {
+        if !candidates.contains(&tile) {
+            candidates.push(tile);
+        }
+    }
+    for neighbor in center_tile.neighbor_tiles(grid) {
+        if !candidates.contains(&neighbor) {
+            candidates.push(neighbor);
+        }
     }
 
-    // 如果没有邻居则使用中心地块
+    // 找到第一个满足规则的地块
+    for tile in candidates {
+        if can_place_on(tile) {
+            return tile;
+        }
+    }
+
+    // 所有候选地块都不满足规则，回退到中心地块（最后兜底）
+    warn!(
+        "No valid tile for producing {} unit near city {}, falling back to center tile",
+        if is_military { "military" } else { "civilian" },
+        city.name
+    );
     center_tile
 }

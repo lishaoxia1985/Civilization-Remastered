@@ -1,11 +1,12 @@
 //! 单位交互插件
 //!
 //! 管理玩家与单位的交互操作，包括：
-//! - 单位选择（点击地块选择单位，同地块多个单位循环切换）
-//! - 选中即显示移动范围（含敌人红色圆圈标记）
+//! - 移动范围显示与高亮（含敌人红色圆圈标记）
 //! - 点击移动目标后发出移动请求（由 MovementPlugin 处理）
 //! - 单位操作菜单（移动、攻击、建城、建造设施、跳过回合等）
 //! - 单位信息面板更新
+//!
+//! 注意：点击地块选择单位/城市由 [`TileSelectionPlugin`] 统一处理。
 
 use std::collections::{HashMap, HashSet, VecDeque};
 
@@ -59,11 +60,7 @@ impl Plugin for UnitInteractionPlugin {
             )
             .add_systems(
                 Update,
-                (
-                    handle_unit_selection,
-                    handle_unit_action_click,
-                    handle_move_target_click,
-                )
+                (handle_unit_action_click, handle_move_target_click)
                     .chain()
                     .run_if(in_state(ScreenState::WorldMap)),
             )
@@ -369,109 +366,6 @@ fn setup_unit_action_menu(mut commands: Commands) {
         Visibility::Hidden,
         UnitActionMenu,
     ));
-}
-
-// ============ 单位选择系统 ============
-
-/// 处理单位选择 - 点击地块选择单位，同地块多个单位循环切换
-/// 选中后弹出行动菜单，不自动显示移动范围（需点击 Move 按钮）
-fn handle_unit_selection(
-    mut click_events: MessageReader<Pointer<Click>>,
-    mut commands: Commands,
-    unit_query: Query<(Entity, &Owner), With<UnitComponent>>,
-    children_query: Query<Option<&Children>, With<WorldTile>>,
-    player_query: Query<&NationComponent, With<Player>>,
-    selected_unit_query: Query<Entity, With<SelectedUnit>>,
-    move_button_query: Query<Entity, With<MoveButtonActive>>,
-    turn_manager: Res<TurnManager>,
-) {
-    // 移动模式激活时，完全不处理选择，交由移动系统
-    if move_button_query.single().is_ok() {
-        return;
-    }
-
-    // 仅在玩家回合处理选择
-    let current_entity = turn_manager.current_nation_entity();
-    let Ok(nation_component) = player_query.get(current_entity) else {
-        return;
-    };
-    let player_nation = nation_component.0;
-
-    // 消除 MoveButtonActive 状态的辅助闭包
-    let deactivate_move_button = |commands: &mut Commands| {
-        if let Ok(entity) = move_button_query.single() {
-            commands
-                .entity(entity)
-                .remove::<MoveButtonActive>()
-                .insert(BackgroundColor(Color::srgb(0.3, 0.3, 0.6)));
-        }
-    };
-
-    for click in click_events.read() {
-        // 缓存当前事件发生时的状态，避免反复查询
-        let current_selected = selected_unit_query.single().ok();
-
-        // 1. 点击的是单位实体
-        if let Ok((unit_entity, owner)) = unit_query.get(click.event_target()) {
-            //消除 MoveButtonActive 状态
-            deactivate_move_button(&mut commands);
-
-            // 只处理本国单位：切换选中目标
-            // Notes: 这意味着如果点击的是当前目标，也会解除选中然后重新选中
-            if owner.0 == player_nation {
-                if let Some(selected) = current_selected {
-                    commands.entity(selected).remove::<SelectedUnit>();
-                }
-                commands.entity(unit_entity).insert(SelectedUnit);
-            }
-            continue;
-        }
-
-        // 2. 点击的是地块
-        if let Ok(children) = children_query.get(click.event_target()) {
-            // 取消旧选中并关闭移动模式
-            if let Some(selected) = current_selected {
-                commands.entity(selected).remove::<SelectedUnit>();
-            }
-            deactivate_move_button(&mut commands);
-
-            // 获得地块的子元素
-            // 如果没有子元素，说明地块上也没有任何单位实体
-            let Some(children) = children else { continue };
-
-            // 收集当前地块上属于玩家的单位
-            let units_on_tile: Vec<Entity> = children
-                .iter()
-                .filter_map(|child| {
-                    unit_query
-                        .get(child)
-                        .ok()
-                        .and_then(|(entity, owner)| (owner.0 == player_nation).then_some(entity))
-                })
-                .collect();
-
-            if units_on_tile.is_empty() {
-                continue;
-            }
-
-            // 决定下一个选中的单位
-            let next_selected = match current_selected {
-                Some(selected) => {
-                    if let Some(current_idx) = units_on_tile.iter().position(|&e| e == selected) {
-                        // 同一地块：切换到下一个单位
-                        let next_idx = (current_idx + 1) % units_on_tile.len();
-                        units_on_tile[next_idx]
-                    } else {
-                        // 不同地块：选择该地块的第一个单位
-                        units_on_tile[0]
-                    }
-                }
-                None => units_on_tile[0],
-            };
-
-            commands.entity(next_selected).insert(SelectedUnit);
-        }
-    }
 }
 
 // ============ 移动范围计算与显示 ============
@@ -828,11 +722,11 @@ fn handle_unit_action_click(
                 if let Ok((entity, _, child_of)) = selected_unit_query.single() {
                     if let Ok(tile) = world_tile_query.get(child_of.0) {
                         // 发出建城请求，由 ConstructionPlugin 处理
+                        // 如果建城成功上述插件会自动销毁该单位实体
                         commands.trigger(FoundCityRequestMessage {
                             unit: entity,
                             target_tile: tile.0,
                         });
-                        commands.entity(entity).remove::<SelectedUnit>();
                     }
                 }
             }
@@ -860,6 +754,8 @@ fn handle_unit_action_click(
             }
             ActionButton::SkipTurn => {
                 // 清除 Move 按钮激活状态
+                // TODO: 跳过当前单位，应当是在结束回合的按钮上点击下一个单位时不会再选中该单位
+                //       即跳过该单位，而不是清零该单位的移动力
                 for entity in move_button_query.iter() {
                     commands.entity(entity).remove::<MoveButtonActive>();
                     commands
@@ -868,7 +764,7 @@ fn handle_unit_action_click(
                 }
 
                 commands.entity(entity).insert(Movement {
-                    current: 0,
+                    current: movement.max,
                     max: movement.max,
                 });
                 commands.entity(entity).remove::<SelectedUnit>();
@@ -1030,34 +926,37 @@ struct OriginalColors {
 /// 取消选中时：恢复原始大小和颜色
 fn animate_selected_unit(
     time: Res<Time>,
-    selected_query: Query<
-        (Entity, &Transform, &MeshMaterial2d<ColorReplaceMaterial>),
+    mut selected_query: Query<
+        (
+            Entity,
+            &mut Transform,
+            &MeshMaterial2d<ColorReplaceMaterial>,
+        ),
         With<SelectedUnit>,
     >,
-    unselected_query: Query<
-        (Entity, &Transform, &MeshMaterial2d<ColorReplaceMaterial>),
+    mut unselected_query: Query<
+        (
+            Entity,
+            &mut Transform,
+            &MeshMaterial2d<ColorReplaceMaterial>,
+        ),
         Without<SelectedUnit>,
     >,
-    mut commands: Commands,
     mut materials: ResMut<Assets<ColorReplaceMaterial>>,
     mut original_colors: Local<HashMap<Entity, OriginalColors>>,
 ) {
     // 使用正弦波实现平滑动画
-    let t = (time.elapsed_secs() * 3.0).sin() * 0.5 + 0.5; // 0.0 ~ 1.0 循环
-    let scale = 1.0 + t * 0.25; // 1.0 ~ 1.25 缩放更明显
-    let brightness = 0.3 + t * 1.2; // 0.3 ~ 1.5 亮度变化非常明显（从明显变暗到明显变亮）
+    let t = (time.elapsed_secs() * 3.0).sin() * 0.5 + 0.5;
+    let scale = 1.0 + t * 0.25;
+    let brightness = 0.3 + t * 1.2;
 
-    // 选中单位：应用缩放和颜色高亮
-    for (entity, transform, material_handle) in &selected_query {
-        // 缩放动画
-        commands.entity(entity).insert(Transform {
-            scale: Vec3::splat(scale),
-            ..*transform
-        });
+    // 选中单位：直接修改缩放和颜色
+    for (entity, mut transform, material_handle) in &mut selected_query {
+        // 修改缩放（立即生效，无延迟命令）
+        transform.scale = Vec3::splat(scale);
 
-        // 颜色高亮 - 从原始颜色计算，避免累积修改
+        // 颜色高亮
         if let Some(mut material) = materials.get_mut(&material_handle.0) {
-            // 如果还没有存储原始颜色，先存储
             if !original_colors.contains_key(&entity) {
                 original_colors.insert(
                     entity,
@@ -1067,8 +966,6 @@ fn animate_selected_unit(
                     },
                 );
             }
-
-            // 从原始颜色计算高亮颜色
             if let Some(original) = original_colors.get(&entity) {
                 material.inner_color = original.inner * brightness;
                 material.outer_color = original.outer * brightness;
@@ -1077,13 +974,10 @@ fn animate_selected_unit(
     }
 
     // 未选中单位：恢复原始大小和颜色
-    for (entity, transform, material_handle) in &unselected_query {
-        // 如果单位被缩放过，恢复原始大小
+    for (entity, mut transform, material_handle) in &mut unselected_query {
+        // 如果缩放不是 1，直接改回 1
         if transform.scale != Vec3::ONE {
-            commands.entity(entity).insert(Transform {
-                scale: Vec3::ONE,
-                ..*transform
-            });
+            transform.scale = Vec3::ONE;
         }
 
         // 恢复颜色

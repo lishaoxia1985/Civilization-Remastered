@@ -114,6 +114,10 @@ pub enum ActionButton {
 #[derive(Component)]
 pub struct MoveButtonActive;
 
+/// 市民分配按钮激活状态标记（点击 Assign 后进入分配屏幕并变绿，再点击或退出时取消）
+#[derive(Component)]
+pub struct CitizenAssignActive;
+
 // ============ 建造系统组件 ============
 
 /// 地块设施组件 - 标记地块上已建造的设施

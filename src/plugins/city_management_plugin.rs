@@ -418,7 +418,7 @@ fn handle_found_city_request(
     mut commands: Commands,
     unit_query: Query<(Entity, &ChildOf, &UnitComponent, &Owner), With<Civilian>>,
     tile_entity_map: Res<TileEntityMap>,
-    city_query: Query<(), With<City>>,
+    city_query: Query<(&City, &Owner), With<City>>, // 修改：获取城市名称和所有者
     tile_map: Option<Res<TileMapRes>>,
     map_params: Res<MapParametersRes>,
     improvement_query: Query<&TileImprovementComponent>,
@@ -428,9 +428,13 @@ fn handle_found_city_request(
     let unit_entity = found_city_request.unit;
     let target_tile = found_city_request.target_tile;
 
+    let nations = &map_params.0.ruleset.nations;
+
     let Ok((_, _child_of, unit_component, owner)) = unit_query.get(unit_entity) else {
         return;
     };
+
+    let city_names = &nations[owner.0].cities;
 
     // 只有移民单位可以建立城市
     if unit_component.0 != Unit::Settler {
@@ -445,6 +449,24 @@ fn handle_found_city_request(
         return;
     }
 
+    // 查找当前文明已有城市中，名称在 city_names 数组中的最大索引
+    let mut max_index: Option<usize> = None;
+    for (city, city_owner) in city_query.iter() {
+        if city_owner.0 == owner.0 {
+            if let Some(pos) = city_names.iter().position(|name| *name == city.name) {
+                max_index = Some(max_index.map_or(pos, |current_max| current_max.max(pos)));
+            }
+        }
+    }
+
+    // 新城市名称的索引 = 最大索引 + 1
+    // TODO: 我们应当定义一个常量，限制文明新建立的城市数量
+    let new_index = match max_index {
+        Some(idx) => idx + 1,
+        None => 0, // 尚无城市或所有城市名均不在列表中
+    };
+    let city_name = city_names[new_index].to_owned();
+
     // 获取地块像素大小用于渲染城市图片
     let tile_pixel_size = tile_map
         .as_ref()
@@ -455,7 +477,7 @@ fn handle_found_city_request(
         .unwrap_or(Vec2::new(100.0, 100.0));
 
     // 创建城市实体
-    let mut city = City::new(format!("City at tile {}", target_tile.index()));
+    let mut city = City::new(city_name);
     // 城市中心地块自动被城市拥有
     city.owned_tiles.push(target_tile);
 
@@ -472,6 +494,7 @@ fn handle_found_city_request(
             .tiles_at_distance(1, grid)
             .filter(|&tile| {
                 // 排除水域/山脉（不可工作地块）
+                // TODO: 此处不应当排除水域地块或山脉地块
                 let terrain = tile.terrain_type(&tile_map.0);
                 terrain != TerrainType::Water && terrain != TerrainType::Mountain
             })
